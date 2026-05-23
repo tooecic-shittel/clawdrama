@@ -32,12 +32,12 @@
         <div class="settings-head">
           <div class="settings-brand">
             <div class="settings-brand-mark">
-              <img v-if="showBrandImage" :src="brandLogo" alt="火宝短剧" class="settings-brand-logo" @error="showBrandImage = false" />
-              <span v-else class="settings-brand-fallback">火</span>
+              <img v-if="showBrandImage" :src="brandLogo" alt="爪爪短剧" class="settings-brand-logo" @error="showBrandImage = false" />
+              <span v-else class="settings-brand-fallback">C</span>
             </div>
             <div class="settings-brand-copy">
-              <div class="settings-brand-kicker">Huobao Shorts</div>
-              <div class="settings-brand-name">火宝短剧</div>
+              <div class="settings-brand-kicker">ClawDrama</div>
+              <div class="settings-brand-name">爪爪短剧</div>
             </div>
           </div>
           <h2 class="settings-title">AI 服务配置</h2>
@@ -47,11 +47,11 @@
           <div class="setup-panel-head">
             <div>
               <div class="setup-kicker">Quick Setup</div>
-              <div class="setup-title">火宝推荐配置</div>
+              <div class="setup-title">推荐配置</div>
               <div class="setup-desc">一键写入文本、图片、视频、音频四类推荐配置，适合作为开箱默认方案。</div>
             </div>
             <button class="btn btn-primary" @click="presetDialog = true">
-              <Sparkles :size="14" /> 火宝一键配置
+              <Sparkles :size="14" /> 一键配置
             </button>
           </div>
           <div class="preset-grid">
@@ -122,12 +122,12 @@
         <div class="settings-head">
           <div class="settings-brand">
             <div class="settings-brand-mark">
-              <img v-if="showBrandImage" :src="brandLogo" alt="火宝短剧" class="settings-brand-logo" @error="showBrandImage = false" />
-              <span v-else class="settings-brand-fallback">火</span>
+              <img v-if="showBrandImage" :src="brandLogo" alt="爪爪短剧" class="settings-brand-logo" @error="showBrandImage = false" />
+              <span v-else class="settings-brand-fallback">C</span>
             </div>
             <div class="settings-brand-copy">
-              <div class="settings-brand-kicker">Huobao Shorts</div>
-              <div class="settings-brand-name">火宝短剧</div>
+              <div class="settings-brand-kicker">ClawDrama</div>
+              <div class="settings-brand-name">爪爪短剧</div>
             </div>
           </div>
           <h2 class="settings-title">Agent 配置</h2>
@@ -201,12 +201,12 @@
           <div class="settings-head">
             <div class="settings-brand">
               <div class="settings-brand-mark">
-                <img v-if="showBrandImage" :src="brandLogo" alt="火宝短剧" class="settings-brand-logo" @error="showBrandImage = false" />
-                <span v-else class="settings-brand-fallback">火</span>
+                <img v-if="showBrandImage" :src="brandLogo" alt="爪爪短剧" class="settings-brand-logo" @error="showBrandImage = false" />
+                <span v-else class="settings-brand-fallback">C</span>
               </div>
               <div class="settings-brand-copy">
-                <div class="settings-brand-kicker">Huobao Shorts</div>
-                <div class="settings-brand-name">火宝短剧</div>
+                <div class="settings-brand-kicker">ClawDrama</div>
+                <div class="settings-brand-name">爪爪短剧</div>
               </div>
             </div>
             <div style="display:flex;align-items:center;gap:10px">
@@ -235,7 +235,7 @@
           <div class="skill-list" v-else>
             <div v-for="s in currentSkills" :key="s.id" class="card skill-card">
               <div class="skill-card-head" @click="toggleSkillEdit(s.id)">
-                <FileText :size="14" style="color:var(--accent);flex-shrink:0" />
+                <FileText :size="14" style="color:var(--accent-text);flex-shrink:0" />
                 <div style="flex:1;min-width:0">
                   <div style="font-weight:600;font-size:13px">{{ s.name }}</div>
                   <div class="dim" style="font-size:11px">{{ s.description }}</div>
@@ -294,7 +294,7 @@
         </div>
         <label class="field">
           <span class="field-label">配置名称</span>
-          <input v-model="cfgForm.name" class="input" placeholder="如 火宝默认图像服务" />
+          <input v-model="cfgForm.name" class="input" placeholder="如 默认图像服务" />
         </label>
         <label class="field"><span class="field-label">服务商</span>
           <BaseSelect v-model="cfgForm.provider" :options="providerSelectOptions" placeholder="选择服务商" searchable />
@@ -335,16 +335,16 @@
       <form class="modal card config-modal" @submit.prevent="applyHuobaoPreset">
         <div class="config-modal-head">
           <div>
-            <div class="setup-kicker">Huobao Preset</div>
-            <h2 class="modal-title">火宝一键配置</h2>
-            <div class="modal-note">按火宝推荐链路自动创建或更新 4 条服务配置，并同时初始化 5 个 Agent 的默认模型。</div>
+            <div class="setup-kicker">Quick Preset</div>
+            <h2 class="modal-title">一键推荐配置</h2>
+            <div class="modal-note">按推荐链路自动创建或更新 4 条服务配置，并同时初始化 5 个 Agent 的默认模型。</div>
           </div>
           <span class="tag tag-success">推荐</span>
         </div>
         <div class="huobao-grid">
           <label class="field">
-            <span class="field-label">Huobao API Key <span class="dim">(统一用于文本 / 图片 / 视频 / 音频)</span></span>
-            <input v-model="huobaoForm.apiKey" class="input" type="password" placeholder="用于 api.chatfire.site 全链路服务" />
+            <span class="field-label">API Key <span class="dim">(统一用于文本 / 图片 / 视频 / 音频)</span></span>
+            <input v-model="huobaoForm.apiKey" class="input" type="password" placeholder="统一 API Key（用于全链路服务）" />
             <span class="field-hint">还没有账号？<a href="https://api.chatfire.site/" target="_blank" rel="noopener">立即注册 →</a></span>
           </label>
         </div>
@@ -395,7 +395,7 @@ import { Plus, Pencil, Trash2, FileText, ChevronDown, Check, Loader2, Bot, Cpu, 
 import BaseSelect from '~/components/BaseSelect.vue'
 import { toast } from 'vue-sonner'
 import { aiConfigAPI, agentConfigAPI, skillsAPI } from '~/composables/useApi'
-import brandLogo from '~/assets/huobao-logo.png'
+import brandLogo from '~/assets/claw-logo.svg'
 
 const showBrandImage = ref(true)
 const tab = ref('ai')
@@ -441,12 +441,12 @@ const providerPresets = {
     volcengine: { label: '火山推荐', baseUrl: 'https://ark.cn-beijing.volces.com', models: ['doubao-seedream-4-0-250828'] },
   },
   video: {
-    volcengine: { label: '火宝视频', baseUrl: 'https://api.chatfire.site/volcengine', models: ['doubao-seedance-1-5-pro-251215'] },
+    volcengine: { label: '视频服务', baseUrl: 'https://api.chatfire.site/volcengine', models: ['doubao-seedance-1-5-pro-251215'] },
     vidu: { label: 'Vidu 推荐', baseUrl: 'https://api.vidu.com', models: ['viduq3-turbo'] },
     ali: { label: '阿里推荐', baseUrl: 'https://dashscope.aliyuncs.com', models: ['wan2.6-i2v-flash'] },
   },
   audio: {
-    minimax: { label: '火宝音频', baseUrl: 'https://api.chatfire.site/minimax', models: ['speech-2.8-hd'] },
+    minimax: { label: '音频服务', baseUrl: 'https://api.chatfire.site/minimax', models: ['speech-2.8-hd'] },
   },
 }
 const huobaoPresetCards = [
@@ -557,7 +557,7 @@ async function saveCfg() {
 }
 async function applyHuobaoPreset() {
   if (!huobaoForm.apiKey) {
-    toast.warning('请填写 Huobao API Key')
+    toast.warning('请填写 API Key')
     return
   }
   try {
@@ -565,7 +565,7 @@ async function applyHuobaoPreset() {
     await loadCfgs()
     await loadAgents()
     presetDialog.value = false
-    toast.success('火宝推荐配置与默认 Agent LLM 已写入')
+    toast.success('推荐配置与默认 Agent LLM 已写入')
   } catch (e) {
     toast.error(e.message)
   }
@@ -1041,7 +1041,7 @@ onMounted(() => { loadCfgs(); loadAgents(); loadAllSkills() })
 .agent-card { overflow: hidden; }
 .agent-card-head { display: flex; align-items: center; gap: 10px; padding: 14px 16px; cursor: pointer; transition: background 0.1s; }
 .agent-card-head:hover { background: var(--bg-hover); }
-.agent-type-badge { width: 36px; height: 36px; border-radius: var(--radius); background: var(--accent-bg); color: var(--accent); display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; }
+.agent-type-badge { width: 36px; height: 36px; border-radius: var(--radius); background: var(--accent-bg); color: var(--accent-text); display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; }
 .agent-card-body { padding: 0 16px 16px; display: flex; flex-direction: column; gap: 12px; border-top: 1px solid var(--border); padding-top: 16px; }
 .agent-card-foot { display: flex; align-items: center; gap: 8px; padding-top: 8px; }
 
@@ -1162,9 +1162,9 @@ onMounted(() => { loadCfgs(); loadAgents(); loadAllSkills() })
   gap: 10px;
 }
 .huobao-grid .field-hint a {
-  color: var(--accent);
+  color: var(--accent-text);
   text-decoration: none;
-  font-weight: 500;
+  font-weight: 700;
 }
 .huobao-grid .field-hint a:hover {
   text-decoration: underline;

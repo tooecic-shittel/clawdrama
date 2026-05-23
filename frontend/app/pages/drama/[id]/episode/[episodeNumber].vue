@@ -171,7 +171,7 @@
             </div>
           </div>
           <div v-else-if="rn && rt === 'script_rewriter'" class="step-loading">
-            <Loader2 :size="24" class="animate-spin" style="color:var(--accent)" />
+            <Loader2 :size="24" class="animate-spin" style="color:var(--accent-dark)" />
             <div class="loading-text">正在改写剧本...</div>
           </div>
           <textarea v-else class="fill-textarea" v-model="localScript" placeholder="格式化剧本内容..." />
@@ -208,7 +208,7 @@
             </button>
           </div>
           <div v-else-if="rn && rt === 'extractor'" class="step-loading">
-            <Loader2 :size="24" class="animate-spin" style="color:var(--accent)" />
+            <Loader2 :size="24" class="animate-spin" style="color:var(--accent-dark)" />
             <div class="loading-text">正在提取角色和场景...</div>
           </div>
           <div v-else class="extract-stage">
@@ -309,7 +309,7 @@
             </button>
           </div>
           <div v-else-if="rn && rt === 'voice_assigner'" class="step-loading">
-            <Loader2 :size="24" class="animate-spin" style="color:var(--accent)" />
+            <Loader2 :size="24" class="animate-spin" style="color:var(--accent-dark)" />
             <div class="loading-text">正在分配音色...</div>
           </div>
           <div v-else class="voice-stage">
@@ -680,7 +680,7 @@
           </div>
 
           <div v-else-if="rn && rt === 'storyboard_breaker'" class="step-loading">
-            <Loader2 :size="24" class="animate-spin" style="color:var(--accent)" />
+            <Loader2 :size="24" class="animate-spin" style="color:var(--accent-dark)" />
             <div class="loading-text">正在拆解分镜并生成提示词...</div>
           </div>
 
@@ -1095,7 +1095,7 @@
 
                 <!-- Step 2: Generating -->
                 <div v-else-if="gridStep === 2" class="grid-tool-body" style="align-items:center;justify-content:center;min-height:300px">
-                  <Loader2 :size="28" class="animate-spin" style="color:var(--accent)" />
+                  <Loader2 :size="28" class="animate-spin" style="color:var(--accent-dark)" />
                   <div class="loading-text" style="margin-top:12px">宫格图生成中...</div>
                   <div class="dim" style="font-size:11px;margin-top:6px">{{ gridStatusText }}</div>
                 </div>
@@ -3281,7 +3281,7 @@ onMounted(() => { refresh(); loadConfigs(); loadVoices() })
 }
 .empty-visual {
   width: 72px; height: 72px; border-radius: 22px;
-  background: rgba(255,255,255,0.8); color: var(--accent);
+  background: rgba(255,255,255,0.8); color: var(--accent-text);
   border: 1px solid rgba(27, 41, 64, 0.08);
   box-shadow: var(--shadow-sm);
   display: flex; align-items: center; justify-content: center;
@@ -3468,11 +3468,11 @@ onMounted(() => { refresh(); loadConfigs(); loadVoices() })
 .shot-item-header { display: flex; align-items: center; gap: 8px; }
 .shot-num {
   font-size: 11px; font-family: var(--font-mono); font-weight: 700;
-  color: var(--accent); background: var(--accent-bg);
+  color: var(--accent-text); background: var(--accent-bg);
   padding: 2px 6px; border-radius: 4px; flex-shrink: 0;
   letter-spacing: 0.03em;
 }
-.shot-item.active .shot-num { background: var(--accent); color: #fff; }
+.shot-item.active .shot-num { background: var(--accent); color: #0a0e1a; }
 .shot-status { display: flex; gap: 4px; margin-left: auto; flex-shrink: 0; }
 .shot-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--bg-3); flex-shrink: 0; }
 .shot-dot.has-img { background: var(--success); }
@@ -3591,7 +3591,7 @@ onMounted(() => { refresh(); loadConfigs(); loadVoices() })
 .role-pill.active {
   border-color: var(--accent);
   background: var(--accent);
-  color: #fff;
+  color: #0a0e1a;
   box-shadow: 0 8px 18px rgba(29, 77, 176, 0.18);
 }
 
@@ -3677,12 +3677,12 @@ onMounted(() => { refresh(); loadConfigs(); loadVoices() })
 .frame-top { display: flex; align-items: center; gap: 8px; }
 .frame-num {
   font-size: 13px; font-family: var(--font-mono); font-weight: 800;
-  color: var(--accent);
+  color: var(--accent-text);
 }
 .frame-badge {
-  font-size: 11px; font-weight: 600; padding: 2px 8px;
+  font-size: 11px; font-weight: 700; padding: 2px 8px;
   border-radius: 20px;
-  background: var(--accent-bg); color: var(--accent);
+  background: var(--accent-bg); color: var(--accent-text);
   border: 1px solid var(--accent-glow);
   white-space: nowrap;
 }
@@ -3890,7 +3890,7 @@ onMounted(() => { refresh(); loadConfigs(); loadVoices() })
   min-height: 70px;
 }
 .grid-blank-cell.empty { opacity: 0.4; }
-.grid-blank-cell-index { font-size: 10px; font-weight: 700; color: var(--accent); font-family: var(--font-mono); }
+.grid-blank-cell-index { font-size: 10px; font-weight: 700; color: var(--accent-text); font-family: var(--font-mono); }
 .grid-blank-cell-desc { font-size: 11px; color: var(--text-2); line-height: 1.5; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .grid-mode-tabs { display: flex; gap: 6px; }
 .grid-mode-tab { flex: 1; display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border: 1.5px solid var(--border); border-radius: var(--radius); background: var(--bg-0); cursor: pointer; transition: all 0.15s; text-align: left; }

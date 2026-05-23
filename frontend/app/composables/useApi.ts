@@ -1,7 +1,13 @@
+import { getAuthToken, clearAuthOnUnauthorized } from './useAuth'
+
 const BASE = '/api/v1'
 
 async function req<T = any>(method: string, path: string, body?: any): Promise<T> {
-  const opts: RequestInit = { method, headers: { 'Content-Type': 'application/json' } }
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+  const token = getAuthToken()
+  if (token) headers['Authorization'] = `Bearer ${token}`
+
+  const opts: RequestInit = { method, headers }
   if (body) opts.body = JSON.stringify(body)
 
   const start = performance.now()
@@ -11,6 +17,15 @@ async function req<T = any>(method: string, path: string, body?: any): Promise<T
     const resp = await fetch(`${BASE}${path}`, opts)
     const json = await resp.json()
     const ms = Math.round(performance.now() - start)
+
+    if (resp.status === 401) {
+      clearAuthOnUnauthorized()
+      if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login') && !window.location.pathname.startsWith('/register') && window.location.pathname !== '/') {
+        const redirect = encodeURIComponent(window.location.pathname + window.location.search)
+        window.location.href = `/login?redirect=${redirect}`
+      }
+      throw new Error(json.message || '未登录')
+    }
 
     if (!resp.ok || (json.code && json.code >= 400)) {
       console.log(`%c[API] %c${method} ${path} %c${resp.status} %c${ms}ms`, 'color:#888', 'color:#ef5350', 'color:#ef5350;font-weight:bold', 'color:#888', json.message || '')
@@ -126,4 +141,27 @@ export const skillsAPI = {
 export const voicesAPI = {
   list: (provider?: string) => api.get(`/ai-voices${provider ? `?provider=${provider}` : ''}`),
   sync: () => api.post('/ai-voices/sync', {}),
+}
+
+export const authAPI = {
+  status: () => api.get<{ has_users: boolean; registration_open: boolean }>('/auth/status'),
+  register: (d: { username: string; password: string; display_name?: string; email?: string }) =>
+    api.post<{ token: string; user: any }>('/auth/register', d),
+  login: (d: { username: string; password: string }) =>
+    api.post<{ token: string; user: any }>('/auth/login', d),
+  me: () => api.get<any>('/auth/me'),
+}
+
+export const creditsAPI = {
+  balance: () => api.get<{ balance: number }>('/credits/balance'),
+  history: (params?: { limit?: number; offset?: number }) => {
+    const q = new URLSearchParams()
+    if (params?.limit) q.set('limit', String(params.limit))
+    if (params?.offset) q.set('offset', String(params.offset))
+    return api.get<{ items: any[] }>(`/credits/history${q.size ? `?${q.toString()}` : ''}`)
+  },
+  packages: () => api.get<{ items: any[] }>('/credits/packages'),
+  grant: (d: { user_id: number; amount: number; description?: string }) =>
+    api.post<{ balance: number; transaction: any }>('/credits/grant', d),
+  listUsers: (q?: string) => api.get<{ items: any[] }>(`/credits/users${q ? `?q=${encodeURIComponent(q)}` : ''}`),
 }

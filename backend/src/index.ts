@@ -22,7 +22,10 @@ import grid from './routes/grid.js'
 import skills from './routes/skills.js'
 import webhooks from './routes/webhooks.js'
 import aiVoices from './routes/aiVoices.js'
+import auth from './routes/auth.js'
+import credits from './routes/credits.js'
 import { requestLogger, errorHandler } from './middleware/logger.js'
+import { requireAuth } from './middleware/auth.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const projectRoot = path.resolve(__dirname, '../..')
@@ -40,8 +43,12 @@ app.use('*', errorHandler)
 // Health check
 app.get('/api/v1/health', (c) => c.json({ status: 'ok', timestamp: new Date().toISOString() }))
 
-// API routes
+// Public auth routes (no token required)
+app.route('/api/v1/auth', auth)
+
+// Protected API routes — require Bearer token
 const api = new Hono()
+api.use('*', requireAuth)
 api.route('/dramas', dramas)
 api.route('/episodes', episodes)
 api.route('/storyboards', storyboards)
@@ -59,6 +66,7 @@ api.route('/merge', merge)
 api.route('/grid', grid)
 api.route('/skills', skills)
 api.route('/ai-voices', aiVoices)
+api.route('/credits', credits)
 
 app.route('/api/v1', api)
 

@@ -3,7 +3,7 @@
     <!-- Header -->
     <div class="page-head">
       <div class="head-left">
-        <button class="back-btn" @click="navigateTo('/')">
+        <button class="back-btn" @click="navigateTo('/projects')">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/>
           </svg>
@@ -271,10 +271,10 @@ onMounted(() => { load(); loadConfigs() })
 
 .page-meta { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .style-chip {
-  font-size: 11px; font-weight: 500;
+  font-size: 11px; font-weight: 600;
   padding: 2px 8px;
   background: var(--accent-bg); color: var(--accent-text);
-  border-radius: 99px; border: 1px solid rgba(184,120,20,0.12);
+  border-radius: 99px; border: 1px solid rgba(143,239,38,0.28);
 }
 .meta-divider { width: 3px; height: 3px; border-radius: 50%; background: var(--text-3); }
 .meta-item {
@@ -320,8 +320,8 @@ onMounted(() => { load(); loadConfigs() })
 }
 .ep-card:hover .ep-number {
   background: var(--accent-bg);
-  border-color: rgba(184,120,20,0.2);
-  color: var(--accent);
+  border-color: rgba(143,239,38,0.4);
+  color: var(--accent-text);
 }
 
 .ep-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 5px; }

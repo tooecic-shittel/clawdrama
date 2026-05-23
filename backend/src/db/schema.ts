@@ -4,6 +4,32 @@
  */
 import { sqliteTable, text, integer, real, primaryKey } from 'drizzle-orm/sqlite-core'
 
+export const users = sqliteTable('users', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  username: text('username').notNull().unique(),
+  email: text('email'),
+  passwordHash: text('password_hash').notNull(),
+  displayName: text('display_name'),
+  role: text('role').notNull().default('user'),
+  credits: integer('credits').notNull().default(0),
+  createdAt: text('created_at').notNull(),
+  updatedAt: text('updated_at').notNull(),
+})
+
+export const creditTransactions = sqliteTable('credit_transactions', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  userId: integer('user_id').notNull(),
+  amount: integer('amount').notNull(),           // positive=add, negative=deduct
+  balanceAfter: integer('balance_after').notNull(),
+  type: text('type').notNull(),                  // 'topup' | 'deduct' | 'refund' | 'admin_grant' | 'register_bonus'
+  description: text('description'),
+  referenceType: text('reference_type'),         // 'image_generation' | 'video_generation' | 'package' | 'manual' | ...
+  referenceId: integer('reference_id'),
+  meta: text('meta'),                            // JSON
+  operatorId: integer('operator_id'),            // admin user id who triggered (for admin_grant)
+  createdAt: text('created_at').notNull(),
+})
+
 export const dramas = sqliteTable('dramas', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   title: text('title').notNull(),

@@ -7,16 +7,19 @@ export default defineNuxtConfig({
   },
   app: {
     head: {
-      title: '火宝短剧',
+      title: '爪爪短剧 ClawDrama',
       meta: [{ name: 'viewport', content: 'width=device-width, initial-scale=1' }],
       link: [
-        { rel: 'icon', type: 'image/png', href: '/favicon.png' },
-        { rel: 'shortcut icon', type: 'image/png', href: '/favicon.png' },
+        { rel: 'icon', type: 'image/svg+xml', href: '/claw-logo.svg' },
+        { rel: 'shortcut icon', type: 'image/svg+xml', href: '/claw-logo.svg' },
       ],
     },
   },
   vite: {
     server: {
+      // Allow tunnel hosts (loca.lt, lhr.life, trycloudflare.com, ngrok-free.app, etc.)
+      // for sharing preview links. Dev only — production build is not affected.
+      allowedHosts: true,
       proxy: {
         '/api': { target: 'http://localhost:5679', changeOrigin: true },
         '/static': { target: 'http://localhost:5679', changeOrigin: true },

@@ -326,8 +326,8 @@ onBeforeUnmount(() => {
 }
 .base-select-option.selected {
   background: var(--accent-bg);
-  color: var(--accent-dark);
-  font-weight: 600;
+  color: var(--accent-text);
+  font-weight: 700;
 }
 
 .base-select-empty {
