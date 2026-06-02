@@ -6,6 +6,7 @@ import { downloadFile, readImageAsCompressedDataUrl } from '../utils/storage.js'
 import { getVideoAdapter } from './adapters/registry'
 import type { AIConfig } from './adapters/types'
 import { logTaskError, logTaskPayload, logTaskProgress, logTaskStart, logTaskSuccess, logTaskWarn, redactUrl } from '../utils/task-logger.js'
+import { enhanceVideoPrompt } from './prompt-enhance.js'
 
 interface GenerateVideoParams {
   storyboardId?: number
@@ -29,10 +30,17 @@ export async function generateVideo(params: GenerateVideoParams): Promise<number
     : getActiveConfig('video')
   if (!config) throw new Error('No active video AI config')
 
+  // Inject drama visual style + storyboard sound effect into video prompt.
+  // Veo 3 generates audio from text — describing the soundscape gets baked in.
+  const enhancedPrompt = enhanceVideoPrompt(params.prompt, {
+    dramaId: params.dramaId,
+    storyboardId: params.storyboardId,
+  })
+
   const res = db.insert(schema.videoGenerations).values({
     storyboardId: params.storyboardId,
     dramaId: params.dramaId,
-    prompt: params.prompt,
+    prompt: enhancedPrompt,
     model: params.model || config.model,
     provider: config.provider,
     referenceMode: params.referenceMode || 'none',
@@ -120,14 +128,37 @@ async function processVideoGeneration(id: number, config: AIConfig) {
       body,
     })
 
-    const resp = await fetch(url, {
-      method,
-      headers,
-      body: JSON.stringify(body),
-    })
+    // Retry on 429 (upstream saturated) with exponential backoff
+    let resp: Response | null = null
+    let result: any = null
+    const maxAttempts = 5
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      resp = await fetch(url, { method, headers, body: JSON.stringify(body) })
 
-    if (!resp.ok) throw new Error(`API error ${resp.status}: ${await resp.text()}`)
-    const result = await resp.json() as any
+      if (resp.ok) {
+        result = await resp.json()
+        break
+      }
+
+      const errText = await resp.text()
+      const isRetryable =
+        resp.status === 429 ||
+        resp.status === 503 ||
+        errText.includes('upstream load is saturated') ||
+        errText.includes('饱和')
+
+      if (!isRetryable || attempt === maxAttempts) {
+        throw new Error(`API error ${resp.status}: ${errText}`)
+      }
+
+      const waitMs = Math.min(30000, 5000 * attempt + Math.random() * 2000)
+      logTaskProgress('VideoTask', 'retry-saturated', {
+        id, attempt, maxAttempts, waitMs: Math.round(waitMs), status: resp.status,
+      })
+      await new Promise(r => setTimeout(r, waitMs))
+    }
+
+    if (!result) throw new Error('No response after retries')
 
     const { isAsync, taskId, videoUrl } = adapter.parseGenerateResponse(result)
 
@@ -218,7 +249,10 @@ async function pollVideoTask(id: number, config: AIConfig, taskId: string, story
 
       if (pollResp.status === 'completed' && pollResp.videoUrl) {
         logTaskSuccess('VideoTask', 'poll-complete', { id, taskId, videoUrl: pollResp.videoUrl })
-        await handleVideoComplete(id, pollResp.videoUrl, null, storyboardId)
+        const downloadAuth = (config.provider === 'google' || config.provider === 'google-veo')
+          ? { kind: 'query-key' as const, key: config.apiKey }
+          : null
+        await handleVideoComplete(id, pollResp.videoUrl, null, storyboardId, downloadAuth)
         return
       }
       if (pollResp.status === 'failed') {
@@ -239,8 +273,14 @@ async function pollVideoTask(id: number, config: AIConfig, taskId: string, story
   }
 }
 
-async function handleVideoComplete(id: number, videoUrl: string, duration: number | null | undefined, storyboardId?: number | null) {
-  const localPath = await downloadFile(videoUrl, 'videos')
+async function handleVideoComplete(id: number, videoUrl: string, duration: number | null | undefined, storyboardId?: number | null, downloadAuth?: { kind: 'query-key'; key: string } | null) {
+  // For Veo: download URL must carry the API key as query param
+  let downloadUrl = videoUrl
+  if (downloadAuth?.kind === 'query-key' && downloadAuth.key) {
+    const sep = videoUrl.includes('?') ? '&' : '?'
+    downloadUrl = `${videoUrl}${sep}key=${encodeURIComponent(downloadAuth.key)}`
+  }
+  const localPath = await downloadFile(downloadUrl, 'videos')
   db.update(schema.videoGenerations)
     .set({ videoUrl, localPath, status: 'completed', completedAt: now(), updatedAt: now() })
     .where(eq(schema.videoGenerations.id, id))

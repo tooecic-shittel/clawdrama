@@ -4,6 +4,8 @@ import { db, schema } from '../db/index.js'
 import { success, created, now, badRequest } from '../utils/response.js'
 import { toSnakeCase } from '../utils/transform.js'
 import { generateTTS } from '../services/tts-generation.js'
+import { pickVoiceForCharacter } from '../services/voice-mapper.js'
+import { buildTTSInstruction } from '../services/tts-instruction.js'
 import { logTaskError, logTaskPayload, logTaskProgress, logTaskStart, logTaskSuccess } from '../utils/task-logger.js'
 
 const app = new Hono()
@@ -169,26 +171,25 @@ app.post('/:id/generate-tts', async (c) => {
     dialogue: sb.dialogue,
   })
 
-  let voiceId = 'alloy'
   const speaker = parsedDialogue.speaker
-
-  if (speaker) {
-    if (!/^(旁白|画外音|narrator)$/i.test(speaker)) {
-      const [ep] = db.select().from(schema.episodes).where(eq(schema.episodes.id, sb.episodeId)).all()
-      if (ep) {
-        const chars = db.select().from(schema.characters).where(eq(schema.characters.dramaId, ep.dramaId)).all()
-        const found = chars.find((char) => char.name === speaker)
-        if (found?.voiceStyle) voiceId = found.voiceStyle
-      }
-    }
-  }
+  const [epForVoice] = db.select().from(schema.episodes).where(eq(schema.episodes.id, sb.episodeId)).all()
+  const voiceId = pickVoiceForCharacter({
+    characterName: speaker,
+    dramaId: epForVoice?.dramaId,
+    fallback: 'sage',
+  })
 
   const pureDialogue = parsedDialogue.pureText
   if (!pureDialogue) return badRequest(c, '未提取到可合成的文本')
 
   const [ep] = db.select().from(schema.episodes).where(eq(schema.episodes.id, sb.episodeId)).all()
+  const emotion = buildTTSInstruction(
+    { atmosphere: sb.atmosphere, action: sb.action, description: sb.description },
+    pureDialogue,
+    speaker,
+  )
   try {
-    const audioPath = await generateTTS({ text: pureDialogue, voice: voiceId, configId: ep?.audioConfigId || null })
+    const audioPath = await generateTTS({ text: pureDialogue, voice: voiceId, emotion, configId: ep?.audioConfigId || null })
   db.update(schema.storyboards)
     .set({ ttsAudioUrl: audioPath, updatedAt: now() })
     .where(eq(schema.storyboards.id, id))

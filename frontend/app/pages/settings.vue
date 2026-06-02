@@ -271,7 +271,7 @@
     </div>
 
     <!-- AI Config Dialog -->
-    <div v-if="cfgDialog" class="overlay" @click.self="cfgDialog = false">
+    <div v-if="cfgDialog" class="overlay">
       <form class="modal card config-modal" @submit.prevent="saveCfg">
         <div class="config-modal-head">
           <div>
@@ -330,37 +330,42 @@
       </form>
     </div>
 
-    <!-- Huobao Preset Dialog -->
-    <div v-if="presetDialog" class="overlay" @click.self="presetDialog = false">
+    <!-- Platform Pool Setup Dialog -->
+    <div v-if="presetDialog" class="overlay">
       <form class="modal card config-modal" @submit.prevent="applyHuobaoPreset">
         <div class="config-modal-head">
           <div>
-            <div class="setup-kicker">Quick Preset</div>
-            <h2 class="modal-title">一键推荐配置</h2>
-            <div class="modal-note">按推荐链路自动创建或更新 4 条服务配置，并同时初始化 5 个 Agent 的默认模型。</div>
+            <div class="setup-kicker">Platform Pool</div>
+            <h2 class="modal-title">配置平台 API 池</h2>
+            <div class="modal-note">这一组配置将供<b>全平台所有用户</b>使用（用户不需要自己填 Key，按积分扣费）。填一次自动写入 4 条服务配置 + 初始化 5 个 Agent 默认模型。</div>
           </div>
-          <span class="tag tag-success">推荐</span>
+          <span class="tag tag-success">Admin</span>
         </div>
+
         <div class="huobao-grid">
           <label class="field">
-            <span class="field-label">API Key <span class="dim">(统一用于文本 / 图片 / 视频 / 音频)</span></span>
-            <input v-model="huobaoForm.apiKey" class="input" type="password" placeholder="统一 API Key（用于全链路服务）" />
-            <span class="field-hint">还没有账号？<a href="https://api.chatfire.site/" target="_blank" rel="noopener">立即注册 →</a></span>
+            <span class="field-label">Base URL <span class="dim">(你的 OpenAI 兼容聚合站点)</span></span>
+            <input v-model="huobaoForm.baseUrl" class="input mono" placeholder="https://yunwu.ai" required />
+          </label>
+          <label class="field">
+            <span class="field-label">API Key <span class="dim">(统一用于 4 类服务)</span></span>
+            <input v-model="huobaoForm.apiKey" class="input" type="password" placeholder="sk-..." required />
           </label>
         </div>
+
         <div class="preset-grid compact">
-          <article v-for="preset in huobaoPresetCards" :key="`${preset.serviceType}-${preset.provider}`" class="preset-card">
+          <article v-for="preset in dynamicPresetCards" :key="`${preset.serviceType}-${preset.provider}`" class="preset-card">
             <div class="preset-card-top">
               <span class="preset-service">{{ preset.label }}</span>
               <span class="tag tag-accent">{{ preset.provider }}</span>
             </div>
             <div class="preset-model mono">{{ preset.model }}</div>
-            <div class="preset-base mono">{{ preset.baseUrl }}</div>
+            <div class="preset-base mono">{{ preset.baseUrl || '— 待填 Base URL —' }}</div>
           </article>
         </div>
         <div class="modal-actions">
           <button type="button" class="btn" @click="presetDialog = false">取消</button>
-          <button type="submit" class="btn btn-primary">创建并启用</button>
+          <button type="submit" class="btn btn-primary" :disabled="!huobaoForm.apiKey || !huobaoForm.baseUrl">保存并启用</button>
         </div>
       </form>
     </div>
@@ -419,7 +424,17 @@ const presetDialog = ref(false)
 const cfgTesting = ref(false)
 const cfgTestResult = ref(null)
 const cfgForm = reactive({ name: '', provider: '', api_key: '', base_url: '', modelStr: '', service_type: 'text', priority: 0 })
-const huobaoForm = reactive({ apiKey: '' })
+const huobaoForm = reactive({ apiKey: '', baseUrl: '' })
+
+const dynamicPresetCards = computed(() => {
+  const base = huobaoForm.baseUrl || 'https://...'
+  return [
+    { serviceType: 'text', label: '文本', provider: 'openai', baseUrl: base, model: 'gemini-3-pro-preview', priority: 100 },
+    { serviceType: 'image', label: '图片', provider: 'gemini', baseUrl: base, model: 'gemini-3-pro-image-preview', priority: 99 },
+    { serviceType: 'video', label: '视频', provider: 'volcengine', baseUrl: base, model: 'doubao-seedance-1-5-pro-251215', priority: 98 },
+    { serviceType: 'audio', label: '音频', provider: 'minimax', baseUrl: base, model: 'speech-2.8-hd', priority: 97 },
+  ]
+})
 const serviceTypes = [{ type: 'text', label: '文本' }, { type: 'image', label: '图片' }, { type: 'video', label: '视频' }, { type: 'audio', label: '音频' }]
 const providers = ['ali', 'chatfire', 'gemini', 'minimax', 'openai', 'openrouter', 'vidu', 'volcengine']
 const providerSelectOptions = computed(() => providers.map(p => ({ label: p, value: p })))
@@ -537,14 +552,26 @@ async function testDraftCfg() {
   })
 }
 async function testExistingCfg(c) {
-  startEditCfg(c)
-  await testCfgPayload({
-    service_type: c.service_type,
-    provider: c.provider,
-    api_key: c.api_key || '',
-    base_url: c.base_url || '',
-    model: Array.isArray(c.model) ? c.model : [],
-  })
+  const toastId = toast.loading(`测试 ${c.provider} · ${c.service_type} ...`)
+  try {
+    const model = Array.isArray(c.model) ? c.model : (c.model ? [c.model] : [])
+    const result = await aiConfigAPI.test({
+      service_type: c.service_type,
+      provider: c.provider,
+      api_key: c.api_key || '',
+      base_url: c.base_url || '',
+      model,
+    })
+    toast.dismiss(toastId)
+    if (result.reachable) {
+      toast.success(`✓ ${c.provider} 端点已响应${result.latencyMs ? `（${result.latencyMs}ms）` : ''}`)
+    } else {
+      toast.error(`✗ 端点未通过测试${result.message ? `：${result.message}` : ''}`)
+    }
+  } catch (e) {
+    toast.dismiss(toastId)
+    toast.error(`✗ 测试失败：${e.message}`)
+  }
 }
 async function saveCfg() {
   if (!cfgForm.provider) { toast.warning('选择服务商'); return }
@@ -560,8 +587,12 @@ async function applyHuobaoPreset() {
     toast.warning('请填写 API Key')
     return
   }
+  if (!huobaoForm.baseUrl) {
+    toast.warning('请填写 Base URL')
+    return
+  }
   try {
-    await aiConfigAPI.huobaoPreset(huobaoForm.apiKey)
+    await aiConfigAPI.huobaoPreset(huobaoForm.apiKey, huobaoForm.baseUrl)
     await loadCfgs()
     await loadAgents()
     presetDialog.value = false
@@ -836,6 +867,17 @@ async function saveSkill(id) {
 }
 
 onMounted(() => { loadCfgs(); loadAgents(); loadAllSkills() })
+
+// ESC closes any open modal (backup since backdrop click is disabled to avoid losing input)
+function onKey(e) {
+  if (e.key === 'Escape') {
+    if (cfgDialog.value) cfgDialog.value = false
+    else if (presetDialog.value) presetDialog.value = false
+    else if (addSkillDialog.value) addSkillDialog.value = false
+  }
+}
+onMounted(() => document.addEventListener('keydown', onKey))
+onUnmounted(() => document.removeEventListener('keydown', onKey))
 </script>
 
 <style scoped>
@@ -1168,6 +1210,48 @@ onMounted(() => { loadCfgs(); loadAgents(); loadAllSkills() })
 }
 .huobao-grid .field-hint a:hover {
   text-decoration: underline;
+}
+
+.aggregator-chips {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 8px;
+}
+.aggregator-chip {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 10px 14px;
+  background: var(--bg-0);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: all 0.18s var(--ease-out);
+  font-family: var(--font-body);
+  text-align: left;
+}
+.aggregator-chip:hover {
+  border-color: var(--border-strong);
+  background: var(--bg-1);
+}
+.aggregator-chip.active {
+  border-color: var(--accent);
+  background: var(--accent-bg);
+  box-shadow: 0 0 0 3px rgba(143,239,38,0.12);
+}
+.aggregator-name {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-0);
+}
+.aggregator-chip.active .aggregator-name {
+  color: var(--accent-text);
+}
+.aggregator-domain {
+  font-size: 10.5px;
+  color: var(--text-3);
+  letter-spacing: 0.02em;
 }
 
 @media (max-width: 900px) {

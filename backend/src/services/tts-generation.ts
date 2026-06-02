@@ -23,6 +23,31 @@ interface TTSParams {
 }
 
 /**
+ * 把裸 PCM（16-bit little-endian）包成可播放的 WAV。
+ * Gemini TTS 返回的是 L16 PCM（默认 24kHz 单声道），没有 WAV 头，直接落盘无法播放。
+ */
+function pcmToWav(pcm: Buffer, sampleRate: number, channels: number): Buffer {
+  const bitsPerSample = 16
+  const blockAlign = (channels * bitsPerSample) / 8
+  const byteRate = sampleRate * blockAlign
+  const header = Buffer.alloc(44)
+  header.write('RIFF', 0)
+  header.writeUInt32LE(36 + pcm.length, 4)
+  header.write('WAVE', 8)
+  header.write('fmt ', 12)
+  header.writeUInt32LE(16, 16) // PCM fmt chunk size
+  header.writeUInt16LE(1, 20) // audio format = PCM
+  header.writeUInt16LE(channels, 22)
+  header.writeUInt32LE(sampleRate, 24)
+  header.writeUInt32LE(byteRate, 28)
+  header.writeUInt16LE(blockAlign, 32)
+  header.writeUInt16LE(bitsPerSample, 34)
+  header.write('data', 36)
+  header.writeUInt32LE(pcm.length, 40)
+  return Buffer.concat([header, pcm])
+}
+
+/**
  * 生成 TTS 音频，返回本地文件路径
  */
 export async function generateTTS(params: TTSParams): Promise<string> {
@@ -72,16 +97,52 @@ export async function generateTTS(params: TTSParams): Promise<string> {
     throw new Error(`TTS API error ${resp.status}: ${errText}`)
   }
 
-  const result = await resp.json()
-  const parsed = adapter.parseResponse(result)
+  let buffer: Buffer
+  let metadata: { audioLength: number; sampleRate: number; bitrate: number; format: string; channel: number }
 
-  // 将 hex 解码为二进制
-  const buffer = Buffer.from(parsed.audioHex, 'hex')
+  // Some adapters (OpenAI-compatible /v1/audio/speech) return raw binary audio.
+  // Others (MiniMax /v1/t2a_v2) return JSON with hex-encoded audio.
+  // Gemini native TTS returns JSON with base64 PCM → we wrap it in a WAV header.
+  const adapterAny = adapter as any
+  if (adapterAny.responseType === 'binary') {
+    const arrayBuf = await resp.arrayBuffer()
+    buffer = Buffer.from(arrayBuf)
+    metadata = adapterAny.getBinaryMetadata?.() || {
+      audioLength: 0,
+      sampleRate: 24000,
+      bitrate: 160000,
+      format: 'mp3',
+      channel: 1,
+    }
+  } else if (adapterAny.responseType === 'gemini-pcm') {
+    const result = await resp.json()
+    const { base64, sampleRate, channels } = adapterAny.parsePcmResponse(result)
+    const pcm = Buffer.from(base64, 'base64')
+    buffer = pcmToWav(pcm, sampleRate, channels)
+    metadata = {
+      audioLength: Math.round((pcm.length / (sampleRate * channels * 2)) * 1000),
+      sampleRate,
+      bitrate: sampleRate * channels * 16,
+      format: 'wav',
+      channel: channels,
+    }
+  } else {
+    const result = await resp.json()
+    const parsed = adapter.parseResponse(result)
+    buffer = Buffer.from(parsed.audioHex, 'hex')
+    metadata = {
+      audioLength: parsed.audioLength,
+      sampleRate: parsed.sampleRate,
+      bitrate: parsed.bitrate,
+      format: parsed.format,
+      channel: parsed.channel,
+    }
+  }
 
   // 保存到本地
   const audioDir = path.join(STORAGE_ROOT, 'audio')
   fs.mkdirSync(audioDir, { recursive: true })
-  const filename = `${uuid()}.${parsed.format || 'mp3'}`
+  const filename = `${uuid()}.${metadata.format || 'mp3'}`
   const filePath = path.join(audioDir, filename)
   fs.writeFileSync(filePath, buffer)
 
@@ -91,7 +152,7 @@ export async function generateTTS(params: TTSParams): Promise<string> {
     voice: params.voice,
     path: relativePath,
     bytes: buffer.length,
-    audioMs: parsed.audioLength,
+    audioMs: metadata.audioLength,
   })
   return relativePath
 }

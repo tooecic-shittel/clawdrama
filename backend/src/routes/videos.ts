@@ -22,11 +22,25 @@ app.post('/', async (c) => {
       }
     }
 
+    // Auto-fill reference image from storyboard's first_frame_image
+    // for character consistency (when frontend didn't pass image_url explicitly).
+    let imageUrl = body.image_url
+    let firstFrameUrl = body.first_frame_url
+    let referenceMode = body.reference_mode
+    if (body.storyboard_id && !imageUrl && !firstFrameUrl) {
+      const [sb] = db.select().from(schema.storyboards).where(eq(schema.storyboards.id, Number(body.storyboard_id))).all()
+      if (sb?.firstFrameImage) {
+        imageUrl = sb.firstFrameImage
+        if (!referenceMode) referenceMode = 'single'
+      }
+    }
+
     logTaskStart('VideoAPI', 'generate', {
       storyboardId: body.storyboard_id,
       dramaId: body.drama_id,
-      referenceMode: body.reference_mode,
+      referenceMode,
       duration: body.duration,
+      hasImageRef: !!imageUrl,
     })
     logTaskPayload('VideoAPI', 'request body', body)
     const id = await generateVideo({
@@ -34,9 +48,9 @@ app.post('/', async (c) => {
       dramaId: body.drama_id,
       prompt: body.prompt,
       model: body.model,
-      referenceMode: body.reference_mode,
-      imageUrl: body.image_url,
-      firstFrameUrl: body.first_frame_url,
+      referenceMode,
+      imageUrl,
+      firstFrameUrl,
       lastFrameUrl: body.last_frame_url,
       referenceImageUrls: body.reference_image_urls,
       duration: body.duration,

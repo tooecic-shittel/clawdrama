@@ -76,7 +76,9 @@ export const characters = sqliteTable('characters', {
   appearance: text('appearance'),
   personality: text('personality'),
   voiceStyle: text('voice_style'),
-  imageUrl: text('image_url'),
+  imageUrl: text('image_url'),         // 正面（默认头像）
+  viewSide: text('view_side'),         // 侧面
+  viewBack: text('view_back'),         // 背面
   referenceImages: text('reference_images'),
   seedValue: text('seed_value'),
   sortOrder: integer('sort_order'),

@@ -7,11 +7,43 @@ import path from 'path'
 import { fileURLToPath } from 'url'
 import { execFileSync } from 'child_process'
 import { v4 as uuid } from 'uuid'
+import os from 'os'
 import { db, schema } from '../db/index.js'
 import { eq } from 'drizzle-orm'
 import { now } from '../utils/response.js'
 import { generateTTS } from './tts-generation.js'
+import { pickVoiceForCharacter } from './voice-mapper.js'
+import { buildTTSInstruction } from './tts-instruction.js'
 import { logTaskError, logTaskProgress, logTaskStart, logTaskSuccess } from '../utils/task-logger.js'
+
+// @ts-ignore - declared via dynamic require fallback
+import ffmpegInstaller from '@ffmpeg-installer/ffmpeg'
+// @ts-ignore
+import ffprobeInstaller from '@ffprobe-installer/ffprobe'
+
+// Resolve ffmpeg binary path: env > npm-installed binary > common system locations
+function resolveBin(envName: string, npmPath: string | undefined, names: string[]): string | null {
+  if (process.env[envName]) return process.env[envName] as string
+  if (npmPath) {
+    try { if (fs.statSync(npmPath).isFile()) return npmPath } catch {}
+  }
+  const home = os.homedir()
+  const candidates = names.flatMap(n => [
+    `${home}/anaconda3/bin/${n}`,
+    `${home}/miniconda3/bin/${n}`,
+    `/opt/homebrew/bin/${n}`,
+    `/usr/local/bin/${n}`,
+    `/usr/bin/${n}`,
+  ])
+  for (const p of candidates) {
+    try { if (fs.statSync(p).isFile()) return p } catch {}
+  }
+  return null
+}
+const _ffmpegBin = resolveBin('FFMPEG_PATH', (ffmpegInstaller as any)?.path, ['ffmpeg'])
+const _ffprobeBin = resolveBin('FFPROBE_PATH', (ffprobeInstaller as any)?.path, ['ffprobe'])
+if (_ffmpegBin) ffmpeg.setFfmpegPath(_ffmpegBin)
+if (_ffprobeBin) ffmpeg.setFfprobePath(_ffprobeBin)
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const STORAGE_ROOT = process.env.STORAGE_PATH || path.resolve(__dirname, '../../../data/static')
@@ -70,9 +102,15 @@ export async function composeStoryboard(storyboardId: number): Promise<string> {
   let subtitlePath: string | null = null
   const parsedDialogue = parseDialogueForTTS(sb.dialogue)
 
-  // 1. 生成 TTS 音频（如果有对白）
+  // Character dialogue: keep Veo's lip-synced audio (don't use TTS to avoid desync).
+  // Only narrator-style voiceover should use TTS (Veo doesn't generate narrator audio).
+  const NARRATOR_RE = /^(旁白|画外音|内心|心想|内心独白|narrator|voiceover|v\.?o\.?)$/i
+  const speakerIsNarrator = parsedDialogue.speaker && NARRATOR_RE.test(parsedDialogue.speaker)
+  const shouldUseTTS = !parsedDialogue.ignorable && speakerIsNarrator
+
+  // 1. 生成 TTS 音频（仅旁白型对白才生成，避免和 Veo 的人物口型冲突）
   try {
-    if (!parsedDialogue.ignorable) {
+    if (shouldUseTTS) {
       if (sb.ttsAudioUrl) {
         const existingAudioPath = toAbsPath(sb.ttsAudioUrl)
         if (fs.existsSync(existingAudioPath)) {
@@ -81,22 +119,26 @@ export async function composeStoryboard(storyboardId: number): Promise<string> {
       }
 
       if (!audioPath) {
-        let voiceId = 'alloy'
         const [ep] = db.select().from(schema.episodes).where(eq(schema.episodes.id, sb.episodeId)).all()
-        if (parsedDialogue.speaker) {
-          const charName = parsedDialogue.speaker
-          if (ep) {
-            const chars = db.select().from(schema.characters)
-              .where(eq(schema.characters.dramaId, ep.dramaId)).all()
-            const found = chars.find(c => c.name === charName)
-            if (found?.voiceStyle) voiceId = found.voiceStyle
-          }
-        }
+        // Map character → OpenAI voice (deterministic, per-character consistent)
+        const voiceId = pickVoiceForCharacter({
+          characterName: parsedDialogue.speaker,
+          dramaId: ep?.dramaId,
+          fallback: 'sage',
+        })
+        logTaskProgress('ComposeTask', 'voice-picked', {
+          storyboardId, speaker: parsedDialogue.speaker, voice: voiceId,
+        })
 
         const pureDialogue = parsedDialogue.pureText
         if (pureDialogue) {
-          logTaskProgress('ComposeTask', 'generate-inline-tts', { storyboardId, voiceId, textPreview: pureDialogue.slice(0, 40) })
-          const ttsPath = await generateTTS({ text: pureDialogue, voice: voiceId, configId: ep?.audioConfigId ?? undefined })
+          const emotion = buildTTSInstruction(
+            { atmosphere: sb.atmosphere, action: sb.action, description: sb.description },
+            pureDialogue,
+            parsedDialogue.speaker,
+          )
+          logTaskProgress('ComposeTask', 'generate-inline-tts', { storyboardId, voiceId, emotion, textPreview: pureDialogue.slice(0, 40) })
+          const ttsPath = await generateTTS({ text: pureDialogue, voice: voiceId, emotion, configId: ep?.audioConfigId ?? undefined })
           audioPath = toAbsPath(ttsPath)
           db.update(schema.storyboards).set({ ttsAudioUrl: ttsPath, updatedAt: now() })
             .where(eq(schema.storyboards.id, storyboardId)).run()
@@ -129,37 +171,49 @@ export async function composeStoryboard(storyboardId: number): Promise<string> {
 
     await new Promise<void>((resolve, reject) => {
       let cmd = ffmpeg(videoPath)
+      if (audioPath) cmd = cmd.input(audioPath)
 
-      if (audioPath) {
-        cmd = cmd.input(audioPath)
-      }
+      // Build a single complexFilter graph that does both subtitle burn-in (video side)
+      // and audio mixing (audio side) — mixing videoFilter + complexFilter doesn't work
+      // in fluent-ffmpeg.
+      const hasSubs = subtitlePath && supportsSubtitleFilter()
+      const filterParts: string[] = []
+      let videoOutLabel = '0:v'
 
-      const filters: string[] = []
-
-      if (subtitlePath && supportsSubtitleFilter()) {
+      if (hasSubs && subtitlePath) {
         const escapedPath = subtitlePath
           .replace(/\\/g, '/')
           .replace(/:/g, '\\:')
           .replace(/'/g, "\\'")
         const forceStyle = 'FontSize=20\\,PrimaryColour=&HFFFFFF&\\,OutlineColour=&H000000&\\,Outline=2'
-        filters.push(`subtitles=filename='${escapedPath}':force_style='${forceStyle}'`)
+        filterParts.push(`[0:v]subtitles=filename='${escapedPath}':force_style='${forceStyle}'[vout]`)
+        videoOutLabel = '[vout]'
       } else if (subtitlePath) {
-        logTaskProgress('ComposeTask', 'subtitle-filter-unavailable', {
-          storyboardId,
-          subtitlePath,
-        })
+        logTaskProgress('ComposeTask', 'subtitle-filter-unavailable', { storyboardId, subtitlePath })
       }
 
-      if (filters.length > 0) {
-        cmd = cmd.videoFilter(filters)
+      let audioOutLabel: string | null = null
+      if (audioPath) {
+        // TTS 对白存在时：直接用 TTS 替换原视频音频。
+        // (不再混入 Veo 原声 —— Veo 自带的对白会和 TTS 重叠出现"两个人说同一句话"。
+        //  环境音 / 背景音乐 后续可以通过专门的 BGM 轨道叠加。)
+        // No filter needed — just map TTS audio directly.
+      }
+
+      if (filterParts.length > 0) {
+        cmd = cmd.complexFilter(filterParts.join(';'))
       }
 
       const outputOptions = ['-c:v', 'libx264', '-preset', 'fast', '-crf', '23']
-
+      // map video
+      outputOptions.push('-map', videoOutLabel)
+      // map audio
       if (audioPath) {
-        outputOptions.push('-map', '0:v', '-map', '1:a', '-c:a', 'aac', '-shortest')
+        // TTS 对白：用 TTS 替换原音轨（避免和 Veo 自带对白重叠）
+        outputOptions.push('-map', '1:a', '-c:a', 'aac', '-b:a', '192k', '-shortest')
       } else {
-        outputOptions.push('-an')
+        // 无 TTS：保留视频原始音轨（Veo 等自带音效），源视频没音轨也不报错
+        outputOptions.push('-map', '0:a?', '-c:a', 'aac')
       }
 
       cmd.outputOptions(outputOptions)

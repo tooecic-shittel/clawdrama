@@ -17,7 +17,6 @@ export class OpenAIImageAdapter implements ImageProviderAdapter {
   provider = 'openai'
 
   buildGenerateRequest(config: AIConfig, record: ImageGenerationRecord): ProviderRequest {
-    // OpenAI 使用 size 字段，格式为 "1024x1024"
     const size = record.size || '1024x1024'
 
     const body: any = {
@@ -25,7 +24,21 @@ export class OpenAIImageAdapter implements ImageProviderAdapter {
       prompt: record.prompt,
       size,
       n: 1,
-      response_format: 'url', // 默认返回 URL，可选 'b64_json'
+      response_format: 'url',
+    }
+
+    // Reference image array (seedream 4.5+ and similar models support this for
+    // character consistency / image-to-image). `referenceImages` on the record is
+    // already normalized to data: URLs or http URLs by image-generation.ts.
+    if (record.referenceImages) {
+      try {
+        const refs = typeof record.referenceImages === 'string'
+          ? JSON.parse(record.referenceImages)
+          : record.referenceImages
+        if (Array.isArray(refs) && refs.length > 0) {
+          body.image = refs
+        }
+      } catch {}
     }
 
     return {

@@ -5,6 +5,10 @@
 import { MiniMaxImageAdapter } from './minimax-image'
 import { MiniMaxVideoAdapter } from './minimax-video'
 import { MiniMaxTTSAdapter } from './minimax-tts'
+import { OpenAITTSAdapter } from './openai-tts'
+import { GeminiTTSAdapter } from './gemini-tts'
+import { OpenAISoraVideoAdapter } from './openai-sora-video'
+import { GoogleVeoVideoAdapter } from './google-veo-video'
 import { OpenAIImageAdapter } from './openai-image'
 import { GeminiImageAdapter } from './gemini-image'
 import { VolcEngineImageAdapter } from './volcengine-image'
@@ -31,12 +35,22 @@ export const videoAdapters: Record<string, VideoProviderAdapter> = {
   volcengine: new VolcEngineVideoAdapter(),
   vidu: new ViduVideoAdapter(),
   ali: new AliVideoAdapter(),
-  // Chatfire 视频 - 待确认 API 格式
+  // OpenAI-compatible sora endpoint (used by yunwu / official OpenAI / chatfire)
+  openai: new OpenAISoraVideoAdapter(),
+  chatfire: new OpenAISoraVideoAdapter(),
+  // Google Veo (AI Studio native protocol)
+  google: new GoogleVeoVideoAdapter(),
+  'google-veo': new GoogleVeoVideoAdapter(),
 }
 
 // TTS Adapter 注册表
 export const ttsAdapters: Record<string, TTSProviderAdapter> = {
   minimax: new MiniMaxTTSAdapter(),
+  openai: new OpenAITTSAdapter(),
+  chatfire: new OpenAITTSAdapter(),
+  // Gemini 原生 TTS（中文更自然，支持语气前缀）
+  gemini: new GeminiTTSAdapter(),
+  google: new GeminiTTSAdapter(),
 }
 
 export function getTTSAdapter(provider: string): TTSProviderAdapter {

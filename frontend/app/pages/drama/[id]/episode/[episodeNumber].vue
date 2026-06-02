@@ -158,15 +158,27 @@
               </svg>
             </div>
             <div class="empty-title">AI 改写为格式化剧本</div>
-            <div class="empty-desc">你可以先用 AI 把原始内容整理成格式化剧本，也可以跳过这一步，直接使用原始内容继续提取角色与场景。</div>
+            <div class="empty-desc">根据你的原始内容选合适的模式 — 已有规范剧本就直接改写，小说/梗概会自动调用对应 Skill。</div>
             <div class="step-empty-actions">
-              <button class="btn btn-primary" @click="doRewrite">
+              <button class="btn btn-primary" @click="doRewrite" title="把已经格式接近的剧本整理成标准格式">
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
-                开始改写
+                改写为剧本
               </button>
-              <button class="btn" @click="skipRewrite">
+              <button class="btn" @click="doNovelToScript" title="把长篇小说拆解成多集短剧 + 输出第一集">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+                小说转剧本
+              </button>
+              <button class="btn" @click="doScriptWrite" title="只用一句梗概让 AI 原创短剧">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 2v4"/><path d="M12 18v4"/><path d="M4.93 4.93l2.83 2.83"/><path d="M16.24 16.24l2.83 2.83"/><path d="M2 12h4"/><path d="M18 12h4"/><path d="M4.93 19.07l2.83-2.83"/><path d="M16.24 7.76l2.83-2.83"/></svg>
+                AI 原创剧本
+              </button>
+              <button class="btn" @click="doScriptPolish" title="对已有剧本做节奏 / 对白 / 冲突优化">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z"/></svg>
+                润色剧本
+              </button>
+              <button class="btn btn-ghost" @click="skipRewrite" title="不改写，直接用原始内容">
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M5 12h14"/><path d="M13 18l6-6-6-6"/></svg>
-                跳过改写
+                跳过
               </button>
             </div>
           </div>
@@ -285,6 +297,15 @@
             <div class="toolbar-right">
               <span v-if="charsVoiced" class="char-count">{{ charsVoiced }}/{{ chars.length }} 已分配</span>
               <span v-if="voiceSampleCount" class="char-count">{{ voiceSampleCount }}/{{ charsVoiced }} 试听文件</span>
+              <label v-if="activeAudioConfig" class="dim" style="font-size:11px;margin-left:8px">TTS 模型</label>
+              <select v-if="activeAudioConfig"
+                :value="currentTTSModel"
+                @change="changeTTSModel($event.target.value)"
+                class="input"
+                style="height:28px;font-size:12px;padding:0 8px;min-width:220px"
+                :title="`当前：${currentTTSModel || '未设置'}（切换后旧的试听需重新生成才能听到新音色）`">
+                <option v-for="opt in TTS_MODEL_PRESETS" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+              </select>
               <button v-if="charsVoiced" class="btn btn-sm" @click="doVoice" :disabled="rn">
                 <Loader2 v-if="rn && rt === 'voice_assigner'" :size="11" class="animate-spin" />
                 <svg v-else width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg>
@@ -771,7 +792,38 @@
                 <div class="asset-foot">
                   <span :class="['dot', (c.image_url || c.imageUrl) && 'ok', isPendingCharImage(c.id) && 'pending']" />
                   <span class="dim" style="font-size:10px">{{ (c.image_url || c.imageUrl) ? '已生成' : (isPendingCharImage(c.id) ? '生成中' : '待生成') }}</span>
-                  <button class="btn btn-sm ml-auto" :disabled="isPendingCharImage(c.id)" @click="genCharImg(c.id)">{{ isPendingCharImage(c.id) ? '生成中' : '生成' }}</button>
+                  <button class="btn btn-sm ml-auto" :disabled="isPendingCharImage(c.id)" @click="genCharImg(c.id)">
+                    {{ isPendingCharImage(c.id) ? '生成中' : ((c.image_url || c.imageUrl) ? '重新生成' : '生成') }}
+                  </button>
+                </div>
+
+                <!-- 三视图：侧面 + 背面（角色一致性 boost） -->
+                <div v-if="(c.image_url || c.imageUrl)" class="char-views">
+                  <div class="char-view-row">
+                    <span class="char-view-label">三视图</span>
+                    <div class="char-view-slot" :title="c.view_side || c.viewSide ? '点击预览' : '点击生成侧面'" @click="(c.view_side || c.viewSide) ? openImageViewer('/' + (c.view_side || c.viewSide), `${c.name} 侧面`) : genCharView(c.id, 'side')">
+                      <img v-if="c.view_side || c.viewSide" :src="'/' + (c.view_side || c.viewSide)" />
+                      <Loader2 v-else-if="isPendingCharView(c.id, 'side')" :size="14" class="animate-spin" />
+                      <div v-else class="char-view-empty">
+                        <span class="char-view-glyph">侧</span>
+                        <span class="char-view-plus">+</span>
+                      </div>
+                      <button v-if="(c.view_side || c.viewSide) && !isPendingCharView(c.id, 'side')" class="char-view-regen" title="重新生成" @click.stop="genCharView(c.id, 'side')">
+                        <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+                      </button>
+                    </div>
+                    <div class="char-view-slot" :title="c.view_back || c.viewBack ? '点击预览' : '点击生成背面'" @click="(c.view_back || c.viewBack) ? openImageViewer('/' + (c.view_back || c.viewBack), `${c.name} 背面`) : genCharView(c.id, 'back')">
+                      <img v-if="c.view_back || c.viewBack" :src="'/' + (c.view_back || c.viewBack)" />
+                      <Loader2 v-else-if="isPendingCharView(c.id, 'back')" :size="14" class="animate-spin" />
+                      <div v-else class="char-view-empty">
+                        <span class="char-view-glyph">背</span>
+                        <span class="char-view-plus">+</span>
+                      </div>
+                      <button v-if="(c.view_back || c.viewBack) && !isPendingCharView(c.id, 'back')" class="char-view-regen" title="重新生成" @click.stop="genCharView(c.id, 'back')">
+                        <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -810,7 +862,12 @@
                 <div class="asset-foot">
                   <span :class="['dot', (s.image_url || s.imageUrl) && 'ok', isPendingSceneImage(s.id) && 'pending']" />
                   <span class="dim" style="font-size:10px">{{ (s.image_url || s.imageUrl) ? '已生成' : (isPendingSceneImage(s.id) ? '生成中' : '待生成') }}</span>
-                  <button class="btn btn-sm ml-auto" :disabled="isPendingSceneImage(s.id)" @click="genSceneImg(s.id)">{{ isPendingSceneImage(s.id) ? '生成中' : '生成' }}</button>
+                  <button class="btn btn-ghost btn-icon ml-auto" :disabled="isPendingSceneImage(s.id)" @click="openSceneCustomDialog(s)" title="自定义生成">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                  </button>
+                  <button class="btn btn-sm" :disabled="isPendingSceneImage(s.id)" @click="genSceneImg(s.id)">
+                    {{ isPendingSceneImage(s.id) ? '生成中' : ((s.image_url || s.imageUrl) ? '重新生成' : '生成') }}
+                  </button>
                 </div>
               </div>
             </div>
@@ -960,7 +1017,7 @@
                   <!-- Thumbnails -->
                   <div class="frame-thumbs">
                     <div class="frame-thumb-wrap">
-                      <div class="frame-thumb" @click.stop="!isPendingShotFrame(sb.id, 'first_frame') && genShotFrame(sb, 'first_frame')">
+                      <div class="frame-thumb" @click.stop="!isPendingShotFrame(sb.id, 'first_frame') && !getFirstFrame(sb) && genShotFrame(sb, 'first_frame')">
                         <img
                           v-if="getFirstFrame(sb)"
                           :src="'/' + getFirstFrame(sb)"
@@ -971,14 +1028,19 @@
                           <Loader2 v-if="isPendingShotFrame(sb.id, 'first_frame')" :size="14" class="animate-spin" />
                           <svg v-else width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
                         </div>
-                        <span v-if="getFirstFrame(sb)" class="frame-re">
-                          <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
-                        </span>
+                        <div v-if="getFirstFrame(sb) && !isPendingShotFrame(sb.id, 'first_frame')" class="frame-actions">
+                          <button class="frame-action-btn" title="重新生成（同 prompt）" @click.stop="genShotFrame(sb, 'first_frame')">
+                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+                          </button>
+                          <button class="frame-action-btn" title="自定义重新生成" @click.stop="openShotCustomDialog(sb, 'first_frame')">
+                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                          </button>
+                        </div>
                       </div>
                       <span class="frame-thumb-label">{{ isPendingShotFrame(sb.id, 'first_frame') ? '首帧生成中' : '首帧' }}</span>
                     </div>
                     <div v-if="frameMode === 'first_last'" class="frame-thumb-wrap">
-                      <div class="frame-thumb" @click.stop="!isPendingShotFrame(sb.id, 'last_frame') && genShotFrame(sb, 'last_frame')">
+                      <div class="frame-thumb" @click.stop="!isPendingShotFrame(sb.id, 'last_frame') && !getLastFrame(sb) && genShotFrame(sb, 'last_frame')">
                         <img
                           v-if="getLastFrame(sb)"
                           :src="'/' + getLastFrame(sb)"
@@ -989,9 +1051,14 @@
                           <Loader2 v-if="isPendingShotFrame(sb.id, 'last_frame')" :size="14" class="animate-spin" />
                           <svg v-else width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
                         </div>
-                        <span v-if="getLastFrame(sb)" class="frame-re">
-                          <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
-                        </span>
+                        <div v-if="getLastFrame(sb) && !isPendingShotFrame(sb.id, 'last_frame')" class="frame-actions">
+                          <button class="frame-action-btn" title="重新生成（同 prompt）" @click.stop="genShotFrame(sb, 'last_frame')">
+                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+                          </button>
+                          <button class="frame-action-btn" title="自定义重新生成" @click.stop="openShotCustomDialog(sb, 'last_frame')">
+                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                          </button>
+                        </div>
                       </div>
                       <span class="frame-thumb-label">{{ isPendingShotFrame(sb.id, 'last_frame') ? '尾帧生成中' : '尾帧' }}</span>
                     </div>
@@ -1193,7 +1260,11 @@
             <div class="prod-section-bar">
               <span class="dim" style="font-size:12px">{{ sbs.length }} 个镜头</span>
               <span class="tag mono">{{ shotVidCount }}/{{ sbs.length }} 已生成</span>
-              <div class="ml-auto flex gap-1">
+              <div class="ml-auto flex gap-1" style="align-items:center">
+                <label class="dim" style="font-size:11px;margin-right:4px">视频模型</label>
+                <select v-model="videoModelOverride" class="input" style="height:28px;font-size:12px;padding:0 8px;min-width:200px" :title="videoModelOverride ? `本次生成使用：${videoModelOverride}` : '使用配置中的默认模型'">
+                  <option v-for="opt in VIDEO_MODEL_PRESETS" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+                </select>
                 <button class="btn btn-sm" @click="batchVideos">
                   <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
                   批量视频
@@ -1235,7 +1306,7 @@
                 <div class="prod-actions">
                   <button class="btn btn-sm" :disabled="isPendingVideo(sb.id)" @click="genVid(sb)">
                     <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
-                    {{ isPendingVideo(sb.id) ? '生成中' : '生成视频' }}
+                    {{ isPendingVideo(sb.id) ? '生成中' : (hasVid(sb) ? '重新生成视频' : '生成视频') }}
                   </button>
                 </div>
               </div>
@@ -1432,6 +1503,18 @@
       </div>
     </main>
     </div>
+
+    <!-- Custom image generation dialog (used by scene/storyboard image triggers) -->
+    <ImageGenerateDialog
+      :open="customGenDialog.open"
+      :title="customGenDialog.title"
+      :subtitle="customGenDialog.subtitle"
+      :default-prompt="customGenDialog.defaultPrompt"
+      :characters="chars"
+      :default-char-ids="customGenDialog.defaultCharIds"
+      @close="closeCustomGen"
+      @submit="handleCustomGenSubmit"
+    />
   </div>
 </template>
 
@@ -1440,9 +1523,10 @@ import { toast } from 'vue-sonner'
 import {
   Users, MapPin, Video, ImageIcon, Layers, Mic2, FileText, FolderKanban, Clapperboard, Download,
 } from 'lucide-vue-next'
-import { dramaAPI, episodeAPI, storyboardAPI, characterAPI, sceneAPI, imageAPI, videoAPI, composeAPI, mergeAPI, gridAPI, aiConfigAPI, voicesAPI } from '~/composables/useApi'
+import { dramaAPI, episodeAPI, storyboardAPI, characterAPI, sceneAPI, imageAPI, videoAPI, composeAPI, mergeAPI, gridAPI, aiConfigAPI, voicesAPI, humanizeError } from '~/composables/useApi'
 import { useAgent } from '~/composables/useAgent'
 import BaseSelect from '~/components/BaseSelect.vue'
+import ImageGenerateDialog from '~/components/ImageGenerateDialog.vue'
 
 definePageMeta({ layout: 'studio' })
 
@@ -1473,12 +1557,40 @@ const prodTabIdx = computed({
 })
 const frameMode = ref('first')
 const fallbackVoiceProfiles = [
-  { id: 'alloy', label: 'Alloy', gender: '中性', traits: '平衡、自然、克制', suitable: '通用叙述、旁白、需要稳定输出的角色' },
-  { id: 'echo', label: 'Echo', gender: '男声', traits: '低沉、稳重、冷静', suitable: '成熟男性、父辈、旁白、压迫感角色' },
-  { id: 'fable', label: 'Fable', gender: '男声', traits: '温暖、讲述感、表现力强', suitable: '男主、成长型角色、叙事担当' },
-  { id: 'onyx', label: 'Onyx', gender: '男声', traits: '深沉、有力、权威', suitable: '反派、强势角色、掌控型人物' },
-  { id: 'nova', label: 'Nova', gender: '女声', traits: '温柔、甜润、亲和', suitable: '女主、母亲、柔和配角' },
-  { id: 'shimmer', label: 'Shimmer', gender: '女声', traits: '明亮、活泼、年轻', suitable: '少女、轻快角色、跳脱配角' },
+  // Gemini 原生 TTS 音色，中文最自然，共 30 个。id 即 Gemini voiceName，直接写回角色 voice_style。
+  // —— 女声 14 ——
+  { id: 'Kore', label: 'Kore', gender: '女声', traits: '温暖、亲和、自然', suitable: '女主、温柔母亲、知心朋友' },
+  { id: 'Leda', label: 'Leda', gender: '女声', traits: '清新、有少女感', suitable: '少女、清纯女主、明亮角色' },
+  { id: 'Despina', label: 'Despina', gender: '女声', traits: '柔美、甜美', suitable: '甜美女主、邻家女孩' },
+  { id: 'Achernar', label: 'Achernar', gender: '女声', traits: '柔和、轻柔', suitable: '温柔配角、抒情女声' },
+  { id: 'Callirrhoe', label: 'Callirrhoe', gender: '女声', traits: '随和、松弛', suitable: '知性女性、都市女主' },
+  { id: 'Autonoe', label: 'Autonoe', gender: '女声', traits: '明亮、活泼', suitable: '活泼少女、元气角色' },
+  { id: 'Erinome', label: 'Erinome', gender: '女声', traits: '清晰、干净', suitable: '职场女性、干练角色' },
+  { id: 'Laomedeia', label: 'Laomedeia', gender: '女声', traits: '轻快、俏皮', suitable: '俏皮少女、喜剧角色' },
+  { id: 'Gacrux', label: 'Gacrux', gender: '女声', traits: '成熟、稳重', suitable: '御姐、成熟女性、女上司' },
+  { id: 'Pulcherrima', label: 'Pulcherrima', gender: '女声', traits: '直率、有态度', suitable: '强势女性、大女主' },
+  { id: 'Vindemiatrix', label: 'Vindemiatrix', gender: '女声', traits: '温柔、平和', suitable: '温婉女性、抒情旁白' },
+  { id: 'Sulafat', label: 'Sulafat', gender: '女声', traits: '温暖、明亮', suitable: '温暖女声、抒情旁白' },
+  { id: 'Sadachbia', label: 'Sadachbia', gender: '女声', traits: '活力、轻盈', suitable: '灵动角色、少女' },
+  { id: 'Zephyr', label: 'Zephyr', gender: '女声', traits: '明亮、轻盈', suitable: '清亮女声、青春角色' },
+  // —— 男声 15 ——
+  { id: 'Charon', label: 'Charon', gender: '男声', traits: '低沉、沉稳、有磁性', suitable: '男主、霸总、成熟男性' },
+  { id: 'Orus', label: 'Orus', gender: '男声', traits: '醇厚、稳重', suitable: '父辈、长者、正气角色' },
+  { id: 'Algieba', label: 'Algieba', gender: '男声', traits: '柔和、抒情、温润', suitable: '温润男主、暖男、内心戏' },
+  { id: 'Fenrir', label: 'Fenrir', gender: '男声', traits: '富有表现力、戏剧张力', suitable: '反派、戏精角色、张力场景' },
+  { id: 'Puck', label: 'Puck', gender: '男声', traits: '活泼、俏皮', suitable: '少年、活力男主、喜剧角色' },
+  { id: 'Iapetus', label: 'Iapetus', gender: '男声', traits: '清晰、沉静', suitable: '文质男性、书生角色' },
+  { id: 'Umbriel', label: 'Umbriel', gender: '男声', traits: '松弛、随和', suitable: '邻家男孩、暖男配角' },
+  { id: 'Enceladus', label: 'Enceladus', gender: '男声', traits: '低沉、气声', suitable: '神秘角色、低语场景' },
+  { id: 'Algenib', label: 'Algenib', gender: '男声', traits: '沙哑、粗粝', suitable: '硬汉、江湖角色' },
+  { id: 'Rasalgethi', label: 'Rasalgethi', gender: '男声', traits: '知性、清晰', suitable: '旁白、解说、学者' },
+  { id: 'Alnilam', label: 'Alnilam', gender: '男声', traits: '坚定、有力', suitable: '军人、领袖、正派' },
+  { id: 'Schedar', label: 'Schedar', gender: '男声', traits: '平稳、均衡', suitable: '旁白、成熟男性' },
+  { id: 'Achird', label: 'Achird', gender: '男声', traits: '友好、亲切', suitable: '邻家男孩、朋友角色' },
+  { id: 'Zubenelgenubi', label: 'Zubenelgenubi', gender: '男声', traits: '随性、口语化', suitable: '市井角色、喜剧男配' },
+  { id: 'Sadaltager', label: 'Sadaltager', gender: '男声', traits: '知性、沉稳', suitable: '专家、长者、旁白' },
+  // —— 中性 / 旁白 1 ——
+  { id: 'Aoede', label: 'Aoede', gender: '中性', traits: '轻盈、自然、叙事感', suitable: '旁白、知性角色、解说' },
 ]
 const voiceProfiles = ref(fallbackVoiceProfiles)
 const voiceSelectOptions = computed(() => voiceProfiles.value.map(v => ({ label: `${v.label} · ${v.traits}`, value: v.id })))
@@ -1488,6 +1600,29 @@ const videoConfigSelectOptions = computed(() => videoConfigs.value.map(c => {
   const label = modelName ? `${modelName} (${c.provider})` : `${c.name} (${c.provider})`
   return { label, value: c.id }
 }))
+
+// TTS quick-switch — each preset is tied to a provider's audio config.
+// 切换时会把对应 provider 的音频配置设为最高优先级（即默认生效的配置）并更新其模型。
+// Gemini 原生 TTS 中文最自然且不"机器人"；OpenAI 作为备选保留。
+const TTS_MODEL_PRESETS = [
+  { value: 'gemini-2.5-flash-preview-tts', provider: 'gemini', label: 'Gemini Flash（中文最自然，推荐）' },
+  { value: 'gpt-4o-mini-tts', provider: 'openai', label: 'gpt-4o-mini-tts（OpenAI 备选）' },
+]
+
+// Video model quick-switch — overrides the active config's model per-generation.
+const VIDEO_MODEL_PRESETS = [
+  { value: '', label: '默认（配置中的模型）' },
+  { value: 'sora-2', label: 'sora-2（云雾，稳定）' },
+  { value: 'happyhorse-1.0-t2v', label: 'happyhorse-1.0-t2v（云雾，快）' },
+  { value: 'wan2.5-i2v-preview', label: 'wan2.5-i2v-preview（云雾，预览）' },
+]
+const videoModelOverride = ref(typeof window !== 'undefined' ? (localStorage.getItem('claw_video_model') || '') : '')
+watch(videoModelOverride, (v) => {
+  if (typeof window === 'undefined') return
+  if (v) localStorage.setItem('claw_video_model', v)
+  else localStorage.removeItem('claw_video_model')
+})
+
 const frameModeOptions = [{ label: '仅首帧', value: 'first' }, { label: '首尾帧', value: 'first_last' }]
 const gridLayoutOptions = [
   { label: '2x2', value: '2x2' },
@@ -1499,6 +1634,7 @@ const imageConfigs = ref([])
 const videoConfigs = ref([])
 const audioConfigs = ref([])
 const pendingCharImageIds = ref([])
+const pendingCharViewKeys = ref([])  // "characterId:view" pairs (view = 'side'|'back')
 const pendingSceneImageIds = ref([])
 const pendingShotFrameKeys = ref([])
 const pendingVideoIds = ref([])
@@ -1556,7 +1692,8 @@ function isPendingVideo(id) {
 }
 
 function videoFailMessage(id) {
-  return failedVideoMessages.value[id] || ''
+  const raw = failedVideoMessages.value[id]
+  return raw ? humanizeError(raw) : ''
 }
 
 function isPendingCompose(id) {
@@ -1564,7 +1701,8 @@ function isPendingCompose(id) {
 }
 
 function composeFailMessage(id) {
-  return failedComposeMessages.value[id] || ''
+  const raw = failedComposeMessages.value[id]
+  return raw ? humanizeError(raw) : ''
 }
 
 function isNarratorCharacter(char) {
@@ -1581,6 +1719,50 @@ const lockedAudioProvider = computed(() => audioConfigs.value.find(c => c.id ===
 const lockedImageConfigLabel = computed(() => configLabel(imageConfigs.value.find(c => c.id === lockedImageConfigId.value)))
 const lockedVideoConfigLabel = computed(() => configLabel(videoConfigs.value.find(c => c.id === lockedVideoConfigId.value)))
 const lockedAudioConfigLabel = computed(() => configLabel(audioConfigs.value.find(c => c.id === lockedAudioConfigId.value)))
+
+// Active audio config — mirrors backend getAudioConfig(): episode binding wins,
+// otherwise the highest-priority active audio config (NOT just the first in list).
+const activeAudioConfig = computed(() => {
+  if (lockedAudioConfigId.value) {
+    const bound = audioConfigs.value.find(c => c.id === lockedAudioConfigId.value)
+    if (bound) return bound
+  }
+  const active = audioConfigs.value
+    .filter(c => (c.is_active ?? c.isActive ?? true))
+    .slice()
+    .sort((a, b) => (Number(b.priority) || 0) - (Number(a.priority) || 0))
+  return active[0] || audioConfigs.value[0] || null
+})
+const currentTTSModel = computed(() => {
+  const c = activeAudioConfig.value
+  if (!c) return ''
+  try {
+    const m = typeof c.model === 'string' ? JSON.parse(c.model || '[]') : c.model
+    return Array.isArray(m) ? (m[0] || '') : (m || '')
+  } catch { return c.model || '' }
+})
+async function changeTTSModel(newModel) {
+  const preset = TTS_MODEL_PRESETS.find(p => p.value === newModel)
+  if (!preset) { toast.error('未知的 TTS 模型'); return }
+  // Find the audio config for this preset's provider (gemini / openai)
+  const target = audioConfigs.value.find(c => (c.provider || '').toLowerCase() === preset.provider)
+  if (!target) { toast.error(`未找到 ${preset.provider} 音频配置，请先在设置中添加`); return }
+  const alreadyActive = activeAudioConfig.value?.id === target.id
+  if (alreadyActive && currentTTSModel.value === newModel) return
+  try {
+    const payload = { model: [newModel], is_active: true }
+    // Switching provider: bump this config above all others so it becomes the default.
+    if (!alreadyActive) {
+      const maxPriority = Math.max(0, ...audioConfigs.value.map(c => Number(c.priority) || 0))
+      payload.priority = maxPriority + 1
+    }
+    await aiConfigAPI.update(target.id, payload)
+    toast.success(`已切换 TTS：${preset.label}`)
+    await loadConfigs()
+  } catch (e) {
+    toast.error(e.message)
+  }
+}
 
 // Grid tool state
 const gridDialog = ref(false)
@@ -2440,6 +2622,27 @@ async function refresh() {
 function saveRaw() { episodeAPI.update(epId.value, { content: localRaw.value }); episode.value.content = localRaw.value }
 function saveScr() { episodeAPI.update(epId.value, { script_content: localScript.value }); episode.value.script_content = localScript.value }
 function doRewrite() { saveRaw(); runAgent('script_rewriter', '请读取剧本并改写为格式化剧本，然后保存', dramaId, epId.value, refresh) }
+
+function doNovelToScript() {
+  saveRaw()
+  runAgent('script_rewriter',
+    '我提供的是一段长篇小说原文（不是剧本格式）。请按 novel_to_script Skill 的方法：① 输出剧集大纲（默认 60 集）② 输出第一集详细短剧剧本（含场景标题、动作描写、对白），第一集保存到当前集（save_script）。结果必须使用中文。',
+    dramaId, epId.value, refresh)
+}
+
+function doScriptWrite() {
+  saveRaw()
+  runAgent('script_rewriter',
+    '我提供的是一句话/几句话剧情梗概。请按 script_writer Skill 的方法原创整剧 — ① 拓展主角设定、核心冲突、金手指 ② 输出大纲 + 第一集详细剧本（场景头、动作、对白、强开场、结尾钩子），第一集保存到当前集（save_script）。结果必须使用中文。',
+    dramaId, epId.value, refresh)
+}
+
+function doScriptPolish() {
+  saveRaw()
+  runAgent('script_rewriter',
+    '我提供的是已有剧本初稿，请按 script_polish Skill 的方法做 4 维度专业润色（节奏、冲突、人物、对白），不改变核心剧情，只优化叙事质感。最后输出完整润色后剧本并 save_script 覆盖保存。结果必须使用中文。',
+    dramaId, epId.value, refresh)
+}
 function skipRewrite() {
   const raw = (localRaw.value || rawContent.value || '').trim()
   if (!raw) {
@@ -2505,6 +2708,30 @@ async function genCharImg(id) {
     toast.error(e.message)
   }
 }
+
+function charViewKey(id, view) { return `${id}:${view}` }
+function isPendingCharView(id, view) { return pendingCharViewKeys.value.includes(charViewKey(id, view)) }
+
+async function genCharView(id, view) {
+  const key = charViewKey(id, view)
+  if (isPendingCharView(id, view)) return
+  try {
+    pendingCharViewKeys.value.push(key)
+    await characterAPI.generateView(id, epId.value, view)
+    toast.success(`${view === 'side' ? '侧面' : '背面'}视图生成中`)
+    await refresh()
+    watchAsyncResult(() => {
+      const char = chars.value.find(c => c.id === id)
+      const field = view === 'side' ? (char?.view_side || char?.viewSide) : (char?.view_back || char?.viewBack)
+      const done = !!field
+      if (done) pendingCharViewKeys.value = pendingCharViewKeys.value.filter(k => k !== key)
+      return done
+    })
+  } catch (e) {
+    pendingCharViewKeys.value = pendingCharViewKeys.value.filter(k => k !== key)
+    toast.error(e.message)
+  }
+}
 function batchCharImages() {
   const ids = visualChars.value.filter(c => !(c.image_url || c.imageUrl)).map(c => c.id)
   if (!ids.length) { toast.info('所有角色图片已生成'); return }
@@ -2523,10 +2750,10 @@ function batchCharImages() {
     toast.error(e.message)
   })
 }
-async function genSceneImg(id) {
+async function genSceneImg(id, opts = {}) {
   try {
     if (!isPendingSceneImage(id)) pendingSceneImageIds.value.push(id)
-    await sceneAPI.generateImage(id, epId.value)
+    await sceneAPI.generateImage(id, epId.value, opts)
     toast.success('场景图片生成中')
     await refresh()
     watchAsyncResult(() => {
@@ -2539,6 +2766,33 @@ async function genSceneImg(id) {
     pendingSceneImageIds.value = pendingSceneImageIds.value.filter(item => item !== id)
     toast.error(e.message)
   }
+}
+
+// === Custom Generate Dialog (lets user tweak prompt + choose character refs) ===
+const customGenDialog = reactive({
+  open: false,
+  title: '',
+  subtitle: '',
+  defaultPrompt: '',
+  defaultCharIds: null,
+  onConfirm: null,  // ({ prompt, referenceCharacterIds }) => Promise
+})
+function closeCustomGen() { customGenDialog.open = false }
+async function handleCustomGenSubmit(payload) {
+  if (customGenDialog.onConfirm) {
+    try { await customGenDialog.onConfirm(payload) } catch (e) { toast.error(e.message || '操作失败') }
+  }
+}
+
+function openSceneCustomDialog(scene) {
+  customGenDialog.title = `自定义生成 · ${scene.location || '场景'}`
+  customGenDialog.subtitle = scene.prompt ? `场景描述：${scene.prompt.slice(0, 80)}` : ''
+  customGenDialog.defaultPrompt = scene.prompt || `${scene.location || ''}, ${scene.time || ''}, 高质量场景, 电影感`
+  customGenDialog.defaultCharIds = null  // null = auto mode by default
+  customGenDialog.onConfirm = async ({ prompt, referenceCharacterIds }) => {
+    await genSceneImg(scene.id, { prompt, referenceCharacterIds })
+  }
+  customGenDialog.open = true
 }
 function batchSceneImages() {
   const ids = scenes.value.filter(s => !(s.image_url || s.imageUrl)).map(s => s.id)
@@ -2669,8 +2923,8 @@ function buildShotImagePrompt(sb, frameType) {
   ].filter(Boolean).join('；')
 }
 
-async function genShotFrame(sb, frameType) {
-  const prompt = buildShotImagePrompt(sb, frameType)
+async function genShotFrame(sb, frameType, opts = {}) {
+  const prompt = opts.prompt || buildShotImagePrompt(sb, frameType)
   const referenceImages = getShotReferenceImages(sb)
   const key = framePendingKey(sb.id, frameType)
   try {
@@ -2681,6 +2935,10 @@ async function genShotFrame(sb, frameType) {
       prompt,
       frame_type: frameType,
       reference_images: referenceImages.length ? referenceImages : undefined,
+    }
+    // null = auto, array (even empty) = explicit choice
+    if (Array.isArray(opts.referenceCharacterIds)) {
+      body.reference_character_ids = opts.referenceCharacterIds
     }
     await imageAPI.generate(body)
     toast.success(frameType === 'first_frame' ? '首帧生成中' : '尾帧生成中')
@@ -2697,6 +2955,20 @@ async function genShotFrame(sb, frameType) {
   }
 }
 
+function openShotCustomDialog(sb, frameType) {
+  const label = frameType === 'first_frame' ? '首帧' : '尾帧'
+  const num = String((sbs.value.findIndex(s => s.id === sb.id) + 1)).padStart(2, '0')
+  customGenDialog.title = `自定义生成 · #${num} ${label}`
+  const desc = sb.description || sb.action || sb.result || ''
+  customGenDialog.subtitle = desc ? `分镜描述：${desc.slice(0, 80)}` : ''
+  customGenDialog.defaultPrompt = buildShotImagePrompt(sb, frameType)
+  customGenDialog.defaultCharIds = null  // auto by default
+  customGenDialog.onConfirm = async ({ prompt, referenceCharacterIds }) => {
+    await genShotFrame(sb, frameType, { prompt, referenceCharacterIds })
+  }
+  customGenDialog.open = true
+}
+
 async function genVid(sb) {
   const params = {
     storyboard_id: sb.id,
@@ -2704,6 +2976,8 @@ async function genVid(sb) {
     prompt: sb.video_prompt || sb.videoPrompt || '',
     duration: Number(sb.duration || 5),
   }
+  // Per-generation model override from the workbench dropdown (empty → use config default)
+  if (videoModelOverride.value) params.model = videoModelOverride.value
   const first = getFirstFrame(sb)
   const last = getLastFrame(sb)
   const refs = getRefs(sb)
@@ -3658,6 +3932,77 @@ onMounted(() => { refresh(); loadConfigs(); loadVoices() })
 .asset-meta { font-size: 11px; }
 .asset-foot { display: flex; align-items: center; gap: 4px; padding: 6px 10px; border-top: 1px solid var(--border); }
 
+/* Character 三视图 */
+.char-views {
+  padding: 6px 10px 8px;
+  border-top: 1px solid var(--border);
+}
+.char-view-row {
+  display: flex; align-items: center; gap: 6px;
+}
+.char-view-label {
+  font-size: 10.5px;
+  color: var(--text-3);
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  margin-right: 2px;
+}
+.char-view-slot {
+  position: relative;
+  flex: 1;
+  aspect-ratio: 3/4;
+  background: var(--bg-2);
+  border: 1px dashed var(--border-strong);
+  border-radius: 6px;
+  cursor: pointer;
+  overflow: hidden;
+  display: flex; align-items: center; justify-content: center;
+  transition: border-color 0.15s, background 0.15s;
+}
+.char-view-slot:hover {
+  border-color: var(--accent);
+  background: var(--accent-bg);
+}
+.char-view-slot img {
+  width: 100%; height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.char-view-empty {
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 1px;
+  color: var(--text-3);
+  font-size: 10px;
+}
+.char-view-glyph {
+  font-family: var(--font-display);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-2);
+  line-height: 1;
+}
+.char-view-plus { font-size: 12px; line-height: 1; color: var(--text-3); }
+.char-view-regen {
+  position: absolute;
+  top: 2px; right: 2px;
+  width: 16px; height: 16px;
+  background: rgba(0,0,0,0.6);
+  border: none;
+  border-radius: 4px;
+  color: #fff;
+  display: none;
+  align-items: center; justify-content: center;
+  cursor: pointer;
+  padding: 0;
+  backdrop-filter: blur(3px);
+}
+.char-view-slot:hover .char-view-regen { display: flex; }
+.char-view-regen:hover {
+  background: var(--accent);
+  color: #0a0e1a;
+}
+
 /* Frame grid */
 .frame-grid { display: flex; flex-direction: column; gap: 8px; }
 .frame-row {
@@ -3710,6 +4055,32 @@ onMounted(() => { refresh(); loadConfigs(); loadVoices() })
   display: none; align-items: center; justify-content: center;
 }
 .frame-thumb:hover .frame-re { display: flex; }
+
+/* Frame action buttons (regen + custom) overlay on hover */
+.frame-actions {
+  position: absolute; top: 4px; right: 4px;
+  display: none; gap: 4px;
+  z-index: 2;
+}
+.frame-thumb:hover .frame-actions { display: flex; }
+.frame-action-btn {
+  width: 22px; height: 22px;
+  border-radius: 6px;
+  background: rgba(0,0,0,0.65);
+  border: 1px solid rgba(255,255,255,0.15);
+  color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+  padding: 0;
+  transition: background 0.15s, transform 0.15s;
+  backdrop-filter: blur(4px);
+}
+.frame-action-btn:hover {
+  background: var(--accent);
+  color: #0a0e1a;
+  border-color: transparent;
+  transform: scale(1.08);
+}
 .frame-scroll { flex: 1; overflow-y: auto; padding: 10px 12px; }
 .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--bg-3); flex-shrink: 0; }
 .dot.ok { background: var(--success); }

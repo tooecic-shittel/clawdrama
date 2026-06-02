@@ -1,9 +1,9 @@
 import { getAuthToken } from '~/composables/useAuth'
 
 const PUBLIC_PATHS = ['/', '/login', '/register']
+const ADMIN_PATHS = ['/settings']
 
 export default defineNuxtRouteMiddleware((to) => {
-  // SSR is disabled, so this only runs in client — but guard anyway
   if (import.meta.server) return
 
   // Public landing + auth pages: never gated
@@ -13,5 +13,20 @@ export default defineNuxtRouteMiddleware((to) => {
   if (!token) {
     const redirect = encodeURIComponent(to.fullPath)
     return navigateTo(`/login?redirect=${redirect}`)
+  }
+
+  // Admin-only routes
+  if (ADMIN_PATHS.some(p => to.path === p || to.path.startsWith(p + '/'))) {
+    if (typeof window !== 'undefined') {
+      try {
+        const raw = localStorage.getItem('clawdrama_user')
+        const user = raw ? JSON.parse(raw) : null
+        if (user?.role !== 'admin') {
+          return navigateTo('/projects')
+        }
+      } catch {
+        return navigateTo('/login')
+      }
+    }
   }
 })

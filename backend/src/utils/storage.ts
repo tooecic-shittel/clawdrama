@@ -17,12 +17,24 @@ export async function downloadFile(url: string, subDir: string): Promise<string>
   const dir = path.join(STORAGE_ROOT, subDir)
   fs.mkdirSync(dir, { recursive: true })
 
-  const ext = getExtFromUrl(url)
-  const filename = `${uuid()}${ext}`
-  const filePath = path.join(dir, filename)
-
   const resp = await fetch(url)
   if (!resp.ok) throw new Error(`Download failed: ${resp.status}`)
+
+  // Prefer URL extension; fall back to Content-Type mapping; final fallback .bin
+  let ext = getExtFromUrl(url)
+  if (ext === '.bin') {
+    const ct = (resp.headers.get('content-type') || '').toLowerCase()
+    if (ct.includes('mp4') || ct.includes('quicktime')) ext = '.mp4'
+    else if (ct.includes('webm')) ext = '.webm'
+    else if (ct.includes('mpeg') && ct.includes('audio')) ext = '.mp3'
+    else if (ct.includes('wav')) ext = '.wav'
+    else if (ct.includes('jpeg') || ct.includes('jpg')) ext = '.jpeg'
+    else if (ct.includes('png')) ext = '.png'
+    else if (ct.includes('webp')) ext = '.webp'
+  }
+
+  const filename = `${uuid()}${ext}`
+  const filePath = path.join(dir, filename)
 
   const buffer = Buffer.from(await resp.arrayBuffer())
   fs.writeFileSync(filePath, buffer)

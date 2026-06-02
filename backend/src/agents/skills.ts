@@ -6,7 +6,8 @@ const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 const SKILLS_DIR = path.resolve(__dirname, '../../../skills')
 const AGENT_SKILL_MAP: Record<string, string[]> = {
-  script_rewriter: ['script_rewriter'],
+  // script_rewriter loads its core skill plus 3 advanced workflows
+  script_rewriter: ['script_rewriter', 'novel_to_script', 'script_writer', 'script_polish'],
   extractor: ['extractor'],
   storyboard_breaker: ['storyboard_breaker'],
   voice_assigner: ['voice_assigner'],

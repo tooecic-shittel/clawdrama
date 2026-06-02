@@ -81,6 +81,49 @@ app.post('/:id/generate-image', async (c) => {
   }
 })
 
+// POST /characters/:id/generate-view  body: { view: 'side' | 'back', episode_id }
+// Generate side / back view using existing front avatar as image-to-image reference.
+app.post('/:id/generate-view', async (c) => {
+  const id = Number(c.req.param('id'))
+  const body = await c.req.json()
+  const view = String(body.view || '').toLowerCase()
+  if (view !== 'side' && view !== 'back') return badRequest(c, 'view must be "side" or "back"')
+  if (!body.episode_id) return badRequest(c, 'episode_id is required')
+
+  const [char] = db.select().from(schema.characters).where(eq(schema.characters.id, id)).all()
+  if (!char) return badRequest(c, 'Character not found')
+  const frontUrl = char.imageUrl || char.localPath
+  if (!frontUrl) return badRequest(c, '请先生成正面头像')
+
+  const [ep] = db.select().from(schema.episodes).where(eq(schema.episodes.id, Number(body.episode_id))).all()
+  if (!ep) return badRequest(c, 'Episode not found')
+
+  const viewLabel = view === 'side' ? '侧面（profile view）' : '背面（back view）'
+  const angleHint = view === 'side'
+    ? '从正侧方拍摄，能看到完整的发型轮廓和服装侧面，保持同一人物的身材比例'
+    : '从背后拍摄，能看到后脑勺发型和服装背面，保持同一人物的身高与体型'
+  const prompt = `${char.name}的${viewLabel}立绘，${char.appearance || char.description || ''}。\n${angleHint}。与参考图为同一角色，**严格保留参考图中的发型、发色、服装款式与配色、肤色、身材**。白色简洁背景，全身或半身，高质量人物立绘。`
+
+  try {
+    logTaskStart('CharacterView', 'generate', { characterId: id, view, episodeId: ep.id })
+    const genId = await generateImage({
+      characterId: id,
+      dramaId: char.dramaId,
+      prompt,
+      configId: ep.imageConfigId ?? undefined,
+      // Pass front avatar as the reference for img2img consistency
+      referenceImages: [frontUrl],
+      // Tag with frame_type so downstream code knows this is a "view" generation
+      frameType: `view_${view}`,
+    })
+    logTaskSuccess('CharacterView', 'generate', { characterId: id, view, generationId: genId })
+    return success(c, { image_generation_id: genId, view })
+  } catch (err: any) {
+    logTaskError('CharacterView', 'generate', { characterId: id, view, error: err.message })
+    return badRequest(c, err.message)
+  }
+})
+
 // POST /characters/batch-generate-images
 app.post('/batch-generate-images', async (c) => {
   const body = await c.req.json()

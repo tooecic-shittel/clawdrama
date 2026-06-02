@@ -5,11 +5,46 @@ import ffmpeg from 'fluent-ffmpeg'
 import fs from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
+import os from 'os'
 import { v4 as uuid } from 'uuid'
 import { db, schema } from '../db/index.js'
 import { eq } from 'drizzle-orm'
 import { now } from '../utils/response.js'
 import { logTaskError, logTaskStart, logTaskSuccess } from '../utils/task-logger.js'
+
+// @ts-ignore
+import ffmpegInstaller from '@ffmpeg-installer/ffmpeg'
+// @ts-ignore
+import ffprobeInstaller from '@ffprobe-installer/ffprobe'
+
+// Resolve ffmpeg binary path (same approach as ffmpeg-compose.ts)
+{
+  const home = os.homedir()
+  const ffmpegCandidates = [
+    process.env.FFMPEG_PATH,
+    (ffmpegInstaller as any)?.path,
+    `${home}/anaconda3/bin/ffmpeg`,
+    `${home}/miniconda3/bin/ffmpeg`,
+    '/opt/homebrew/bin/ffmpeg',
+    '/usr/local/bin/ffmpeg',
+    '/usr/bin/ffmpeg',
+  ].filter(Boolean) as string[]
+  for (const p of ffmpegCandidates) {
+    try { if (fs.statSync(p).isFile()) { ffmpeg.setFfmpegPath(p); break } } catch {}
+  }
+  const ffprobeCandidates = [
+    process.env.FFPROBE_PATH,
+    (ffprobeInstaller as any)?.path,
+    `${home}/anaconda3/bin/ffprobe`,
+    `${home}/miniconda3/bin/ffprobe`,
+    '/opt/homebrew/bin/ffprobe',
+    '/usr/local/bin/ffprobe',
+    '/usr/bin/ffprobe',
+  ].filter(Boolean) as string[]
+  for (const p of ffprobeCandidates) {
+    try { if (fs.statSync(p).isFile()) { ffmpeg.setFfprobePath(p); break } } catch {}
+  }
+}
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const STORAGE_ROOT = process.env.STORAGE_PATH || path.resolve(__dirname, '../../../data/static')

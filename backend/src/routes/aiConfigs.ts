@@ -171,6 +171,7 @@ app.post('/', async (c) => {
 app.post('/huobao-preset', async (c) => {
   const body = await c.req.json()
   const apiKey = String(body.api_key || '').trim()
+  const customBaseUrl = String(body.base_url || '').trim().replace(/\/+$/, '')  // strip trailing slash
   if (!apiKey) return badRequest(c, 'api_key is required')
 
   const ts = now()
@@ -179,11 +180,15 @@ app.post('/huobao-preset', async (c) => {
     const [existing] = db.select().from(schema.aiServiceConfigs).where(eq(schema.aiServiceConfigs.serviceType, preset.serviceType)).all()
       .filter(row => row.provider === preset.provider)
 
+    // If user provided a base URL, use it for ALL service types.
+    // Default falls back to preset (chatfire) for backward compat.
+    const baseUrl = customBaseUrl || preset.baseUrl
+
     const values = {
       serviceType: preset.serviceType,
       provider: preset.provider,
-      name: `火宝默认${preset.label}服务`,
-      baseUrl: preset.baseUrl,
+      name: `默认${preset.label}服务`,
+      baseUrl,
       apiKey,
       model: JSON.stringify([preset.model]),
       priority: preset.priority,

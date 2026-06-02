@@ -47,11 +47,32 @@ app.post('/:id/generate-image', async (c) => {
   const [ep] = db.select().from(schema.episodes).where(eq(schema.episodes.id, Number(body.episode_id))).all()
   if (!ep) return badRequest(c, 'Episode not found')
 
-  const prompt = scene.prompt || `${scene.location}, ${scene.time || ''}, 高质量场景, 电影感`
+  // Allow caller to override prompt + pick which characters to include as refs
+  const prompt: string = body.prompt || scene.prompt || `${scene.location}, ${scene.time || ''}, 高质量场景, 电影感`
+
+  // reference_character_ids: array (even empty for 空镜) means explicit; undefined = auto
+  let referenceImages: string[] | undefined
+  if (Array.isArray(body.reference_character_ids)) {
+    referenceImages = []
+    for (const cid of body.reference_character_ids) {
+      const [ch] = db.select().from(schema.characters).where(eq(schema.characters.id, Number(cid))).all()
+      const p = (ch as any)?.localPath || (ch as any)?.imageUrl
+      if (p && typeof p === 'string' && (p.startsWith('static/') || p.startsWith('/static/'))) {
+        referenceImages.push(p)
+      }
+    }
+  }
+
   try {
-    logTaskStart('SceneImage', 'generate', { sceneId: id, episodeId: ep.id, dramaId: scene.dramaId, location: scene.location })
+    logTaskStart('SceneImage', 'generate', {
+      sceneId: id, episodeId: ep.id, dramaId: scene.dramaId,
+      location: scene.location, mode: referenceImages ? 'explicit' : 'auto',
+    })
     db.update(schema.scenes).set({ status: 'processing', updatedAt: now() }).where(eq(schema.scenes.id, id)).run()
-    const genId = await generateImage({ sceneId: id, dramaId: scene.dramaId, prompt, configId: ep.imageConfigId ?? undefined })
+    const genId = await generateImage({
+      sceneId: id, dramaId: scene.dramaId, prompt, configId: ep.imageConfigId ?? undefined,
+      referenceImages,
+    })
     logTaskSuccess('SceneImage', 'generate', { sceneId: id, generationId: genId })
     return success(c, { image_generation_id: genId })
   } catch (err: any) {

@@ -22,12 +22,36 @@ app.post('/', async (c) => {
       }
     }
 
+    // Build reference_images:
+    //   - reference_character_ids provided → resolve each id to image path,
+    //     merge with any explicit reference_images. Empty array = no character refs (空镜).
+    //   - Neither provided → undefined, backend will auto-detect characters from context.
+    let finalReferenceImages: string[] | undefined
+    let explicitMode = false
+    if (Array.isArray(body.reference_character_ids)) {
+      explicitMode = true
+      const charPaths: string[] = []
+      for (const cid of body.reference_character_ids) {
+        const [ch] = db.select().from(schema.characters).where(eq(schema.characters.id, Number(cid))).all()
+        const p = (ch as any)?.localPath || (ch as any)?.imageUrl
+        if (p && typeof p === 'string' && (p.startsWith('static/') || p.startsWith('/static/'))) {
+          charPaths.push(p)
+        }
+      }
+      finalReferenceImages = [...charPaths, ...(Array.isArray(body.reference_images) ? body.reference_images : [])]
+    } else if (Array.isArray(body.reference_images)) {
+      explicitMode = true
+      finalReferenceImages = body.reference_images
+    }
+
     logTaskStart('ImageAPI', 'generate', {
       storyboardId: body.storyboard_id,
       sceneId: body.scene_id,
       characterId: body.character_id,
       dramaId: body.drama_id,
       frameType: body.frame_type,
+      mode: explicitMode ? 'explicit' : 'auto',
+      refCount: finalReferenceImages?.length ?? '(auto)',
     })
     logTaskPayload('ImageAPI', 'request body', body)
     const id = await generateImage({
@@ -38,7 +62,7 @@ app.post('/', async (c) => {
       prompt: body.prompt,
       model: body.model,
       size: body.size,
-      referenceImages: body.reference_images,
+      referenceImages: finalReferenceImages,
       frameType: body.frame_type,
       configId,
     })
