@@ -53,6 +53,7 @@ ENV NODE_ENV=production
 ENV PORT=5679
 
 EXPOSE 5679
-VOLUME ["/app/data"]
 
+# Note: no VOLUME directive — Railway rejects it. Persistent storage is provided by
+# attaching a Railway Volume mounted at /app/data (or docker-compose's volume mapping locally).
 CMD ["tsx", "backend/src/index.ts"]
