@@ -7,6 +7,7 @@ import { getVideoAdapter } from './adapters/registry'
 import type { AIConfig } from './adapters/types'
 import { logTaskError, logTaskPayload, logTaskProgress, logTaskStart, logTaskSuccess, logTaskWarn, redactUrl } from '../utils/task-logger.js'
 import { enhanceVideoPrompt } from './prompt-enhance.js'
+import { assertBalance, chargeForAction } from './credits.js'
 
 interface GenerateVideoParams {
   storyboardId?: number
@@ -21,10 +22,14 @@ interface GenerateVideoParams {
   duration?: number
   aspectRatio?: string
   configId?: number
+  /** Owner of this generation — used to meter credits (undefined = unmetered/system). */
+  userId?: number
 }
 
 export async function generateVideo(params: GenerateVideoParams): Promise<number> {
   const ts = now()
+  // Gate on credits before doing any work (throws InsufficientCreditsError → 402 at route).
+  await assertBalance(params.userId, 'video')
   const config = params.configId
     ? getConfigById(params.configId)
     : getActiveConfig('video')
@@ -38,6 +43,7 @@ export async function generateVideo(params: GenerateVideoParams): Promise<number
   })
 
   const res = db.insert(schema.videoGenerations).values({
+    userId: params.userId,
     storyboardId: params.storyboardId,
     dramaId: params.dramaId,
     prompt: enhancedPrompt,
@@ -286,6 +292,9 @@ async function handleVideoComplete(id: number, videoUrl: string, duration: numbe
     .where(eq(schema.videoGenerations.id, id))
     .run()
   logTaskSuccess('VideoTask', 'downloaded', { id, localPath, storyboardId, duration })
+  const [vrec] = db.select({ userId: schema.videoGenerations.userId })
+    .from(schema.videoGenerations).where(eq(schema.videoGenerations.id, id)).all()
+  await chargeForAction(vrec?.userId, 'video', { referenceId: id })
 
   if (storyboardId) {
     db.update(schema.storyboards)

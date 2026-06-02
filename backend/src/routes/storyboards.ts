@@ -1,7 +1,7 @@
 import { Hono } from 'hono'
 import { eq } from 'drizzle-orm'
 import { db, schema } from '../db/index.js'
-import { success, created, now, badRequest } from '../utils/response.js'
+import { success, created, now, badRequest, paymentRequired } from '../utils/response.js'
 import { toSnakeCase } from '../utils/transform.js'
 import { generateTTS } from '../services/tts-generation.js'
 import { pickVoiceForCharacter } from '../services/voice-mapper.js'
@@ -189,7 +189,7 @@ app.post('/:id/generate-tts', async (c) => {
     speaker,
   )
   try {
-    const audioPath = await generateTTS({ text: pureDialogue, voice: voiceId, emotion, configId: ep?.audioConfigId || null })
+    const audioPath = await generateTTS({ text: pureDialogue, voice: voiceId, emotion, configId: ep?.audioConfigId || null, userId: (c.get('user') as any)?.id })
   db.update(schema.storyboards)
     .set({ ttsAudioUrl: audioPath, updatedAt: now() })
     .where(eq(schema.storyboards.id, id))
@@ -204,6 +204,7 @@ app.post('/:id/generate-tts', async (c) => {
     return success(c, { tts_audio_url: audioPath, voice_id: voiceId, text: pureDialogue })
   } catch (err: any) {
     logTaskError('StoryboardAPI', 'generate-tts', { storyboardId: id, voiceId, error: err.message })
+    if (err?.status === 402) return paymentRequired(c, err.message)
     return badRequest(c, err.message)
   }
 })

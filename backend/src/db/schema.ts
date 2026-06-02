@@ -225,6 +225,7 @@ export const agentConfigs = sqliteTable('agent_configs', {
 
 export const imageGenerations = sqliteTable('image_generations', {
   id: integer('id').primaryKey({ autoIncrement: true }),
+  userId: integer('user_id'),
   storyboardId: integer('storyboard_id'),
   dramaId: integer('drama_id'),
   sceneId: integer('scene_id'),
@@ -258,6 +259,7 @@ export const imageGenerations = sqliteTable('image_generations', {
 
 export const videoGenerations = sqliteTable('video_generations', {
   id: integer('id').primaryKey({ autoIncrement: true }),
+  userId: integer('user_id'),
   storyboardId: integer('storyboard_id'),
   dramaId: integer('drama_id'),
   provider: text('provider'),

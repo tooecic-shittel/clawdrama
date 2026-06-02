@@ -8,6 +8,7 @@ import { fileURLToPath } from 'url'
 import { v4 as uuid } from 'uuid'
 import { getAudioConfigById } from './ai.js'
 import { getTTSAdapter } from './adapters/registry.js'
+import { assertBalance, chargeForAction } from './credits.js'
 import { logTaskError, logTaskPayload, logTaskProgress, logTaskStart, logTaskSuccess, redactUrl } from '../utils/task-logger.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -20,6 +21,8 @@ interface TTSParams {
   speed?: number
   emotion?: string
   configId?: number | null
+  /** Owner of this generation — used to meter credits (undefined = unmetered/system, e.g. voice preview). */
+  userId?: number
 }
 
 /**
@@ -51,6 +54,8 @@ function pcmToWav(pcm: Buffer, sampleRate: number, channels: number): Buffer {
  * 生成 TTS 音频，返回本地文件路径
  */
 export async function generateTTS(params: TTSParams): Promise<string> {
+  // Gate on credits before doing any work (throws InsufficientCreditsError → 402 at route).
+  await assertBalance(params.userId, 'tts')
   const config = getAudioConfigById(params.configId)
   const adapter = getTTSAdapter(config.provider)
 
@@ -154,6 +159,7 @@ export async function generateTTS(params: TTSParams): Promise<string> {
     bytes: buffer.length,
     audioMs: metadata.audioLength,
   })
+  await chargeForAction(params.userId, 'tts', {})
   return relativePath
 }
 

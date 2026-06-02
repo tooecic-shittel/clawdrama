@@ -8,6 +8,7 @@ import { db, schema } from '../db/index.js'
 import { success, badRequest } from '../utils/response.js'
 import { downloadFile } from '../utils/storage.js'
 import { ViduVideoAdapter } from '../services/adapters/vidu-video'
+import { chargeForAction } from '../services/credits.js'
 import { logTaskError, logTaskProgress, logTaskSuccess, logTaskWarn } from '../utils/task-logger.js'
 
 const app = new Hono()
@@ -42,6 +43,13 @@ app.post('/vidu', async (c) => {
 
   const record = rows[0]
 
+  // Idempotency: Vidu may retry the webhook. If we already settled this task,
+  // don't re-download or double-charge.
+  if (record.status === 'completed') {
+    logTaskProgress('Webhook', 'vidu-already-completed', { taskId: task_id, generationId: record.id })
+    return success(c, { message: 'Already completed' })
+  }
+
   if (state === 'success' && video_url) {
     try {
       const localPath = await downloadFile(video_url, 'videos')
@@ -54,6 +62,7 @@ app.post('/vidu', async (c) => {
         })
         .where(eq(schema.videoGenerations.id, record.id))
         .run()
+      await chargeForAction(record.userId, 'video', { referenceId: record.id })
 
       // 更新 storyboard
       if (record.storyboardId) {

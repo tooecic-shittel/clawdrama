@@ -1,7 +1,7 @@
 import { Hono } from 'hono'
 import { eq } from 'drizzle-orm'
 import { db, schema } from '../db/index.js'
-import { success, badRequest, now } from '../utils/response.js'
+import { success, badRequest, now, paymentRequired } from '../utils/response.js'
 import { generateVoiceSample } from '../services/tts-generation.js'
 import { generateImage } from '../services/image-generation.js'
 import { logTaskError, logTaskStart, logTaskSuccess } from '../utils/task-logger.js'
@@ -72,11 +72,12 @@ app.post('/:id/generate-image', async (c) => {
   const prompt = `${char.name}, ${char.appearance || char.description || '人物立绘'}, 高质量, 正面, 白色背景`
   try {
     logTaskStart('CharacterImage', 'generate', { characterId: id, episodeId: ep.id, dramaId: char.dramaId })
-    const genId = await generateImage({ characterId: id, dramaId: char.dramaId, prompt, configId: ep.imageConfigId ?? undefined })
+    const genId = await generateImage({ userId: (c.get('user') as any)?.id, characterId: id, dramaId: char.dramaId, prompt, configId: ep.imageConfigId ?? undefined })
     logTaskSuccess('CharacterImage', 'generate', { characterId: id, generationId: genId })
     return success(c, { image_generation_id: genId })
   } catch (err: any) {
     logTaskError('CharacterImage', 'generate', { characterId: id, error: err.message })
+    if (err?.status === 402) return paymentRequired(c, err.message)
     return badRequest(c, err.message)
   }
 })
@@ -107,6 +108,7 @@ app.post('/:id/generate-view', async (c) => {
   try {
     logTaskStart('CharacterView', 'generate', { characterId: id, view, episodeId: ep.id })
     const genId = await generateImage({
+      userId: (c.get('user') as any)?.id,
       characterId: id,
       dramaId: char.dramaId,
       prompt,
@@ -120,6 +122,7 @@ app.post('/:id/generate-view', async (c) => {
     return success(c, { image_generation_id: genId, view })
   } catch (err: any) {
     logTaskError('CharacterView', 'generate', { characterId: id, view, error: err.message })
+    if (err?.status === 402) return paymentRequired(c, err.message)
     return badRequest(c, err.message)
   }
 })
@@ -137,7 +140,7 @@ app.post('/batch-generate-images', async (c) => {
     if (!char) continue
     const prompt = `${char.name}, ${char.appearance || char.description || '人物立绘'}, 高质量, 正面, 白色背景`
     try {
-      const genId = await generateImage({ characterId: cid, dramaId: char.dramaId, prompt, configId: ep.imageConfigId ?? undefined })
+      const genId = await generateImage({ userId: (c.get('user') as any)?.id, characterId: cid, dramaId: char.dramaId, prompt, configId: ep.imageConfigId ?? undefined })
       results.push(genId)
     } catch {}
   }

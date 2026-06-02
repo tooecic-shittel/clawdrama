@@ -1,7 +1,7 @@
 import { Hono } from 'hono'
 import { eq } from 'drizzle-orm'
 import { db, schema } from '../db/index.js'
-import { success, badRequest, now } from '../utils/response.js'
+import { success, badRequest, now, paymentRequired } from '../utils/response.js'
 import { generateImage } from '../services/image-generation.js'
 import { splitGridImage } from '../services/grid-split.js'
 import { createAgent } from '../agents/index.js'
@@ -520,6 +520,7 @@ app.post('/generate', async (c) => {
 
   try {
     const genId = await generateImage({
+      userId: (c.get('user') as any)?.id,
       dramaId: drama_id,
       prompt,
       size,
@@ -544,6 +545,7 @@ app.post('/generate', async (c) => {
       reference_images: referenceImages,
     })
   } catch (err: any) {
+    if (err?.status === 402) return paymentRequired(c, err.message)
     return badRequest(c, err.message)
   }
 })

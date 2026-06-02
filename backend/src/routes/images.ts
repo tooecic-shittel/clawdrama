@@ -1,7 +1,7 @@
 import { Hono } from 'hono'
 import { eq } from 'drizzle-orm'
 import { db, schema } from '../db/index.js'
-import { success, created, now, badRequest } from '../utils/response.js'
+import { success, created, now, badRequest, paymentRequired } from '../utils/response.js'
 import { generateImage } from '../services/image-generation.js'
 import { logTaskError, logTaskPayload, logTaskStart, logTaskSuccess } from '../utils/task-logger.js'
 
@@ -55,6 +55,7 @@ app.post('/', async (c) => {
     })
     logTaskPayload('ImageAPI', 'request body', body)
     const id = await generateImage({
+      userId: (c.get('user') as any)?.id,
       storyboardId: body.storyboard_id,
       dramaId: body.drama_id,
       sceneId: body.scene_id,
@@ -73,6 +74,7 @@ app.post('/', async (c) => {
     return created(c, record)
   } catch (err: any) {
     logTaskError('ImageAPI', 'generate', { error: err.message })
+    if (err?.status === 402) return paymentRequired(c, err.message)
     return badRequest(c, err.message)
   }
 })

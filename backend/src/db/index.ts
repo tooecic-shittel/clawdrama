@@ -388,6 +388,8 @@ ensureColumn('episodes', 'audio_config_id', 'INTEGER')
 ensureColumn('users', 'credits', 'INTEGER NOT NULL DEFAULT 0')
 ensureColumn('characters', 'view_side', 'TEXT')
 ensureColumn('characters', 'view_back', 'TEXT')
+ensureColumn('image_generations', 'user_id', 'INTEGER')
+ensureColumn('video_generations', 'user_id', 'INTEGER')
 
 export const db = drizzle(sqlite, { schema })
 export { schema }

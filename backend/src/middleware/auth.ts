@@ -10,6 +10,20 @@ export type JwtPayload = {
   exp: number
 }
 
+export type AuthUser = {
+  id: number
+  username: string
+  role: string
+}
+
+// Type the `user` context variable set by requireAuth so `c.get('user')` is
+// strongly typed across all routes (instead of the unknown-key overload error).
+declare module 'hono' {
+  interface ContextVariableMap {
+    user: AuthUser
+  }
+}
+
 export const requireAuth: MiddlewareHandler = async (c, next) => {
   const header = c.req.header('Authorization')
   if (!header || !header.startsWith('Bearer ')) {

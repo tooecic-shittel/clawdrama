@@ -14,6 +14,7 @@ import { getImageAdapter } from './adapters/registry'
 import type { AIConfig } from './adapters/types'
 import { logTaskError, logTaskPayload, logTaskProgress, logTaskStart, logTaskSuccess, logTaskWarn, redactUrl } from '../utils/task-logger.js'
 import { enhanceImagePrompt, enhanceFramePromptForContinuity, resolveDramaId } from './prompt-enhance.js'
+import { assertBalance, chargeForAction } from './credits.js'
 
 /**
  * For storyboard frames that will be fed to sora-2 as input_reference,
@@ -49,10 +50,14 @@ interface GenerateImageParams {
   /** If true, skip auto-attaching character refs (caller already chose explicitly) */
   skipAutoCharRefs?: boolean
   configId?: number
+  /** Owner of this generation — used to meter credits (undefined = unmetered/system). */
+  userId?: number
 }
 
 export async function generateImage(params: GenerateImageParams): Promise<number> {
   const ts = now()
+  // Gate on credits before doing any work (throws InsufficientCreditsError → 402 at route).
+  await assertBalance(params.userId, 'image')
   const config = params.configId
     ? getConfigById(params.configId)
     : getActiveConfig('image')
@@ -89,6 +94,7 @@ export async function generateImage(params: GenerateImageParams): Promise<number
       : JSON.stringify(params.referenceImages)
 
   const res = db.insert(schema.imageGenerations).values({
+    userId: params.userId,
     storyboardId: params.storyboardId,
     dramaId: params.dramaId,
     sceneId: params.sceneId,
@@ -583,6 +589,7 @@ async function handleImageComplete(id: number, provider: string, imageUrl: strin
     .where(eq(schema.imageGenerations.id, id))
     .run()
   logTaskSuccess('ImageTask', 'downloaded', { id, provider, localPath, w: finalWidth, h: finalHeight })
+  await chargeForAction(record?.userId, 'image', { referenceId: id })
 
   // 更新关联表
   if (record?.storyboardId) {
@@ -617,6 +624,7 @@ async function handleImageCompleteBase64(id: number, provider: string, base64Dat
     .where(eq(schema.imageGenerations.id, id))
     .run()
   logTaskSuccess('ImageTask', 'saved-base64', { id, provider, mimeType, localPath })
+  await chargeForAction(record?.userId, 'image', { referenceId: id })
 
   // 更新关联表
   if (record?.storyboardId) {

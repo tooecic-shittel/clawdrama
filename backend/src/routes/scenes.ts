@@ -1,7 +1,7 @@
 import { Hono } from 'hono'
 import { eq } from 'drizzle-orm'
 import { db, schema } from '../db/index.js'
-import { success, created, badRequest, now } from '../utils/response.js'
+import { success, created, badRequest, now, paymentRequired } from '../utils/response.js'
 import { generateImage } from '../services/image-generation.js'
 import { logTaskError, logTaskStart, logTaskSuccess } from '../utils/task-logger.js'
 
@@ -70,6 +70,7 @@ app.post('/:id/generate-image', async (c) => {
     })
     db.update(schema.scenes).set({ status: 'processing', updatedAt: now() }).where(eq(schema.scenes.id, id)).run()
     const genId = await generateImage({
+      userId: (c.get('user') as any)?.id,
       sceneId: id, dramaId: scene.dramaId, prompt, configId: ep.imageConfigId ?? undefined,
       referenceImages,
     })
@@ -78,6 +79,7 @@ app.post('/:id/generate-image', async (c) => {
   } catch (err: any) {
     logTaskError('SceneImage', 'generate', { sceneId: id, error: err.message })
     db.update(schema.scenes).set({ status: 'failed', updatedAt: now() }).where(eq(schema.scenes.id, id)).run()
+    if (err?.status === 402) return paymentRequired(c, err.message)
     return badRequest(c, err.message)
   }
 })

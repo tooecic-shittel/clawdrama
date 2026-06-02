@@ -6,7 +6,9 @@ import { db, schema } from '../db/index.js'
 import { JWT_SECRET, requireAuth } from '../middleware/auth.js'
 import { applyCreditOp } from '../services/credits.js'
 
-const REGISTER_BONUS_CREDITS = 200
+// ¥1 = 1000 积分。3000 积分 ≈ ¥3 体验额度：够生成 3 张图 + 几段配音，
+// 但不够白嫖一个视频（视频 7500），既能试用又防薅羊毛。
+const REGISTER_BONUS_CREDITS = 3000
 
 const auth = new Hono()
 

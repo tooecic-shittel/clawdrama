@@ -82,7 +82,7 @@ function parseDialogueForTTS(dialogue?: string | null) {
 /**
  * 合成单个镜头：视频 + TTS对白音频 + 烧录字幕
  */
-export async function composeStoryboard(storyboardId: number): Promise<string> {
+export async function composeStoryboard(storyboardId: number, userId?: number): Promise<string> {
   const [sb] = db.select().from(schema.storyboards).where(eq(schema.storyboards.id, storyboardId)).all()
   if (!sb) throw new Error(`Storyboard ${storyboardId} not found`)
   if (!sb.videoUrl) throw new Error(`Storyboard ${storyboardId} has no video`)
@@ -138,7 +138,7 @@ export async function composeStoryboard(storyboardId: number): Promise<string> {
             parsedDialogue.speaker,
           )
           logTaskProgress('ComposeTask', 'generate-inline-tts', { storyboardId, voiceId, emotion, textPreview: pureDialogue.slice(0, 40) })
-          const ttsPath = await generateTTS({ text: pureDialogue, voice: voiceId, emotion, configId: ep?.audioConfigId ?? undefined })
+          const ttsPath = await generateTTS({ text: pureDialogue, voice: voiceId, emotion, configId: ep?.audioConfigId ?? undefined, userId })
           audioPath = toAbsPath(ttsPath)
           db.update(schema.storyboards).set({ ttsAudioUrl: ttsPath, updatedAt: now() })
             .where(eq(schema.storyboards.id, storyboardId)).run()

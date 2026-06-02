@@ -16,6 +16,10 @@ export function notFound(c: Context, message = 'not found') {
   return c.json({ code: 404, message }, 404)
 }
 
+export function paymentRequired(c: Context, message = '积分余额不足') {
+  return c.json({ code: 402, message }, 402)
+}
+
 export function serverError(c: Context, message = 'internal error') {
   return c.json({ code: 500, message }, 500)
 }
