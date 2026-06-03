@@ -9,8 +9,9 @@
  *
  * 需要的环境变量：
  *   GOOGLE_API_KEY        —— Google Gemini（文本 + 原生 TTS）
+ *   GOOGLE_VIDEO_API_KEY  —— Google Veo 官方视频（主）。与 GOOGLE_API_KEY 是不同的 key；缺失则跳过 Veo，保留 HappyHorse 兜底。
  *   YUNWU_API_KEY         —— 云雾（图片 + TTS 兜底）
- *   YUNWU_VIDEO_API_KEY   —— 云雾视频（HappyHorse）。未单独提供时回退用 YUNWU_API_KEY。
+ *   YUNWU_VIDEO_API_KEY   —— 云雾视频（HappyHorse 兜底）。未单独提供时回退用 YUNWU_API_KEY。
  */
 import { eq, and } from 'drizzle-orm'
 import { db, schema } from './index.js'
@@ -29,7 +30,8 @@ interface ManagedConfig {
 const MANAGED_CONFIGS: ManagedConfig[] = [
   { serviceType: 'text',  provider: 'google', name: 'Google Gemini 文本',    baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai', model: 'gemini-2.5-flash',             priority: 100, envKey: 'GOOGLE_API_KEY' },
   { serviceType: 'image', provider: 'openai', name: '云雾图片服务',           baseUrl: 'https://yunwu.ai/v1',                                     model: 'doubao-seedream-4-5-251128',  priority: 99,  envKey: 'YUNWU_API_KEY' },
-  { serviceType: 'video', provider: 'openai', name: '云雾 HappyHorse 视频',   baseUrl: 'https://yunwu.ai/v1',                                     model: 'happyhorse-1.0-t2v',          priority: 98,  envKey: 'YUNWU_VIDEO_API_KEY' },
+  { serviceType: 'video', provider: 'google-veo', name: 'Google Veo 视频（官方）', baseUrl: 'https://generativelanguage.googleapis.com/v1beta',     model: 'veo-3.0-fast-generate-001',   priority: 98,  envKey: 'GOOGLE_VIDEO_API_KEY' },
+  { serviceType: 'video', provider: 'openai', name: '云雾 HappyHorse 视频（兜底）', baseUrl: 'https://yunwu.ai/v1',                                  model: 'happyhorse-1.0-t2v',          priority: 90,  envKey: 'YUNWU_VIDEO_API_KEY' },
   { serviceType: 'audio', provider: 'openai', name: '云雾 TTS 服务',          baseUrl: 'https://yunwu.ai/v1',                                     model: 'gpt-4o-mini-tts',             priority: 97,  envKey: 'YUNWU_API_KEY' },
   { serviceType: 'audio', provider: 'gemini', name: 'Gemini 原生 TTS',        baseUrl: 'https://generativelanguage.googleapis.com/v1beta',        model: 'gemini-2.5-flash-preview-tts', priority: 98, envKey: 'GOOGLE_API_KEY' },
 ]

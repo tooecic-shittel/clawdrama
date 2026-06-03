@@ -3,8 +3,11 @@ import { eq, isNull, and } from 'drizzle-orm'
 import { db, schema } from '../db/index.js'
 import { success, badRequest, now } from '../utils/response.js'
 import { toSnakeCaseArray, toSnakeCase } from '../utils/transform.js'
+import { requireAdmin } from '../middleware/auth.js'
 
 const app = new Hono()
+// Agent 配置属运营配置，整组仅管理员可用
+app.use('*', requireAdmin)
 
 // GET /agent-configs
 app.get('/', async (c) => {

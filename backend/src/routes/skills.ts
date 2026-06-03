@@ -3,8 +3,11 @@ import fs from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
 import { success, badRequest } from '../utils/response.js'
+import { requireAdmin } from '../middleware/auth.js'
 
 const app = new Hono()
+// Skills 属运营配置，整组仅管理员可用
+app.use('*', requireAdmin)
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const SKILLS_DIR = path.resolve(__dirname, '../../../skills')
 

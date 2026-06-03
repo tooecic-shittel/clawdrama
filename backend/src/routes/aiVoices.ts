@@ -8,6 +8,7 @@ import { eq } from 'drizzle-orm'
 import { db, schema } from '../db/index.js'
 import { success, badRequest, now } from '../utils/response.js'
 import { joinProviderUrl } from '../services/adapters/url.js'
+import { requireAdmin } from '../middleware/auth.js'
 
 const app = new Hono()
 
@@ -29,8 +30,8 @@ app.get('/', async (c) => {
   return success(c, parsed)
 })
 
-// POST /ai-voices/sync
-app.post('/sync', async (c) => {
+// POST /ai-voices/sync —— 同步音色属运营操作，仅管理员
+app.post('/sync', requireAdmin, async (c) => {
   // 从数据库获取 minimax 的音频配置
   const rows = db.select().from(schema.aiServiceConfigs)
     .where(eq(schema.aiServiceConfigs.serviceType, 'audio'))

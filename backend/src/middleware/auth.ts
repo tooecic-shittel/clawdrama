@@ -39,4 +39,14 @@ export const requireAuth: MiddlewareHandler = async (c, next) => {
   }
 }
 
+// 运营配置类接口（AI 服务配置 / Agent / Skills 等）仅管理员可用。
+// 必须挂在 requireAuth 之后——它依赖 requireAuth 设置好的 c.get('user')。
+export const requireAdmin: MiddlewareHandler = async (c, next) => {
+  const user = c.get('user')
+  if (!user || user.role !== 'admin') {
+    return c.json({ code: 403, message: '需要管理员权限' }, 403)
+  }
+  await next()
+}
+
 export { JWT_SECRET }

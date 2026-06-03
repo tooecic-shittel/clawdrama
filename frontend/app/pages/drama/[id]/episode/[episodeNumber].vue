@@ -297,8 +297,8 @@
             <div class="toolbar-right">
               <span v-if="charsVoiced" class="char-count">{{ charsVoiced }}/{{ chars.length }} 已分配</span>
               <span v-if="voiceSampleCount" class="char-count">{{ voiceSampleCount }}/{{ charsVoiced }} 试听文件</span>
-              <label v-if="activeAudioConfig" class="dim" style="font-size:11px;margin-left:8px">TTS 模型</label>
-              <select v-if="activeAudioConfig"
+              <label v-if="isAdmin && activeAudioConfig" class="dim" style="font-size:11px;margin-left:8px">TTS 模型</label>
+              <select v-if="isAdmin && activeAudioConfig"
                 :value="currentTTSModel"
                 @change="changeTTSModel($event.target.value)"
                 class="input"
@@ -1537,6 +1537,7 @@ const episodeNumber = Number(route.params.episodeNumber)
 const drama = ref(null), episode = ref(null), chars = ref([]), scenes = ref([]), sbs = ref([]), mergeData = ref(null)
 const panel = ref('script')
 const { running: rn, runningType: rt, run: runAgent } = useAgent()
+const { isAdmin } = useAuth()  // TTS 模型切换等运营操作仅管理员可见
 
 const localRaw = ref(''), localScript = ref('')
 const rawContent = computed(() => episode.value?.content || '')

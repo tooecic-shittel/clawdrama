@@ -82,6 +82,42 @@ export function getAudioConfigById(id?: number | null): AIConfig {
   return getAudioConfig()
 }
 
+/**
+ * 所有「启用中」的音频配置，按优先级从高到低。
+ * 给 TTS 跨 provider 兜底用：主配置（最高优先级）生成失败时，依次落到下一个。
+ */
+export function getActiveAudioConfigs(): AIConfig[] {
+  return db.select().from(schema.aiServiceConfigs)
+    .where(eq(schema.aiServiceConfigs.serviceType, 'audio'))
+    .all()
+    .filter(r => r.isActive)
+    .sort((a, b) => (b.priority || 0) - (a.priority || 0))
+    .map(r => ({
+      provider: r.provider || '',
+      baseUrl: r.baseUrl,
+      apiKey: r.apiKey,
+      model: r.model ? (JSON.parse(r.model)[0] || '') : '',
+    }))
+}
+
+/**
+ * 所有「启用中」的视频配置，按优先级从高到低。
+ * 给视频跨配置兜底用：主配置（如官方 Veo）失败/配额耗尽时，依次落到下一个（如云雾 happyhorse）。
+ */
+export function getActiveVideoConfigs(): AIConfig[] {
+  return db.select().from(schema.aiServiceConfigs)
+    .where(eq(schema.aiServiceConfigs.serviceType, 'video'))
+    .all()
+    .filter(r => r.isActive)
+    .sort((a, b) => (b.priority || 0) - (a.priority || 0))
+    .map(r => ({
+      provider: r.provider || '',
+      baseUrl: r.baseUrl,
+      apiKey: r.apiKey,
+      model: r.model ? (JSON.parse(r.model)[0] || '') : '',
+    }))
+}
+
 export function getConfigById(id: number): AIConfig | null {
   const [row] = db.select().from(schema.aiServiceConfigs)
     .where(eq(schema.aiServiceConfigs.id, id)).all()

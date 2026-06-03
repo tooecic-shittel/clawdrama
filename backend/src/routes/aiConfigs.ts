@@ -5,6 +5,7 @@ import { success, notFound, created, badRequest, now } from '../utils/response.j
 import { toSnakeCase } from '../utils/transform.js'
 import { joinProviderUrl } from '../services/adapters/url.js'
 import { redactUrl, logTaskError, logTaskProgress, logTaskSuccess } from '../utils/task-logger.js'
+import { requireAdmin } from '../middleware/auth.js'
 
 const app = new Hono()
 
@@ -124,19 +125,21 @@ function buildProbe(serviceType: string, provider: string, baseUrl: string, mode
 
 // GET /ai-configs?service_type=text
 app.get('/', async (c) => {
+  const isAdmin = c.get('user')?.role === 'admin'
   const serviceType = c.req.query('service_type')
   let rows = db.select().from(schema.aiServiceConfigs).all()
   if (serviceType) rows = rows.filter(r => r.serviceType === serviceType)
 
-  const parsed = rows.map(r => ({
-    ...toSnakeCase(r),
-    model: r.model ? JSON.parse(r.model) : [],
-  }))
+  const parsed = rows.map(r => {
+    const o: any = { ...toSnakeCase(r), model: r.model ? JSON.parse(r.model) : [] }
+    if (!isAdmin) delete o.api_key   // 普通用户只看能力，不下发 key
+    return o
+  })
   return success(c, parsed)
 })
 
-// POST /ai-configs
-app.post('/', async (c) => {
+// POST /ai-configs —— 仅管理员
+app.post('/', requireAdmin, async (c) => {
   const body = await c.req.json()
   const ts = now()
 
@@ -167,8 +170,8 @@ app.post('/', async (c) => {
   })
 })
 
-// POST /ai-configs/huobao-preset
-app.post('/huobao-preset', async (c) => {
+// POST /ai-configs/huobao-preset —— 仅管理员
+app.post('/huobao-preset', requireAdmin, async (c) => {
   const body = await c.req.json()
   const apiKey = String(body.api_key || '').trim()
   const customBaseUrl = String(body.base_url || '').trim().replace(/\/+$/, '')  // strip trailing slash
@@ -252,8 +255,8 @@ app.post('/huobao-preset', async (c) => {
   })
 })
 
-// POST /ai-configs/test
-app.post('/test', async (c) => {
+// POST /ai-configs/test —— 探测端点/密钥，仅管理员
+app.post('/test', requireAdmin, async (c) => {
   const body = await c.req.json()
   if (!body.service_type || !body.provider || !body.base_url) {
     return badRequest(c, 'service_type, provider and base_url are required')
@@ -323,17 +326,17 @@ app.post('/test', async (c) => {
 
 // GET /ai-configs/:id
 app.get('/:id', async (c) => {
+  const isAdmin = c.get('user')?.role === 'admin'
   const id = Number(c.req.param('id'))
   const [row] = db.select().from(schema.aiServiceConfigs).where(eq(schema.aiServiceConfigs.id, id)).all()
   if (!row) return notFound(c)
-  return success(c, {
-    ...toSnakeCase(row),
-    model: row.model ? JSON.parse(row.model) : [],
-  })
+  const o: any = { ...toSnakeCase(row), model: row.model ? JSON.parse(row.model) : [] }
+  if (!isAdmin) delete o.api_key
+  return success(c, o)
 })
 
-// PUT /ai-configs/:id
-app.put('/:id', async (c) => {
+// PUT /ai-configs/:id —— 仅管理员
+app.put('/:id', requireAdmin, async (c) => {
   const id = Number(c.req.param('id'))
   const body = await c.req.json()
   const updates: Record<string, any> = { updatedAt: now() }
@@ -350,8 +353,8 @@ app.put('/:id', async (c) => {
   return success(c)
 })
 
-// DELETE /ai-configs/:id
-app.delete('/:id', async (c) => {
+// DELETE /ai-configs/:id —— 仅管理员
+app.delete('/:id', requireAdmin, async (c) => {
   const id = Number(c.req.param('id'))
   db.delete(schema.aiServiceConfigs).where(eq(schema.aiServiceConfigs.id, id)).run()
   return success(c)
