@@ -32,6 +32,7 @@ export const creditTransactions = sqliteTable('credit_transactions', {
 
 export const dramas = sqliteTable('dramas', {
   id: integer('id').primaryKey({ autoIncrement: true }),
+  userId: integer('user_id'),                       // 属主；旧数据为 null（仅管理员可见）
   title: text('title').notNull(),
   description: text('description'),
   genre: text('genre'),

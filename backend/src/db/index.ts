@@ -44,6 +44,7 @@ sqlite.exec(`
 
   CREATE TABLE IF NOT EXISTS dramas (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER,
     title TEXT NOT NULL,
     description TEXT,
     genre TEXT,
@@ -390,6 +391,7 @@ ensureColumn('characters', 'view_side', 'TEXT')
 ensureColumn('characters', 'view_back', 'TEXT')
 ensureColumn('image_generations', 'user_id', 'INTEGER')
 ensureColumn('video_generations', 'user_id', 'INTEGER')
+ensureColumn('dramas', 'user_id', 'INTEGER')  // 多租户：剧集属主（旧数据 null）
 
 export const db = drizzle(sqlite, { schema })
 export { schema }
