@@ -32,12 +32,6 @@ export class OpenAISoraVideoAdapter implements VideoProviderAdapter {
       size: this.resolveSize(record.aspectRatio),
     }
 
-    // 云雾 happyhorse 走的是万相式校验：要 parameters.resolution ∈ {'720P','1080P'}，
-    // 不是 sora 的 size。不补就报 "Input should be '1080P' or '720P': parameters.resolution"。
-    if (/happyhorse/i.test(model)) {
-      body.parameters = { resolution: this.resolveResolution(record.aspectRatio) }
-    }
-
     // Reference image: pass as input_reference (must match `size` exactly).
     // image-generation.ts now forces storyboard first/last frames to sora-compatible
     // sizes (720x1280 / 1280x720 / 720x720), so they should match.
@@ -110,13 +104,6 @@ export class OpenAISoraVideoAdapter implements VideoProviderAdapter {
     if (parsed <= 4) return 4
     if (parsed <= 8) return 8
     return 12
-  }
-
-  /** happyhorse 用万相式 resolution 枚举：'720P' / '1080P'。 */
-  private resolveResolution(aspectRatio?: string | null): string {
-    const r = (aspectRatio || '9:16').toLowerCase()
-    if (r.includes('16:9') || r === 'landscape' || r === 'horizontal') return '1080P'
-    return '720P'
   }
 
   /** sora-2 supports specific sizes. Pick closest match to aspect. */
