@@ -2801,7 +2801,7 @@ async function handleCustomGenSubmit(payload) {
 function openCharCustomDialog(c) {
   customGenDialog.title = `自定义生成 · ${c.name || '角色'}立绘`
   customGenDialog.subtitle = (c.appearance || c.description) ? `角色设定：${String(c.appearance || c.description).slice(0, 80)}` : ''
-  customGenDialog.defaultPrompt = `${c.name}, ${c.appearance || c.description || '人物立绘'}, 高质量, 正面, 白色背景`
+  customGenDialog.defaultPrompt = c.image_prompt || c.imagePrompt || `${c.name}, ${c.appearance || c.description || '人物立绘'}, 高质量, 正面, 白色背景`
   customGenDialog.defaultCharIds = null
   customGenDialog.onConfirm = async ({ prompt }) => {
     await genCharImg(c.id, { prompt })

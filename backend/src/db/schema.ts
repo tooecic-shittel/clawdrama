@@ -80,6 +80,7 @@ export const characters = sqliteTable('characters', {
   imageUrl: text('image_url'),         // 正面（默认头像）
   viewSide: text('view_side'),         // 侧面
   viewBack: text('view_back'),         // 背面
+  imagePrompt: text('image_prompt'),   // 上次用的立绘提示词（自定义/AI改写后存这，下次复用）
   referenceImages: text('reference_images'),
   seedValue: text('seed_value'),
   sortOrder: integer('sort_order'),

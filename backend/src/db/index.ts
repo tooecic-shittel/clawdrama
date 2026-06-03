@@ -389,6 +389,7 @@ ensureColumn('episodes', 'audio_config_id', 'INTEGER')
 ensureColumn('users', 'credits', 'INTEGER NOT NULL DEFAULT 0')
 ensureColumn('characters', 'view_side', 'TEXT')
 ensureColumn('characters', 'view_back', 'TEXT')
+ensureColumn('characters', 'image_prompt', 'TEXT')
 ensureColumn('image_generations', 'user_id', 'INTEGER')
 ensureColumn('video_generations', 'user_id', 'INTEGER')
 ensureColumn('dramas', 'user_id', 'INTEGER')  // 多租户：剧集属主（旧数据 null）

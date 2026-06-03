@@ -104,10 +104,15 @@ app.post('/:id/generate-image', async (c) => {
   const [ep] = db.select().from(schema.episodes).where(eq(schema.episodes.id, Number(body.episode_id))).all()
   if (!ep) return badRequest(c, 'Episode not found')
 
-  // 允许前端传自定义提示词覆盖默认（用户对自动生成不满意时手动改写重生）
-  const prompt = (body.prompt && String(body.prompt).trim())
-    ? String(body.prompt).trim()
-    : `${char.name}, ${char.appearance || char.description || '人物立绘'}, 高质量, 正面, 白色背景`
+  // 自定义提示词优先；没传则用角色上次存的；都没有才现拼默认。
+  // 用过的自定义提示词存回角色，下次「自定义」预填、「重新生成」也复用，不再回退到默认那版。
+  const customPrompt = (body.prompt && String(body.prompt).trim()) ? String(body.prompt).trim() : ''
+  const prompt = customPrompt
+    || char.imagePrompt
+    || `${char.name}, ${char.appearance || char.description || '人物立绘'}, 高质量, 正面, 白色背景`
+  if (customPrompt && customPrompt !== char.imagePrompt) {
+    db.update(schema.characters).set({ imagePrompt: customPrompt, updatedAt: now() }).where(eq(schema.characters.id, id)).run()
+  }
   try {
     logTaskStart('CharacterImage', 'generate', { characterId: id, episodeId: ep.id, dramaId: char.dramaId, customPrompt: !!body.prompt })
     const genId = await generateImage({ userId: (c.get('user') as any)?.id, characterId: id, dramaId: char.dramaId, prompt, configId: ep.imageConfigId ?? undefined })
