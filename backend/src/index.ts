@@ -41,6 +41,14 @@ app.use('*', cors({
 app.use('*', requestLogger)
 app.use('*', errorHandler)
 
+// 兜底错误处理：任何漏出中间件 try/catch 的异常（含子应用/框架层），统一返回 JSON，
+// 避免前端拿到纯文本 "Internal Server Error" 再 JSON.parse 失败、看不到真正错因。
+app.onError((err, c) => {
+  const status = (err as any).status || 500
+  console.error(`[onError] ${c.req.method} ${c.req.path}:`, (err as any)?.stack || err)
+  return c.json({ code: status, message: (err as any)?.message || 'Internal Server Error' }, status)
+})
+
 // Health check
 app.get('/api/v1/health', (c) => c.json({ status: 'ok', timestamp: new Date().toISOString() }))
 
