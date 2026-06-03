@@ -52,7 +52,9 @@ export class GoogleVeoVideoAdapter implements VideoProviderAdapter {
       instances: [instance],
       parameters: {
         aspectRatio: this.resolveAspect(record.aspectRatio),
-        personGeneration: 'allow_all',
+        // Veo 现已不支持 'allow_all'（尤其图生视频 / 涉及未成年人），用广泛支持的 'allow_adult'。
+        // 注意：这意味着 Veo 不允许生成儿童形象——短剧里有小孩的镜头 Veo 仍会受限。
+        personGeneration: 'allow_adult',
       },
     }
 
