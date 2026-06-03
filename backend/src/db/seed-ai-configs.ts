@@ -10,9 +10,7 @@
  * 需要的环境变量：
  *   GOOGLE_API_KEY        —— Google Gemini（文本 + 原生 TTS）
  *   GOOGLE_VIDEO_API_KEY  —— Google Veo 官方视频。与 GOOGLE_API_KEY 是不同的 key；缺失则跳过视频播种。
- *   YUNWU_API_KEY         —— 云雾（图片 + TTS 兜底）
- *
- * 注：happyhorse 视频兜底已废弃（云雾中转接口生成时报 resolution 错，修不好），启动时会清掉残留配置。
+ *   YUNWU_API_KEY         —— 云雾（图片 + 视频 happyhorse + TTS 兜底）
  */
 import { eq, and } from 'drizzle-orm'
 import { db, schema } from './index.js'
@@ -31,7 +29,8 @@ interface ManagedConfig {
 const MANAGED_CONFIGS: ManagedConfig[] = [
   { serviceType: 'text',  provider: 'google', name: 'Google Gemini 文本',    baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai', model: 'gemini-2.5-flash',             priority: 100, envKey: 'GOOGLE_API_KEY' },
   { serviceType: 'image', provider: 'openai', name: '云雾图片服务',           baseUrl: 'https://yunwu.ai/v1',                                     model: 'doubao-seedream-4-5-251128',  priority: 99,  envKey: 'YUNWU_API_KEY' },
-  { serviceType: 'video', provider: 'google-veo', name: 'Google Veo 视频（官方）', baseUrl: 'https://generativelanguage.googleapis.com/v1beta',     model: 'veo-3.0-fast-generate-001',   priority: 98,  envKey: 'GOOGLE_VIDEO_API_KEY' },
+  { serviceType: 'video', provider: 'openai', name: '云雾 HappyHorse 视频',  baseUrl: 'https://yunwu.ai/v1',                                     model: 'happyhorse-1.0-t2v',          priority: 99,  envKey: 'YUNWU_API_KEY' },
+  { serviceType: 'video', provider: 'google-veo', name: 'Google Veo 视频（官方·兜底）', baseUrl: 'https://generativelanguage.googleapis.com/v1beta', model: 'veo-3.0-fast-generate-001',   priority: 90,  envKey: 'GOOGLE_VIDEO_API_KEY' },
   { serviceType: 'audio', provider: 'openai', name: '云雾 TTS 服务',          baseUrl: 'https://yunwu.ai/v1',                                     model: 'gpt-4o-mini-tts',             priority: 97,  envKey: 'YUNWU_API_KEY' },
   { serviceType: 'audio', provider: 'gemini', name: 'Gemini 原生 TTS',        baseUrl: 'https://generativelanguage.googleapis.com/v1beta',        model: 'gemini-2.5-flash-preview-tts', priority: 98, envKey: 'GOOGLE_API_KEY' },
 ]
@@ -80,16 +79,7 @@ export function seedAiConfigs(): void {
     }
   }
 
-  // 清理：happyhorse 视频兜底已废弃（云雾接口生成时报 resolution 错），删掉残留配置
-  const stale = db.select().from(schema.aiServiceConfigs)
-    .where(eq(schema.aiServiceConfigs.serviceType, 'video')).all()
-    .filter(r => (r.model || '').includes('happyhorse'))
-  for (const r of stale) {
-    db.delete(schema.aiServiceConfigs).where(eq(schema.aiServiceConfigs.id, r.id)).run()
-  }
-  const dropped = stale.length
-
-  if (inserted || updated || skipped || dropped) {
-    console.log(`🔑 AI 配置播种完成：新增 ${inserted}，更新 ${updated}，跳过 ${skipped}（缺环境变量），清理废弃 ${dropped}`)
+  if (inserted || updated || skipped) {
+    console.log(`🔑 AI 配置播种完成：新增 ${inserted}，更新 ${updated}，跳过 ${skipped}（缺环境变量）`)
   }
 }
