@@ -784,6 +784,10 @@
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
                   </div>
                   <span class="asset-cover-badge" :class="(c.image_url || c.imageUrl) ? 'is-ready' : (isPendingCharImage(c.id) ? 'is-pending' : '')">{{ (c.image_url || c.imageUrl) ? '已生成' : (isPendingCharImage(c.id) ? '生成中' : '待生成') }}</span>
+                  <div v-if="isPendingCharImage(c.id)" class="asset-cover-loading">
+                    <div class="asset-loading-bar"><i></i></div>
+                    <span class="asset-loading-text">AI 生成中…</span>
+                  </div>
                 </div>
                 <div class="asset-body">
                   <div class="asset-name">{{ c.name }}</div>
@@ -2695,6 +2699,9 @@ function watchAsyncResult(check, attempts = 24, delay = 2500) {
 }
 
 async function genCharImg(id, opts = {}) {
+  // 记下旧图地址：重新生成时旧图还在，必须等地址「变了」才算完成，否则「生成中」会秒消失
+  const c0 = chars.value.find(c => c.id === id)
+  const before = c0?.image_url || c0?.imageUrl || ''
   try {
     if (!isPendingCharImage(id)) pendingCharImageIds.value.push(id)
     await characterAPI.generateImage(id, epId.value, opts)
@@ -2702,10 +2709,11 @@ async function genCharImg(id, opts = {}) {
     await refresh()
     watchAsyncResult(() => {
       const char = chars.value.find(c => c.id === id)
-      const done = !!(char?.image_url || char?.imageUrl)
+      const cur = char?.image_url || char?.imageUrl || ''
+      const done = !!cur && cur !== before
       if (done) pendingCharImageIds.value = pendingCharImageIds.value.filter(item => item !== id)
       return done
-    })
+    }, 36)
   } catch (e) {
     pendingCharImageIds.value = pendingCharImageIds.value.filter(item => item !== id)
     toast.error(e.message)
@@ -2718,6 +2726,8 @@ function isPendingCharView(id, view) { return pendingCharViewKeys.value.includes
 async function genCharView(id, view) {
   const key = charViewKey(id, view)
   if (isPendingCharView(id, view)) return
+  const c0 = chars.value.find(c => c.id === id)
+  const before = (view === 'side' ? (c0?.view_side || c0?.viewSide) : (c0?.view_back || c0?.viewBack)) || ''
   try {
     pendingCharViewKeys.value.push(key)
     await characterAPI.generateView(id, epId.value, view)
@@ -2725,11 +2735,11 @@ async function genCharView(id, view) {
     await refresh()
     watchAsyncResult(() => {
       const char = chars.value.find(c => c.id === id)
-      const field = view === 'side' ? (char?.view_side || char?.viewSide) : (char?.view_back || char?.viewBack)
-      const done = !!field
+      const field = (view === 'side' ? (char?.view_side || char?.viewSide) : (char?.view_back || char?.viewBack)) || ''
+      const done = !!field && field !== before
       if (done) pendingCharViewKeys.value = pendingCharViewKeys.value.filter(k => k !== key)
       return done
-    })
+    }, 36)
   } catch (e) {
     pendingCharViewKeys.value = pendingCharViewKeys.value.filter(k => k !== key)
     toast.error(e.message)
@@ -3952,6 +3962,15 @@ onMounted(() => { refresh(); loadConfigs(); loadVoices() })
   background: rgba(19, 51, 121, 0.92);
 }
 .asset-cover-empty { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; color: var(--text-3); }
+.asset-cover-loading {
+  position: absolute; inset: 0; z-index: 3;
+  background: rgba(15, 18, 30, 0.55); backdrop-filter: blur(2px);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
+}
+.asset-loading-bar { width: 72%; height: 4px; border-radius: 3px; background: rgba(255, 255, 255, 0.2); overflow: hidden; }
+.asset-loading-bar i { display: block; height: 100%; width: 40%; border-radius: 3px; background: var(--accent, #7c5cff); animation: assetBar 1.05s ease-in-out infinite; }
+@keyframes assetBar { 0% { margin-left: -42%; } 100% { margin-left: 102%; } }
+.asset-loading-text { font-size: 11px; font-weight: 600; color: #fff; letter-spacing: 0.04em; }
 .asset-body { padding: 8px 10px; }
 .asset-name { font-size: 13px; font-weight: 600; }
 .asset-meta { font-size: 11px; }
