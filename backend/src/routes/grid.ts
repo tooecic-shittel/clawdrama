@@ -1,7 +1,8 @@
 import { Hono } from 'hono'
 import { eq } from 'drizzle-orm'
 import { db, schema } from '../db/index.js'
-import { success, badRequest, now, paymentRequired } from '../utils/response.js'
+import { success, badRequest, notFound, now, paymentRequired } from '../utils/response.js'
+import { canAccess, episodeOwnerId, dramaOwnerId } from '../middleware/ownership.js'
 import { generateImage } from '../services/image-generation.js'
 import { splitGridImage } from '../services/grid-split.js'
 import { createAgent } from '../agents/index.js'
@@ -404,6 +405,7 @@ app.post('/prompt', async (c) => {
   }).filter(Boolean)
 
   if (!storyboards.length) return badRequest(c, 'No storyboards found')
+  if (!canAccess(c, episodeOwnerId(storyboards[0].episodeId))) return notFound(c, '镜头不存在')
 
   let dramaStyle = ''
   if (drama_id) {
@@ -500,6 +502,7 @@ app.post('/generate', async (c) => {
   }).filter(Boolean)
 
   if (!storyboards.length) return badRequest(c, 'No storyboards found')
+  if (!canAccess(c, episodeOwnerId(storyboards[0].episodeId))) return notFound(c, '镜头不存在')
 
   // Get drama style
   let dramaStyle = ''
@@ -563,6 +566,10 @@ app.post('/split', async (c) => {
   if (!image_generation_id) return badRequest(c, 'image_generation_id required')
   if (!rows || !cols) return badRequest(c, 'rows and cols required')
   if (!assignments?.length) return badRequest(c, 'assignments required')
+  {
+    const [img] = db.select().from(schema.imageGenerations).where(eq(schema.imageGenerations.id, Number(image_generation_id))).all()
+    if (!img || !canAccess(c, img.dramaId ? dramaOwnerId(img.dramaId) : (img.userId ?? null))) return notFound(c, '图片不存在')
+  }
 
   const [imgRecord] = db.select().from(schema.imageGenerations)
     .where(eq(schema.imageGenerations.id, image_generation_id)).all()
@@ -606,6 +613,7 @@ app.get('/status/:id', async (c) => {
   const [row] = db.select().from(schema.imageGenerations)
     .where(eq(schema.imageGenerations.id, id)).all()
   if (!row) return badRequest(c, 'Not found')
+  if (!canAccess(c, row.dramaId ? dramaOwnerId(row.dramaId) : (row.userId ?? null))) return notFound(c, '图片不存在')
   return success(c, {
     id: row.id,
     status: row.status,

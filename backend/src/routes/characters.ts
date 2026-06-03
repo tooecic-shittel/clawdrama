@@ -1,7 +1,8 @@
 import { Hono } from 'hono'
 import { eq } from 'drizzle-orm'
 import { db, schema } from '../db/index.js'
-import { success, badRequest, now, paymentRequired } from '../utils/response.js'
+import { success, badRequest, notFound, now, paymentRequired } from '../utils/response.js'
+import { canAccess, characterOwnerId, dramaOwnerId, episodeOwnerId } from '../middleware/ownership.js'
 import { generateVoiceSample } from '../services/tts-generation.js'
 import { generateImage } from '../services/image-generation.js'
 import { logTaskError, logTaskStart, logTaskSuccess } from '../utils/task-logger.js'
@@ -11,6 +12,7 @@ const app = new Hono()
 // PUT /characters/:id
 app.put('/:id', async (c) => {
   const id = Number(c.req.param('id'))
+  if (!canAccess(c, characterOwnerId(id))) return notFound(c, '角色不存在')
   const body = await c.req.json()
   const updates: Record<string, any> = { updatedAt: now() }
   for (const key of ['name', 'role', 'description', 'appearance', 'personality', 'voiceStyle', 'voiceProvider', 'imageUrl', 'localPath']) {
@@ -28,6 +30,7 @@ app.put('/:id', async (c) => {
 // DELETE /characters/:id
 app.delete('/:id', async (c) => {
   const id = Number(c.req.param('id'))
+  if (!canAccess(c, characterOwnerId(id))) return notFound(c, '角色不存在')
   db.update(schema.characters).set({ deletedAt: now() }).where(eq(schema.characters.id, id)).run()
   return success(c)
 })
@@ -38,6 +41,7 @@ app.post('/:id/generate-voice-sample', async (c) => {
   const body = await c.req.json().catch(() => ({}))
   const [char] = db.select().from(schema.characters).where(eq(schema.characters.id, id)).all()
   if (!char) return badRequest(c, 'Character not found')
+  if (!canAccess(c, dramaOwnerId(char.dramaId))) return notFound(c, '角色不存在')
   if (!char.voiceStyle) return badRequest(c, '请先分配音色')
   if (!body.episode_id) return badRequest(c, 'episode_id is required')
 
@@ -64,6 +68,7 @@ app.post('/:id/generate-image', async (c) => {
   const body = await c.req.json()
   const [char] = db.select().from(schema.characters).where(eq(schema.characters.id, id)).all()
   if (!char) return badRequest(c, 'Character not found')
+  if (!canAccess(c, dramaOwnerId(char.dramaId))) return notFound(c, '角色不存在')
   if (!body.episode_id) return badRequest(c, 'episode_id is required')
 
   const [ep] = db.select().from(schema.episodes).where(eq(schema.episodes.id, Number(body.episode_id))).all()
@@ -93,6 +98,7 @@ app.post('/:id/generate-view', async (c) => {
 
   const [char] = db.select().from(schema.characters).where(eq(schema.characters.id, id)).all()
   if (!char) return badRequest(c, 'Character not found')
+  if (!canAccess(c, dramaOwnerId(char.dramaId))) return notFound(c, '角色不存在')
   const frontUrl = char.imageUrl || char.localPath
   if (!frontUrl) return badRequest(c, '请先生成正面头像')
 
@@ -132,12 +138,13 @@ app.post('/batch-generate-images', async (c) => {
   const body = await c.req.json()
   const ids: number[] = body.character_ids || []
   if (!body.episode_id) return badRequest(c, 'episode_id is required')
+  if (!canAccess(c, episodeOwnerId(body.episode_id))) return notFound(c, '剧集不存在')
   const [ep] = db.select().from(schema.episodes).where(eq(schema.episodes.id, Number(body.episode_id))).all()
   if (!ep) return badRequest(c, 'Episode not found')
   const results: number[] = []
   for (const cid of ids) {
     const [char] = db.select().from(schema.characters).where(eq(schema.characters.id, cid)).all()
-    if (!char) continue
+    if (!char || !canAccess(c, dramaOwnerId(char.dramaId))) continue
     const prompt = `${char.name}, ${char.appearance || char.description || '人物立绘'}, 高质量, 正面, 白色背景`
     try {
       const genId = await generateImage({ userId: (c.get('user') as any)?.id, characterId: cid, dramaId: char.dramaId, prompt, configId: ep.imageConfigId ?? undefined })

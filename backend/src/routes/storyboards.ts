@@ -1,8 +1,9 @@
 import { Hono } from 'hono'
 import { eq } from 'drizzle-orm'
 import { db, schema } from '../db/index.js'
-import { success, created, now, badRequest, paymentRequired } from '../utils/response.js'
+import { success, created, now, badRequest, notFound, paymentRequired } from '../utils/response.js'
 import { toSnakeCase } from '../utils/transform.js'
+import { canAccess, episodeOwnerId, storyboardOwnerId } from '../middleware/ownership.js'
 import { generateTTS } from '../services/tts-generation.js'
 import { pickVoiceForCharacter } from '../services/voice-mapper.js'
 import { buildTTSInstruction } from '../services/tts-instruction.js'
@@ -70,6 +71,7 @@ function validateStoryboardBindings(episodeId: number, sceneId: number | null | 
 // POST /storyboards
 app.post('/', async (c) => {
   const body = await c.req.json()
+  if (!canAccess(c, episodeOwnerId(body.episode_id))) return notFound(c, '剧集不存在')
   const ts = now()
   logTaskStart('StoryboardAPI', 'create', {
     episodeId: body.episode_id,
@@ -111,6 +113,7 @@ app.put('/:id', async (c) => {
   const body = await c.req.json()
   const [storyboard] = db.select().from(schema.storyboards).where(eq(schema.storyboards.id, id)).all()
   if (!storyboard) return badRequest(c, '镜头不存在')
+  if (!canAccess(c, episodeOwnerId(storyboard.episodeId))) return notFound(c, '镜头不存在')
   logTaskStart('StoryboardAPI', 'update', {
     storyboardId: id,
     episodeId: storyboard.episodeId,
@@ -158,6 +161,7 @@ app.post('/:id/generate-tts', async (c) => {
   const id = Number(c.req.param('id'))
   const [sb] = db.select().from(schema.storyboards).where(eq(schema.storyboards.id, id)).all()
   if (!sb) return badRequest(c, '镜头不存在')
+  if (!canAccess(c, episodeOwnerId(sb.episodeId))) return notFound(c, '镜头不存在')
   const parsedDialogue = parseDialogueForTTS(sb.dialogue)
   if (parsedDialogue.ignorable) return badRequest(c, '该镜头没有可生成的对白或旁白')
   logTaskStart('StoryboardAPI', 'generate-tts', {
@@ -212,6 +216,7 @@ app.post('/:id/generate-tts', async (c) => {
 // DELETE /storyboards/:id
 app.delete('/:id', async (c) => {
   const id = Number(c.req.param('id'))
+  if (!canAccess(c, storyboardOwnerId(id))) return notFound(c, '镜头不存在')
   logTaskStart('StoryboardAPI', 'delete', { storyboardId: id })
   db.delete(schema.storyboardCharacters).where(eq(schema.storyboardCharacters.storyboardId, id)).run()
   db.delete(schema.storyboards).where(eq(schema.storyboards.id, id)).run()

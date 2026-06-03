@@ -1,7 +1,8 @@
 import { Hono } from 'hono'
 import { eq } from 'drizzle-orm'
 import { db, schema } from '../db/index.js'
-import { success, badRequest } from '../utils/response.js'
+import { success, badRequest, notFound } from '../utils/response.js'
+import { canAccess, episodeOwnerId, storyboardOwnerId } from '../middleware/ownership.js'
 import { composeStoryboard } from '../services/ffmpeg-compose.js'
 import { logTaskError, logTaskStart, logTaskSuccess } from '../utils/task-logger.js'
 import { toSnakeCase } from '../utils/transform.js'
@@ -11,6 +12,7 @@ const app = new Hono()
 // POST /storyboards/:id/compose — 合成单个镜头
 app.post('/storyboards/:id/compose', async (c) => {
   const id = Number(c.req.param('id'))
+  if (!canAccess(c, storyboardOwnerId(id))) return notFound(c, '镜头不存在')
   try {
     logTaskStart('ComposeAPI', 'single-compose', { storyboardId: id })
     const composedUrl = await composeStoryboard(id, (c.get('user') as any)?.id)
@@ -25,6 +27,7 @@ app.post('/storyboards/:id/compose', async (c) => {
 // POST /episodes/:id/compose-all — 批量合成全部镜头
 app.post('/episodes/:id/compose-all', async (c) => {
   const episodeId = Number(c.req.param('id'))
+  if (!canAccess(c, episodeOwnerId(episodeId))) return notFound(c, '剧集不存在')
   const storyboards = db.select().from(schema.storyboards)
     .where(eq(schema.storyboards.episodeId, episodeId))
     .orderBy(schema.storyboards.storyboardNumber)
@@ -63,6 +66,7 @@ app.post('/episodes/:id/compose-all', async (c) => {
 // GET /episodes/:id/compose-status — 查询批量合成状态
 app.get('/episodes/:id/compose-status', async (c) => {
   const episodeId = Number(c.req.param('id'))
+  if (!canAccess(c, episodeOwnerId(episodeId))) return notFound(c, '剧集不存在')
   const storyboards = db.select().from(schema.storyboards)
     .where(eq(schema.storyboards.episodeId, episodeId))
     .orderBy(schema.storyboards.storyboardNumber)
