@@ -1513,6 +1513,7 @@
       :default-prompt="customGenDialog.defaultPrompt"
       :characters="chars"
       :default-char-ids="customGenDialog.defaultCharIds"
+      :on-enhance="customGenDialog.onEnhance"
       @close="closeCustomGen"
       @submit="handleCustomGenSubmit"
     />
@@ -2778,6 +2779,7 @@ const customGenDialog = reactive({
   defaultPrompt: '',
   defaultCharIds: null,
   onConfirm: null,  // ({ prompt, referenceCharacterIds }) => Promise
+  onEnhance: null,  // async (currentPrompt) => newPrompt（传入才显示「AI 改写」）
 })
 function closeCustomGen() { customGenDialog.open = false }
 async function handleCustomGenSubmit(payload) {
@@ -2794,6 +2796,15 @@ function openCharCustomDialog(c) {
   customGenDialog.onConfirm = async ({ prompt }) => {
     await genCharImg(c.id, { prompt })
   }
+  customGenDialog.onEnhance = async (current) => {
+    try {
+      const r = await characterAPI.enhancePrompt(c.id, current)
+      return r.prompt
+    } catch (e) {
+      toast.error(e.message || 'AI 改写失败')
+      return null
+    }
+  }
   customGenDialog.open = true
 }
 function openSceneCustomDialog(scene) {
@@ -2801,6 +2812,7 @@ function openSceneCustomDialog(scene) {
   customGenDialog.subtitle = scene.prompt ? `场景描述：${scene.prompt.slice(0, 80)}` : ''
   customGenDialog.defaultPrompt = scene.prompt || `${scene.location || ''}, ${scene.time || ''}, 高质量场景, 电影感`
   customGenDialog.defaultCharIds = null  // null = auto mode by default
+  customGenDialog.onEnhance = null
   customGenDialog.onConfirm = async ({ prompt, referenceCharacterIds }) => {
     await genSceneImg(scene.id, { prompt, referenceCharacterIds })
   }
@@ -2975,6 +2987,7 @@ function openShotCustomDialog(sb, frameType) {
   customGenDialog.subtitle = desc ? `分镜描述：${desc.slice(0, 80)}` : ''
   customGenDialog.defaultPrompt = buildShotImagePrompt(sb, frameType)
   customGenDialog.defaultCharIds = null  // auto by default
+  customGenDialog.onEnhance = null
   customGenDialog.onConfirm = async ({ prompt, referenceCharacterIds }) => {
     await genShotFrame(sb, frameType, { prompt, referenceCharacterIds })
   }

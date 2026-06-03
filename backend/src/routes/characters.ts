@@ -3,6 +3,7 @@ import { eq } from 'drizzle-orm'
 import { db, schema } from '../db/index.js'
 import { success, badRequest, notFound, now, paymentRequired } from '../utils/response.js'
 import { canAccess, characterOwnerId, dramaOwnerId, episodeOwnerId } from '../middleware/ownership.js'
+import { enhanceCharacterImagePrompt } from '../services/prompt-rewrite.js'
 import { generateVoiceSample } from '../services/tts-generation.js'
 import { generateImage } from '../services/image-generation.js'
 import { logTaskError, logTaskStart, logTaskSuccess } from '../utils/task-logger.js'
@@ -59,6 +60,35 @@ app.post('/:id/generate-voice-sample', async (c) => {
   } catch (err: any) {
     logTaskError('VoiceSample', 'generate', { characterId: id, error: err.message })
     return badRequest(c, `TTS 生成失败: ${err.message}`)
+  }
+})
+
+// POST /characters/:id/enhance-prompt — 让 AI 根据角色设定+画风改写丰富立绘提示词
+app.post('/:id/enhance-prompt', async (c) => {
+  const id = Number(c.req.param('id'))
+  if (!canAccess(c, characterOwnerId(id))) return notFound(c, '角色不存在')
+  const body = await c.req.json().catch(() => ({}))
+  const [char] = db.select().from(schema.characters).where(eq(schema.characters.id, id)).all()
+  if (!char) return badRequest(c, 'Character not found')
+  const [drama] = char.dramaId
+    ? db.select({ style: schema.dramas.style }).from(schema.dramas).where(eq(schema.dramas.id, char.dramaId)).all()
+    : []
+  try {
+    const prompt = await enhanceCharacterImagePrompt({
+      name: char.name,
+      role: char.role,
+      appearance: char.appearance,
+      description: char.description,
+      personality: char.personality,
+      dramaStyle: drama?.style,
+      currentPrompt: body.prompt,
+    })
+    if (!prompt) return badRequest(c, 'AI 未返回提示词，请重试')
+    logTaskSuccess('CharacterImage', 'enhance-prompt', { characterId: id, length: prompt.length })
+    return success(c, { prompt })
+  } catch (err: any) {
+    logTaskError('CharacterImage', 'enhance-prompt', { characterId: id, error: err.message })
+    return badRequest(c, err.message || 'AI 改写失败')
   }
 })
 

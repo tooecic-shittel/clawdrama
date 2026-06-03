@@ -10,10 +10,15 @@
         <button type="button" class="btn btn-ghost btn-icon" @click="close" title="关闭">×</button>
       </div>
 
-      <label class="field">
-        <span class="field-label">提示词</span>
+      <div class="field">
+        <div class="field-label-row">
+          <span class="field-label">提示词</span>
+          <button v-if="onEnhance" type="button" class="link-btn" :disabled="enhancing || !form.prompt.trim()" @click="doEnhance">
+            {{ enhancing ? 'AI 改写中…' : '✨ AI 改写丰富' }}
+          </button>
+        </div>
         <textarea v-model="form.prompt" class="textarea" rows="4" placeholder="描述这一镜画面" required />
-      </label>
+      </div>
 
       <div v-if="availableCharacters.length > 0" class="field">
         <div class="field-label-row">
@@ -76,12 +81,26 @@ const props = defineProps({
   characters: { type: Array, default: () => [] },
   /** Default selected character IDs (e.g. characters auto-detected for this shot) */
   defaultCharIds: { type: Array, default: () => null },  // null = auto mode
+  /** 可选：传入则显示「AI 改写」按钮。async (currentPrompt) => newPrompt */
+  onEnhance: { type: Function, default: null },
 })
 
 const emit = defineEmits(['close', 'submit'])
 
 const loading = ref(false)
+const enhancing = ref(false)
 const form = reactive({ prompt: '' })
+
+async function doEnhance() {
+  if (!props.onEnhance || enhancing.value) return
+  enhancing.value = true
+  try {
+    const result = await props.onEnhance(form.prompt.trim())
+    if (result && typeof result === 'string') form.prompt = result
+  } finally {
+    enhancing.value = false
+  }
+}
 
 // selectedCharIds: [] = explicit none, [ids] = explicit selection
 // autoMode: when true, ignore selection — backend will auto-detect
