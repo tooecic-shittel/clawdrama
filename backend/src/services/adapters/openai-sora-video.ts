@@ -37,6 +37,7 @@ export class OpenAISoraVideoAdapter implements VideoProviderAdapter {
         model,
         prompt: record.prompt || '',
         resolution: this.resolveResolution(record.aspectRatio),
+        ratio: this.resolveRatio(record.aspectRatio),  // 横竖比，独立于 resolution（画质档）
         duration: Math.round(Number(record.duration) || 5),
       }
       return { url, method: 'POST', headers, body }
@@ -112,11 +113,21 @@ export class OpenAISoraVideoAdapter implements VideoProviderAdapter {
     return 12
   }
 
-  /** happyhorse 用 '720P' / '1080P' 枚举。短剧竖屏走 720P。 */
+  /** happyhorse 用 '720P' / '1080P' 枚举（画质档，不含横竖）。 */
   private resolveResolution(aspectRatio?: string | null): string {
     const r = (aspectRatio || '9:16').toLowerCase()
     if (r.includes('16:9') || r === 'landscape' || r === 'horizontal') return '1080P'
     return '720P'
+  }
+
+  /** happyhorse 的横竖比 ratio：16:9 / 9:16 / 1:1 / 4:3 / 3:4 / 4:5 / 5:4 / 9:21 / 21:9。短剧默认竖屏 9:16。 */
+  private resolveRatio(aspectRatio?: string | null): string {
+    const r = (aspectRatio || '9:16').toLowerCase().replace(/\s/g, '')
+    const allowed = ['16:9', '9:16', '1:1', '4:3', '3:4', '4:5', '5:4', '9:21', '21:9']
+    if (allowed.includes(r)) return r
+    if (r === 'landscape' || r === 'horizontal') return '16:9'
+    if (r === 'portrait' || r === 'vertical') return '9:16'
+    return '9:16'
   }
 
   /** sora-2 supports specific sizes. Pick closest match to aspect. */
