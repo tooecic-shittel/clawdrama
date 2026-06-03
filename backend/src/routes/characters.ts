@@ -74,9 +74,12 @@ app.post('/:id/generate-image', async (c) => {
   const [ep] = db.select().from(schema.episodes).where(eq(schema.episodes.id, Number(body.episode_id))).all()
   if (!ep) return badRequest(c, 'Episode not found')
 
-  const prompt = `${char.name}, ${char.appearance || char.description || '人物立绘'}, 高质量, 正面, 白色背景`
+  // 允许前端传自定义提示词覆盖默认（用户对自动生成不满意时手动改写重生）
+  const prompt = (body.prompt && String(body.prompt).trim())
+    ? String(body.prompt).trim()
+    : `${char.name}, ${char.appearance || char.description || '人物立绘'}, 高质量, 正面, 白色背景`
   try {
-    logTaskStart('CharacterImage', 'generate', { characterId: id, episodeId: ep.id, dramaId: char.dramaId })
+    logTaskStart('CharacterImage', 'generate', { characterId: id, episodeId: ep.id, dramaId: char.dramaId, customPrompt: !!body.prompt })
     const genId = await generateImage({ userId: (c.get('user') as any)?.id, characterId: id, dramaId: char.dramaId, prompt, configId: ep.imageConfigId ?? undefined })
     logTaskSuccess('CharacterImage', 'generate', { characterId: id, generationId: genId })
     return success(c, { image_generation_id: genId })

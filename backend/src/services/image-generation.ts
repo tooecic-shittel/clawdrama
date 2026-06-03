@@ -203,6 +203,16 @@ async function processImageGeneration(id: number, config: AIConfig) {
         id, refImagesLen: typeof refImagesRaw === 'string' ? refImagesRaw.length : 0,
       })
     }
+    // 角色身份文字锚点（仅镜头帧）：和参考图配套，降低多角色同框时性别/外貌串味
+    if (record.storyboardId && record.frameType && !record.characterId) {
+      const identity = buildStoryboardIdentityClause(record.storyboardId)
+      if (identity && !(record.prompt || '').includes('本画面出现的角色')) {
+        const merged = `${identity}\n${record.prompt || ''}`
+        db.update(schema.imageGenerations).set({ prompt: merged }).where(eq(schema.imageGenerations.id, id)).run()
+        ;(record as any).prompt = merged
+      }
+    }
+
     const resolvedReferenceImages = await normalizeReferenceImages(refImagesRaw)
     const { url, method, headers, body } = adapter.buildGenerateRequest(config, {
       id: record.id,
@@ -310,6 +320,42 @@ function characterToRefPath(ch: any): string | null {
   if (!p || typeof p !== 'string') return null
   if (p.startsWith('static/') || p.startsWith('/static/')) return p
   return null
+}
+
+/** 从 appearance/description 粗判性别，给提示词一个强锚点（只匹配明确词，避免人名误伤）。 */
+function extractGender(text: string): string {
+  const a = text || ''
+  if (/女性|女人|女孩|少女|女子|female|woman|girl/i.test(a)) return '女性'
+  if (/男性|男人|男孩|少年|男子|male|\bman\b|boy/i.test(a)) return '男性'
+  return ''
+}
+
+/**
+ * 为镜头里出现的角色构建「身份锚点」文字，与参考图配套，强约束模型别把性别/外貌搞混、别张冠李戴。
+ * 这是多角色同框时一致性跑偏（如男角色被画成女）的主要缓解手段。
+ */
+function buildStoryboardIdentityClause(storyboardId: number): string {
+  try {
+    const links = db.select().from(schema.storyboardCharacters)
+      .where(eq(schema.storyboardCharacters.storyboardId, storyboardId)).all()
+    const parts: string[] = []
+    for (const l of links) {
+      const [ch] = db.select().from(schema.characters).where(eq(schema.characters.id, l.characterId)).all()
+      if (!ch || ch.deletedAt) continue
+      const gender = extractGender(`${ch.appearance || ''} ${ch.description || ''}`)
+      const appr = String(ch.appearance || '')
+        .replace(/性别[：:]\s*/g, '')
+        .replace(/^(男性|女性|男人|女人|男|女)[，。,.、\s]*/, '')  // 去掉开头重复的性别词
+        .replace(/^[，。,.\s]+/, '')
+        .slice(0, 36)
+      const tag = [gender, appr].filter(Boolean).join('，')
+      parts.push(tag ? `${ch.name}（${tag}）` : ch.name)
+    }
+    if (!parts.length) return ''
+    return `本画面出现的角色及其身份（必须与参考图严格对应，不得混淆性别、外貌或张冠李戴）：${parts.join('；')}。`
+  } catch {
+    return ''
+  }
 }
 
 /** Convert character record to all available views (front + side + back). Returns up to 3 paths. */

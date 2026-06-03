@@ -795,6 +795,7 @@
                   <button class="btn btn-sm ml-auto" :disabled="isPendingCharImage(c.id)" @click="genCharImg(c.id)">
                     {{ isPendingCharImage(c.id) ? '生成中' : ((c.image_url || c.imageUrl) ? '重新生成' : '生成') }}
                   </button>
+                  <button class="btn btn-sm" :disabled="isPendingCharImage(c.id)" title="自定义提示词重新生成" @click="openCharCustomDialog(c)">自定义</button>
                 </div>
 
                 <!-- 三视图：侧面 + 背面（角色一致性 boost） -->
@@ -2692,10 +2693,10 @@ function watchAsyncResult(check, attempts = 24, delay = 2500) {
   })()
 }
 
-async function genCharImg(id) {
+async function genCharImg(id, opts = {}) {
   try {
     if (!isPendingCharImage(id)) pendingCharImageIds.value.push(id)
-    await characterAPI.generateImage(id, epId.value)
+    await characterAPI.generateImage(id, epId.value, opts)
     toast.success('角色图片生成中')
     await refresh()
     watchAsyncResult(() => {
@@ -2785,6 +2786,16 @@ async function handleCustomGenSubmit(payload) {
   }
 }
 
+function openCharCustomDialog(c) {
+  customGenDialog.title = `自定义生成 · ${c.name || '角色'}立绘`
+  customGenDialog.subtitle = (c.appearance || c.description) ? `角色设定：${String(c.appearance || c.description).slice(0, 80)}` : ''
+  customGenDialog.defaultPrompt = `${c.name}, ${c.appearance || c.description || '人物立绘'}, 高质量, 正面, 白色背景`
+  customGenDialog.defaultCharIds = null
+  customGenDialog.onConfirm = async ({ prompt }) => {
+    await genCharImg(c.id, { prompt })
+  }
+  customGenDialog.open = true
+}
 function openSceneCustomDialog(scene) {
   customGenDialog.title = `自定义生成 · ${scene.location || '场景'}`
   customGenDialog.subtitle = scene.prompt ? `场景描述：${scene.prompt.slice(0, 80)}` : ''
