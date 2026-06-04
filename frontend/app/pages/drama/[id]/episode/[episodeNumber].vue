@@ -1275,7 +1275,7 @@
                   <option value="720P">720P（快）</option>
                   <option value="1080P">1080P（清晰）</option>
                 </select>
-                <span class="dim" style="font-size:11px;margin:0 4px" :title="`每条视频扣 ${pricing.video} 积分`">≈{{ pricing.video }} 积分/条</span>
+                <span class="dim" style="font-size:11px;margin:0 4px" :title="`视频按时长×画质扣费：${videoResolution} ≈${videoRatePerSec} 积分/秒。例 5 秒 ≈${videoRatePerSec * 5} 积分`">≈{{ videoRatePerSec }} 积分/秒</span>
                 <button class="btn btn-sm" @click="batchVideos">
                   <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
                   批量视频
@@ -1695,7 +1695,12 @@ function handleImageViewerKeydown(event) {
   if (event.key === 'Escape' && imageViewer.value.open) closeImageViewer()
 }
 
-const pricing = ref({ image: 1000, video: 7500, tts: 150 })
+const pricing = ref({ image: 1000, tts: 150, videoPerSec: { '720p': 3000, '1080p': 6000 } })
+// 视频按画质的每秒积分（动态计费）
+const videoRatePerSec = computed(() => {
+  const k = String(videoResolution.value).toLowerCase().includes('1080') ? '1080p' : '720p'
+  return pricing.value.videoPerSec?.[k] ?? 3000
+})
 onMounted(() => {
   window.addEventListener('keydown', handleImageViewerKeydown)
   creditsAPI.pricing().then(p => { if (p) pricing.value = p }).catch(() => {})

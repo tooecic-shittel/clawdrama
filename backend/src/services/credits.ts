@@ -71,28 +71,42 @@ export async function applyCreditOp(op: CreditOp) {
 }
 
 // === Per-action pricing (credits consumed per successful AI generation) ===
-// 定价锚点：¥1 = 1000 积分（1 积分 = ¥0.001）。
-// 公式：积分价 = 真实 API 成本(元) × 毛利倍数(5) × 1000。
-//   图片  ¥0.20 × 5 × 1000 = 1000  （≈¥1.0/张）
-//   视频  ¥1.50 × 5 × 1000 = 7500  （≈¥7.5/个）
-//   配音  ¥0.03 × 5 × 1000 = 150   （≈¥0.15/段）
-// 改成本/倍数/锚点时，同步更新这里与下方 PACKAGES。
+// 定价锚点：¥1 = 1000 积分（1 积分 = ¥0.001）。积分价 = 真实成本(元) × 毛利倍数 × 1000。
+//   图片  doubao-seedream ¥0.20 × 5 = 1000   （≈¥1.0/张）
+//   配音  MiniMax ≤¥0.03 × 5 = 150           （≈¥0.15/段，实际更低，留足余量）
+//   视频  Seedance 2.0 按「时长 × 画质」动态：成本 720P≈¥1/秒、1080P≈¥2/秒，× 3 毛利
+//         → 720P 3000 积分/秒、1080P 6000 积分/秒（见 videoCost）。例：5秒/720P=15000。
+// 改成本/倍数/锚点时，同步更新这里、videoCost、PACKAGES、前端提示。
 export type ChargeableAction = 'image' | 'video' | 'tts'
 
 export const ACTION_COST: Record<ChargeableAction, number> = {
   image: 1000,
-  video: 7500,
+  video: 15000, // 兜底/默认（5秒·720P）；视频实际按 videoCost 动态计算
   tts: 150,
+}
+
+// 视频每秒积分（按画质档），3x 毛利
+export const VIDEO_CREDIT_PER_SEC: Record<string, number> = {
+  '720p': 3000,
+  '1080p': 6000,
+}
+
+/** 视频动态积分：时长(秒) × 画质费率。缺省按 5秒 / 720P。 */
+export function videoCost(durationSec?: number | null, resolution?: string | null): number {
+  const sec = Math.min(15, Math.max(1, Math.round(Number(durationSec) || 5)))
+  const r = String(resolution || '').toLowerCase().includes('1080') ? '1080p' : '720p'
+  return sec * (VIDEO_CREDIT_PER_SEC[r] ?? VIDEO_CREDIT_PER_SEC['720p'])
 }
 
 /**
  * Pre-flight balance gate. Call BEFORE enqueuing a generation.
  * Throws InsufficientCreditsError (402) when the user can't afford the action.
+ * `costOverride` lets variable-priced actions (video) pass the computed cost.
  * No-op when userId is absent (internal/system calls aren't metered).
  */
-export async function assertBalance(userId: number | null | undefined, action: ChargeableAction) {
+export async function assertBalance(userId: number | null | undefined, action: ChargeableAction, costOverride?: number) {
   if (!userId) return
-  const cost = ACTION_COST[action]
+  const cost = costOverride ?? ACTION_COST[action]
   if (!cost) return
   const balance = await getBalance(userId)
   if (balance < cost) {
@@ -104,22 +118,23 @@ export async function assertBalance(userId: number | null | undefined, action: C
  * Deduct credits for a COMPLETED action. Best-effort: never throws — the asset is
  * already produced, so a billing hiccup must not crash the completion handler or
  * lose the result. Access is gated up-front by assertBalance(); this only settles.
+ * `opts.cost` overrides the flat ACTION_COST (used by video's dynamic pricing).
  * No-op when userId is absent.
  */
 export async function chargeForAction(
   userId: number | null | undefined,
   action: ChargeableAction,
-  opts: { referenceId?: number; meta?: Record<string, any> } = {},
+  opts: { referenceId?: number; meta?: Record<string, any>; cost?: number } = {},
 ) {
   if (!userId) return
-  const cost = ACTION_COST[action]
+  const cost = opts.cost ?? ACTION_COST[action]
   if (!cost) return
   try {
     await applyCreditOp({
       userId,
       amount: -cost,
       type: 'deduct',
-      description: `${action} 生成扣费`,
+      description: `${action} 生成扣费 ${cost} 积分`,
       referenceType: `${action}_generation`,
       referenceId: opts.referenceId,
       meta: opts.meta,

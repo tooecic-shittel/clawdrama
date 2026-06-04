@@ -2,7 +2,7 @@ import { Hono } from 'hono'
 import { desc, eq, like, or } from 'drizzle-orm'
 import { db, schema } from '../db/index.js'
 import { requireAuth } from '../middleware/auth.js'
-import { applyCreditOp, getBalance, listHistory, PACKAGES, ACTION_COST } from '../services/credits.js'
+import { applyCreditOp, getBalance, listHistory, PACKAGES, ACTION_COST, VIDEO_CREDIT_PER_SEC } from '../services/credits.js'
 
 const credits = new Hono()
 
@@ -30,8 +30,9 @@ credits.get('/packages', (c) => {
 })
 
 // GET /credits/pricing — 各操作扣费（前端显示成本用）
+// 视频按「时长 × 画质」动态：videoPerSec 给前端按选中画质 × 时长估算。
 credits.get('/pricing', (c) => {
-  return c.json({ data: ACTION_COST })
+  return c.json({ data: { image: ACTION_COST.image, tts: ACTION_COST.tts, videoPerSec: VIDEO_CREDIT_PER_SEC } })
 })
 
 // POST /credits/grant — ADMIN ONLY: manually add/remove credits for a user

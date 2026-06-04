@@ -7,7 +7,7 @@ import { getVideoAdapter } from './adapters/registry'
 import type { AIConfig } from './adapters/types'
 import { logTaskError, logTaskPayload, logTaskProgress, logTaskStart, logTaskSuccess, logTaskWarn, redactUrl } from '../utils/task-logger.js'
 import { enhanceVideoPrompt } from './prompt-enhance.js'
-import { assertBalance, chargeForAction } from './credits.js'
+import { assertBalance, chargeForAction, videoCost } from './credits.js'
 
 interface GenerateVideoParams {
   storyboardId?: number
@@ -30,7 +30,8 @@ interface GenerateVideoParams {
 export async function generateVideo(params: GenerateVideoParams): Promise<number> {
   const ts = now()
   // Gate on credits before doing any work (throws InsufficientCreditsError → 402 at route).
-  await assertBalance(params.userId, 'video')
+  // 视频按「时长 × 画质」动态计费。
+  await assertBalance(params.userId, 'video', videoCost(params.duration, params.resolution))
   const primary = params.configId
     ? getConfigById(params.configId)
     : getActiveConfig('video')
@@ -358,9 +359,17 @@ async function handleVideoComplete(id: number, videoUrl: string, duration: numbe
     .where(eq(schema.videoGenerations.id, id))
     .run()
   logTaskSuccess('VideoTask', 'downloaded', { id, localPath, storyboardId, duration })
-  const [vrec] = db.select({ userId: schema.videoGenerations.userId })
-    .from(schema.videoGenerations).where(eq(schema.videoGenerations.id, id)).all()
-  await chargeForAction(vrec?.userId, 'video', { referenceId: id })
+  const [vrec] = db.select({
+    userId: schema.videoGenerations.userId,
+    duration: schema.videoGenerations.duration,
+    resolution: schema.videoGenerations.resolution,
+  }).from(schema.videoGenerations).where(eq(schema.videoGenerations.id, id)).all()
+  const cost = videoCost(vrec?.duration, vrec?.resolution)
+  await chargeForAction(vrec?.userId, 'video', {
+    referenceId: id,
+    cost,
+    meta: { duration: vrec?.duration ?? duration, resolution: vrec?.resolution ?? null },
+  })
 
   if (storyboardId) {
     db.update(schema.storyboards)
