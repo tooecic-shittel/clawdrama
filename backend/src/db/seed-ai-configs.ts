@@ -103,30 +103,34 @@ function migrateAudioToMinimax(ts: string): void {
     )).all()
   if (!mm || !mm.isActive) return
 
+  // (1) 停用其它激活音频配置 + 把历史剧集指过来（仅当还存在激活的非 minimax 音频配置时）
   const others = db.select().from(schema.aiServiceConfigs)
     .where(eq(schema.aiServiceConfigs.serviceType, 'audio')).all()
     .filter(r => r.provider !== 'minimax' && r.isActive)
-  if (!others.length) return
-
-  for (const o of others) {
-    db.update(schema.aiServiceConfigs).set({ isActive: false, updatedAt: ts })
-      .where(eq(schema.aiServiceConfigs.id, o.id)).run()
-  }
-
-  const disabledIds = new Set(others.map(o => o.id))
-  const eps = db.select().from(schema.episodes).all()
   let redirected = 0
-  for (const ep of eps) {
-    if (ep.audioConfigId && disabledIds.has(ep.audioConfigId)) {
-      db.update(schema.episodes).set({ audioConfigId: mm.id, updatedAt: ts })
-        .where(eq(schema.episodes.id, ep.id)).run()
-      redirected++
+  if (others.length) {
+    for (const o of others) {
+      db.update(schema.aiServiceConfigs).set({ isActive: false, updatedAt: ts })
+        .where(eq(schema.aiServiceConfigs.id, o.id)).run()
+    }
+    const disabledIds = new Set(others.map(o => o.id))
+    for (const ep of db.select().from(schema.episodes).all()) {
+      if (ep.audioConfigId && disabledIds.has(ep.audioConfigId)) {
+        db.update(schema.episodes).set({ audioConfigId: mm.id, updatedAt: ts })
+          .where(eq(schema.episodes.id, ep.id)).run()
+        redirected++
+      }
     }
   }
 
-  // 历史角色的旧 Gemini/OpenAI 音色 → minimax（否则试听/直生会把无效音色 id 发给 minimax 被拒）
+  // (2) 角色音色对齐到 MiniMax —— 每次启动幂等执行（不受上面 early-exit 影响）：
+  //   a. 旧 Gemini/OpenAI 音色 → 同性别 minimax（+清旧样本）。
+  //   b. 已是 minimax 音色但 voiceProvider 没对齐 minimax —— 说明那条试听样本是「切换前用别的
+  //      provider（如 Gemini）生成的」，会出现「显示男声、听到女声」的错位 → 校正 provider + 清旧样本，
+  //      让用户重生（届时走 minimax，性别就对了）。校正后 voiceProvider=minimax，下次启动不再触发，幂等。
   const chars = db.select().from(schema.characters).all()
   let remapped = 0
+  let realigned = 0
   for (const ch of chars) {
     const mmVoice = remapVoiceToMinimax(ch.voiceStyle)
     if (mmVoice) {
@@ -134,9 +138,16 @@ function migrateAudioToMinimax(ts: string): void {
         .set({ voiceStyle: mmVoice, voiceProvider: 'minimax', voiceSampleUrl: null, updatedAt: ts })
         .where(eq(schema.characters.id, ch.id)).run()
       remapped++
+    } else if (ch.voiceStyle && ch.voiceProvider !== 'minimax') {
+      db.update(schema.characters)
+        .set({ voiceProvider: 'minimax', voiceSampleUrl: null, updatedAt: ts })
+        .where(eq(schema.characters.id, ch.id)).run()
+      realigned++
     }
   }
-  console.log(`🎙️ TTS 已切到 MiniMax：停用 ${others.length} 个旧音频配置，重定向 ${redirected} 个历史剧集，迁移 ${remapped} 个角色音色`)
+  if (others.length || remapped || realigned) {
+    console.log(`🎙️ TTS→MiniMax：停用 ${others.length} 个旧音频配置，重定向 ${redirected} 剧集，迁移 ${remapped} + 对齐 ${realigned} 个角色音色（清旧样本）`)
+  }
 }
 
 /**
