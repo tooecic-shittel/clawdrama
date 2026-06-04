@@ -17,7 +17,7 @@
 import { eq, and } from 'drizzle-orm'
 import { db, schema } from './index.js'
 import { now } from '../utils/response.js'
-import { MINIMAX_VOICE_CATALOG } from '../services/minimax-voices.js'
+import { MINIMAX_VOICE_CATALOG, LEGACY_TO_NEW_VOICE } from '../services/minimax-voices.js'
 import { remapVoiceToMinimax } from '../services/voice-mapper.js'
 
 interface ManagedConfig {
@@ -155,6 +155,13 @@ function migrateAudioToMinimax(ts: string): void {
  * 运营方可在后台 POST /ai-voices/sync 从官方 get_voice 拉全量覆盖。
  */
 export function seedMinimaxVoices(): void {
+  // 清理之前误加的旧版经典 id（不在官方标准音色表、行为不可靠：会出现「少女」却发男声）。
+  for (const legacyId of Object.keys(LEGACY_TO_NEW_VOICE)) {
+    db.delete(schema.aiVoices)
+      .where(and(eq(schema.aiVoices.provider, 'minimax'), eq(schema.aiVoices.voiceId, legacyId)))
+      .run()
+  }
+
   // 增量补种：按 voiceId 补齐目录里还没入库的音色（不动运营方 sync 进来的其它音色）。
   const existing = new Set(db.select().from(schema.aiVoices)
     .where(eq(schema.aiVoices.provider, 'minimax')).all()

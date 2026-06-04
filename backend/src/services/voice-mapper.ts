@@ -15,6 +15,7 @@ import {
   MINIMAX_NARRATOR_VOICES,
   DEFAULT_MINIMAX_VOICE,
   isMinimaxCatalogVoice,
+  LEGACY_TO_NEW_VOICE,
 } from './minimax-voices.js'
 
 export type VoiceGender = '男声' | '女声' | '中性'
@@ -131,6 +132,7 @@ const NARRATOR_KEYWORDS = /(旁白|解说|narrator|voiceover)/i
 export function remapVoiceToMinimax(voiceStyle?: string | null): string | null {
   const v = (voiceStyle || '').trim()
   if (!v) return null
+  if (LEGACY_TO_NEW_VOICE[v]) return LEGACY_TO_NEW_VOICE[v]   // 旧 minimax 经典 id → 官方同性别音色
   if (VALID_RE.test(v)) return minimaxForGemini(canonicalVoice(v))
   if (LEGACY_VOICE_MAP[v.toLowerCase()]) return minimaxForGemini(LEGACY_VOICE_MAP[v.toLowerCase()])
   return null
