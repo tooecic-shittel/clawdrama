@@ -102,13 +102,12 @@ export async function composeStoryboard(storyboardId: number, userId?: number): 
   let subtitlePath: string | null = null
   const parsedDialogue = parseDialogueForTTS(sb.dialogue)
 
-  // Character dialogue: keep Veo's lip-synced audio (don't use TTS to avoid desync).
-  // Only narrator-style voiceover should use TTS (Veo doesn't generate narrator audio).
-  const NARRATOR_RE = /^(旁白|画外音|内心|心想|内心独白|narrator|voiceover|v\.?o\.?)$/i
-  const speakerIsNarrator = parsedDialogue.speaker && NARRATOR_RE.test(parsedDialogue.speaker)
-  const shouldUseTTS = !parsedDialogue.ignorable && speakerIsNarrator
+  // 视频用 Seedance/happyhorse 生成（generate_audio=false，视频是静音的），不再依赖视频自带人声。
+  // 因此所有真实台词（角色 + 旁白）都要生成 TTS 配音；只跳过「环境音/无对白」这类 ignorable 行。
+  // （历史背景：早期用 Veo 时只给旁白配 TTS，靠 Veo 出人物口型音，现已不适用。）
+  const shouldUseTTS = !parsedDialogue.ignorable
 
-  // 1. 生成 TTS 音频（仅旁白型对白才生成，避免和 Veo 的人物口型冲突）
+  // 1. 生成 TTS 音频（所有台词都配音）
   try {
     if (shouldUseTTS) {
       if (sb.ttsAudioUrl) {
