@@ -1634,11 +1634,10 @@ const TTS_MODEL_PRESETS = [
 ]
 
 // Video model quick-switch — overrides the active config's model per-generation.
+// 视频主力 = 火山 Seedance 2.0（官方）。模型与 provider 强绑定，下拉只列与主力 provider 兼容的，
+// 选默认即用配置中的 Seedance；失败时后端自动兜底到云雾 happyhorse（无需用户手动选）。
 const VIDEO_MODEL_PRESETS = [
-  { value: '', label: '默认（配置中的模型）' },
-  { value: 'sora-2', label: 'sora-2（云雾，稳定）' },
-  { value: 'happyhorse-1.0-t2v', label: 'happyhorse-1.0-t2v（云雾，快）' },
-  { value: 'wan2.5-i2v-preview', label: 'wan2.5-i2v-preview（云雾，预览）' },
+  { value: '', label: '火山 Seedance 2.0（默认·官方）' },
 ]
 const videoModelOverride = ref(typeof window !== 'undefined' ? (localStorage.getItem('claw_video_model') || '') : '')
 const videoResolution = ref(typeof window !== 'undefined' ? (localStorage.getItem('claw_video_res') || '720P') : '720P')

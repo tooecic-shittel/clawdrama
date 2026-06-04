@@ -17,13 +17,14 @@ export class VolcEngineVideoAdapter implements VideoProviderAdapter {
   provider = 'volcengine'
 
   buildGenerateRequest(config: AIConfig, record: VideoGenerationRecord): ProviderRequest {
-    const model = record.model || config.model || 'doubao-seedance-1-5-pro-251215'
+    const model = record.model || config.model || 'doubao-seedance-2-0-260128'
 
     const content: any[] = [{ type: 'text', text: record.prompt || '' }]
 
     // 添加参考图
     if (record.referenceMode === 'single' && record.imageUrl) {
-      content.push({ type: 'image_url', image_url: { url: record.imageUrl } })
+      // 我们的 i2v：用首帧图，画面跟随首帧
+      content.push({ type: 'image_url', image_url: { url: record.imageUrl }, role: 'first_frame' })
     } else if (record.referenceMode === 'first_last') {
       if (record.firstFrameUrl) {
         content.push({ type: 'image_url', image_url: { url: record.firstFrameUrl }, role: 'first_frame' })
@@ -43,8 +44,10 @@ export class VolcEngineVideoAdapter implements VideoProviderAdapter {
     const body: any = {
       model,
       content,
-      generate_audio: true,
-      ratio: record.aspectRatio || 'adaptive',
+      // 我们的流程是「无声视频 + 单独 TTS 合成」，让 Seedance 不要自带音轨，避免和配音叠音
+      generate_audio: false,
+      ratio: this.resolveRatio(record.aspectRatio),
+      resolution: this.normalizeResolution(record.resolution),
       duration: this.normalizeDuration(record.duration),
       watermark: false,
     }
@@ -106,5 +109,23 @@ export class VolcEngineVideoAdapter implements VideoProviderAdapter {
     const parsed = Math.round(Number(duration || 5))
     if (!Number.isFinite(parsed)) return 5
     return Math.min(12, Math.max(4, parsed))
+  }
+
+  /** 用户选的画质档 '720P'/'1080P' → Seedance 的 '720p'/'1080p'（小写）；缺省 720p。 */
+  private normalizeResolution(res?: string | null): string {
+    const r = String(res || '').trim().toLowerCase()
+    if (r === '1080p' || r === '1080') return '1080p'
+    if (r === '480p' || r === '480') return '480p'
+    return '720p'
+  }
+
+  /** Seedance ratio 取值：16:9 / 9:16 / 4:3 / 3:4 / 1:1 / 21:9 / adaptive。短剧默认 16:9。 */
+  private resolveRatio(aspectRatio?: string | null): string {
+    const r = String(aspectRatio || '').toLowerCase().replace(/\s/g, '')
+    const allowed = ['16:9', '9:16', '4:3', '3:4', '1:1', '21:9', 'adaptive']
+    if (allowed.includes(r)) return r
+    if (r === 'landscape' || r === 'horizontal') return '16:9'
+    if (r === 'portrait' || r === 'vertical') return '9:16'
+    return '16:9'
   }
 }

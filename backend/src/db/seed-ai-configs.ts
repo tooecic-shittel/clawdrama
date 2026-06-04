@@ -10,8 +10,9 @@
  * 需要的环境变量：
  *   GOOGLE_API_KEY        —— Google Gemini（文本）
  *   GOOGLE_VIDEO_API_KEY  —— Google Veo 官方视频。与 GOOGLE_API_KEY 是不同的 key；缺失则跳过视频播种。
- *   YUNWU_API_KEY         —— 云雾（图片 + 视频 happyhorse）
+ *   YUNWU_API_KEY         —— 云雾（图片 + 视频 happyhorse 兜底）
  *   MINIMAX_API_KEY       —— MiniMax 官方语音（TTS，直连 api.minimaxi.com）
+ *   ARK_API_KEY           —— 火山方舟 Seedance 官方视频（主力，直连 ark.cn-beijing.volces.com）
  */
 import { eq, and } from 'drizzle-orm'
 import { db, schema } from './index.js'
@@ -32,7 +33,8 @@ interface ManagedConfig {
 const MANAGED_CONFIGS: ManagedConfig[] = [
   { serviceType: 'text',  provider: 'google', name: 'Google Gemini 文本',    baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai', model: 'gemini-2.5-flash',             priority: 100, envKey: 'GOOGLE_API_KEY' },
   { serviceType: 'image', provider: 'openai', name: '云雾图片服务',           baseUrl: 'https://yunwu.ai/v1',                                     model: 'doubao-seedream-4-5-251128',  priority: 99,  envKey: 'YUNWU_API_KEY' },
-  { serviceType: 'video', provider: 'openai', name: '云雾 HappyHorse 视频',  baseUrl: 'https://yunwu.ai/v1',                                     model: 'happyhorse-1.0-t2v',          priority: 99,  envKey: 'YUNWU_API_KEY' },
+  { serviceType: 'video', provider: 'volcengine', name: '火山 Seedance 视频（官方）', baseUrl: 'https://ark.cn-beijing.volces.com',                  model: 'doubao-seedance-2-0-260128',  priority: 100, envKey: 'ARK_API_KEY' },
+  { serviceType: 'video', provider: 'openai', name: '云雾 HappyHorse 视频（兜底）', baseUrl: 'https://yunwu.ai/v1',                                 model: 'happyhorse-1.0-t2v',          priority: 95,  envKey: 'YUNWU_API_KEY' },
   { serviceType: 'video', provider: 'google-veo', name: 'Google Veo 视频（官方·兜底）', baseUrl: 'https://generativelanguage.googleapis.com/v1beta', model: 'veo-3.0-fast-generate-001',   priority: 90,  envKey: 'GOOGLE_VIDEO_API_KEY' },
   { serviceType: 'audio', provider: 'minimax', name: 'MiniMax 语音（官方）',  baseUrl: 'https://api.minimaxi.com',                                model: 'speech-2.8-hd',               priority: 100, envKey: 'MINIMAX_API_KEY' },
 ]
