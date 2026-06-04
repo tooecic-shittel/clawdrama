@@ -33,13 +33,20 @@ export class OpenAISoraVideoAdapter implements VideoProviderAdapter {
     //   - duration 是数字（不是 sora 的字符串 seconds）
     // 实测：发对这套才能拿到 task 并出片；发 size/seconds 会被云雾上游拒。
     if (/happyhorse/i.test(model)) {
+      // 有参考首帧图 → 图生视频 i2v（视频锚定首帧，画面跟首帧一致）；没有 → 文生视频 t2v。
+      // ref 已由 video-generation 的 normalizeVideoReferenceUrl 转成 base64 data URL 或 http URL。
+      const ref = record.imageUrl || record.firstFrameUrl || null
       const body: any = {
-        model,
+        model: ref ? 'happyhorse-1.0-i2v' : 'happyhorse-1.0-t2v',
         prompt: record.prompt || '',
         // 优先用用户选的画质档；没选则按画幅默认
         resolution: this.normalizeResolution(record.resolution) || this.resolveResolution(record.aspectRatio),
-        ratio: this.resolveRatio(record.aspectRatio),  // 横竖比，独立于 resolution（画质档）
         duration: Math.round(Number(record.duration) || 5),
+      }
+      if (ref) {
+        body.image = ref  // i2v：画幅自动跟随首帧图，不发 ratio
+      } else {
+        body.ratio = this.resolveRatio(record.aspectRatio)  // t2v：需指定横竖比
       }
       return { url, method: 'POST', headers, body }
     }

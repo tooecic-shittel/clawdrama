@@ -652,7 +652,8 @@ async function handleImageComplete(id: number, provider: string, imageUrl: strin
     } else if (record.frameType === 'view_back') {
       db.update(schema.characters).set({ viewBack: localPath, updatedAt: now() }).where(eq(schema.characters.id, record.characterId)).run()
     } else {
-      db.update(schema.characters).set({ imageUrl: localPath, updatedAt: now() }).where(eq(schema.characters.id, record.characterId)).run()
+      // 主头像重生 → 旧侧/背已与新正面不一致，清掉，让用户按新正面重生（三视图跟随正面）
+      db.update(schema.characters).set({ imageUrl: localPath, viewSide: null, viewBack: null, updatedAt: now() }).where(eq(schema.characters.id, record.characterId)).run()
     }
   }
   if (record?.sceneId) {
@@ -687,7 +688,8 @@ async function handleImageCompleteBase64(id: number, provider: string, base64Dat
     } else if (record.frameType === 'view_back') {
       db.update(schema.characters).set({ viewBack: localPath, updatedAt: now() }).where(eq(schema.characters.id, record.characterId)).run()
     } else {
-      db.update(schema.characters).set({ imageUrl: localPath, updatedAt: now() }).where(eq(schema.characters.id, record.characterId)).run()
+      // 主头像重生 → 旧侧/背已与新正面不一致，清掉，让用户按新正面重生（三视图跟随正面）
+      db.update(schema.characters).set({ imageUrl: localPath, viewSide: null, viewBack: null, updatedAt: now() }).where(eq(schema.characters.id, record.characterId)).run()
     }
   }
   if (record?.sceneId) {
