@@ -3963,7 +3963,9 @@ onMounted(() => { refresh(); loadConfigs(); loadVoices() })
 .prod-tab.active .prod-tab-badge { background: var(--accent-bg); color: var(--accent-text); }
 
 /* Production content */
-.prod-content { flex: 1; overflow-y: auto; padding: 12px 16px; display: flex; flex-direction: column; gap: 12px; }
+.prod-content { flex: 1; overflow-y: auto; padding: 12px 16px; display: flex; flex-direction: column; gap: 12px; align-items: center; }
+/* 内容限制最大宽度并居中：超宽屏不再无限拉伸铺满、显得很空；顶部控件与卡片网格一起对齐居中 */
+.prod-content > * { width: 100%; max-width: 1760px; }
 .prod-section-bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 
 .dub-grid { display: flex; flex-direction: column; gap: 10px; }
@@ -3977,10 +3979,8 @@ onMounted(() => { refresh(); loadConfigs(); loadVoices() })
 .dub-audio { flex: 1; min-width: 0; height: 30px; }
 
 /* Asset grid */
-.asset-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 12px; }
-/* 大屏：限制列数并放大卡片，避免一行铺满一堆小图、下方一大片空白 */
-@media (min-width: 1500px) { .asset-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 16px; } }
-@media (min-width: 2200px) { .asset-grid { grid-template-columns: repeat(8, minmax(0, 1fr)); } }
+/* 卡片自适应：最小宽随视口按比例缩放(13vw)，夹在 170~240px，平滑过渡 */
+.asset-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(clamp(170px, 13vw, 240px), 1fr)); gap: clamp(12px, 1vw, 16px); }
 .asset-card {
   display: flex; flex-direction: column; overflow: hidden;
   transition: transform 0.18s var(--ease-out), box-shadow 0.18s var(--ease-out), border-color 0.18s var(--ease-out);
@@ -4183,10 +4183,8 @@ onMounted(() => { refresh(); loadConfigs(); loadVoices() })
 }
 
 /* Prod grid */
-.prod-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px; }
-/* 大屏：限制每行列数并放大卡片，避免一行铺满 8 张小图、下方一大片空白显得很空 */
-@media (min-width: 1500px) { .prod-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 16px; } }
-@media (min-width: 2200px) { .prod-grid { grid-template-columns: repeat(7, minmax(0, 1fr)); } }
+/* 卡片自适应：最小宽随视口按比例缩放(16vw)，夹在 200~280px。屏幕越大卡片越大、平滑过渡，无硬断点 */
+.prod-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(clamp(200px, 16vw, 280px), 1fr)); gap: clamp(12px, 1vw, 18px); }
 .prod-card {
   display: flex; flex-direction: column; overflow: hidden;
   transition: transform 0.18s var(--ease-out), box-shadow 0.18s var(--ease-out), border-color 0.18s var(--ease-out);
