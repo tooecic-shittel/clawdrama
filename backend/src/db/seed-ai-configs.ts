@@ -17,6 +17,7 @@ import { eq, and } from 'drizzle-orm'
 import { db, schema } from './index.js'
 import { now } from '../utils/response.js'
 import { MINIMAX_VOICE_CATALOG } from '../services/minimax-voices.js'
+import { remapVoiceToMinimax } from '../services/voice-mapper.js'
 
 interface ManagedConfig {
   serviceType: string
@@ -120,7 +121,20 @@ function migrateAudioToMinimax(ts: string): void {
       redirected++
     }
   }
-  console.log(`🎙️ TTS 已切到 MiniMax：停用 ${others.length} 个旧音频配置，重定向 ${redirected} 个历史剧集`)
+
+  // 历史角色的旧 Gemini/OpenAI 音色 → minimax（否则试听/直生会把无效音色 id 发给 minimax 被拒）
+  const chars = db.select().from(schema.characters).all()
+  let remapped = 0
+  for (const ch of chars) {
+    const mmVoice = remapVoiceToMinimax(ch.voiceStyle)
+    if (mmVoice) {
+      db.update(schema.characters)
+        .set({ voiceStyle: mmVoice, voiceProvider: 'minimax', voiceSampleUrl: null, updatedAt: ts })
+        .where(eq(schema.characters.id, ch.id)).run()
+      remapped++
+    }
+  }
+  console.log(`🎙️ TTS 已切到 MiniMax：停用 ${others.length} 个旧音频配置，重定向 ${redirected} 个历史剧集，迁移 ${remapped} 个角色音色`)
 }
 
 /**

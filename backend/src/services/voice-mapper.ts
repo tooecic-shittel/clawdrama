@@ -123,6 +123,19 @@ const FEMALE_KEYWORDS = /(女|姑娘|小姐|妹|姐|妈|奶奶|阿姨|女主|女
 const MALE_KEYWORDS = /(男|爷爷|爸|叔|哥|弟|先生|男主|男孩|male|man|boy|他)/i
 const NARRATOR_KEYWORDS = /(旁白|解说|narrator|voiceover)/i
 
+/**
+ * 把一个已存的 voiceStyle 重映射成 minimax 音色：
+ *   旧 Gemini id / 旧 OpenAI id → 同性别 minimax id；已是 minimax / 未知 → 返回 null（不动）。
+ * 供启动迁移把历史角色的音色平滑切到 minimax。
+ */
+export function remapVoiceToMinimax(voiceStyle?: string | null): string | null {
+  const v = (voiceStyle || '').trim()
+  if (!v) return null
+  if (VALID_RE.test(v)) return minimaxForGemini(canonicalVoice(v))
+  if (LEGACY_VOICE_MAP[v.toLowerCase()]) return minimaxForGemini(LEGACY_VOICE_MAP[v.toLowerCase()])
+  return null
+}
+
 /** 旧 Gemini 音色 → 同性别 minimax 音色（确定性散列，保留角色间区分度）。 */
 function minimaxForGemini(geminiId: string): string {
   const profile = GEMINI_VOICE_CATALOG.find(v => v.id.toLowerCase() === geminiId.toLowerCase())
