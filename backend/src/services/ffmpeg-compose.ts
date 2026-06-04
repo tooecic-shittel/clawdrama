@@ -5,7 +5,6 @@ import ffmpeg from 'fluent-ffmpeg'
 import fs from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
-import { execFileSync } from 'child_process'
 import { v4 as uuid } from 'uuid'
 import os from 'os'
 import { db, schema } from '../db/index.js'
@@ -49,7 +48,6 @@ if (_ffprobeBin) ffmpeg.setFfprobePath(_ffprobeBin)
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const STORAGE_ROOT = process.env.STORAGE_PATH || path.resolve(__dirname, '../../../data/static')
 const DATA_ROOT = path.resolve(__dirname, '../../../data')
-let subtitleFilterSupport: boolean | null = null
 const IGNORE_TTS_SPEAKERS = /^(环境音|环境声|音效|效果音|sfx|sound ?effect|bgm|背景音|背景音乐|ambient)$/i
 const IGNORE_TTS_TEXT = /^(无|无对白|无台词|无旁白|无需配音|无需对白|none|null|n\/a|na|环境音|环境声|音效|效果音|纯音效|纯环境音|只有环境音|仅环境音|背景音|背景音乐|bgm|sfx|ambient)$/i
 
@@ -57,17 +55,6 @@ function toAbsPath(relativePath: string): string {
   if (path.isAbsolute(relativePath)) return relativePath
   if (relativePath.startsWith('static/')) return path.join(DATA_ROOT, relativePath)
   return path.join(STORAGE_ROOT, relativePath)
-}
-
-function supportsSubtitleFilter(): boolean {
-  if (subtitleFilterSupport != null) return subtitleFilterSupport
-  try {
-    const output = execFileSync('ffmpeg', ['-hide_banner', '-filters'], { encoding: 'utf8' })
-    subtitleFilterSupport = /\bsubtitles\b/.test(output)
-  } catch {
-    subtitleFilterSupport = false
-  }
-  return subtitleFilterSupport
 }
 
 function parseDialogueForTTS(dialogue?: string | null) {
@@ -177,43 +164,23 @@ export async function composeStoryboard(storyboardId: number, userId?: number): 
       } else {
         // 无对白镜头：补一条静音音轨，保证每个合成片段都是一致的「视频+音频」流结构。
         // 否则拼接（concat demuxer 要求各片段流结构完全一致）会丢镜头、丢声音。
-        cmd = cmd.input('anullsrc=channel_layout=stereo:sample_rate=48000').inputOptions(['-f', 'lavfi'])
+        // -t 60 把 anullsrc 限定成有限源（够长，-shortest 会按视频时长截）；
+        // 无限源配 -c:v copy + -shortest 收不了尾，必须限定。
+        cmd = cmd.input('anullsrc=channel_layout=stereo:sample_rate=48000').inputOptions(['-f', 'lavfi', '-t', '60'])
       }
 
-      // Build a single complexFilter graph that does both subtitle burn-in (video side)
-      // and audio mixing (audio side) — mixing videoFilter + complexFilter doesn't work
-      // in fluent-ffmpeg.
-      const hasSubs = subtitlePath && supportsSubtitleFilter()
-      const filterParts: string[] = []
-      let videoOutLabel = '0:v'
+      // 视频「流拷贝」不重编码（-c:v copy）→ 合成秒出、内存极低、画质无损、不再 OOM。
+      // 按产品决定不把字幕烧进画面（SRT 仍生成保存，留作以后导出/外挂字幕用）。
+      // 只处理音频：[1:a]apad 把配音(或静音垫底)补到不短于视频，-shortest 对齐到视频时长，
+      //   避免短台词镜头被截短；统一 aac/48k/stereo 保证各片段流一致，拼接不丢镜头/不丢声。
+      cmd = cmd.complexFilter('[1:a]apad[aout]')
 
-      if (hasSubs && subtitlePath) {
-        const escapedPath = subtitlePath
-          .replace(/\\/g, '/')
-          .replace(/:/g, '\\:')
-          .replace(/'/g, "\\'")
-        const forceStyle = 'FontSize=20\\,PrimaryColour=&HFFFFFF&\\,OutlineColour=&H000000&\\,Outline=2'
-        filterParts.push(`[0:v]subtitles=filename='${escapedPath}':force_style='${forceStyle}'[vout]`)
-        videoOutLabel = '[vout]'
-      } else if (subtitlePath) {
-        logTaskProgress('ComposeTask', 'subtitle-filter-unavailable', { storyboardId, subtitlePath })
-      }
-
-      // 音频：把 input 1（TTS 对白 或 静音垫底）用 apad 补静音到不短于视频，再配合 -shortest 对齐视频时长。
-      // 关键：避免「短台词镜头被 -shortest 截成台词长度」——那会让镜头一闪而过、看着像被拼接掉了。
-      filterParts.push('[1:a]apad[aout]')
-
-      cmd = cmd.complexFilter(filterParts.join(';'))
-
-      // -threads/-filter_threads 限制：ffmpeg 默认按宿主 CPU 数（共享机可能几十核）开线程，
-      // 会撞容器线程上限 → pthread_create failed。这里压到 2。
-      // ultrafast：关掉 libx264 的前瞻/B帧缓冲，内存占用大幅下降（容器内存有限，防 OOM SIGKILL）。
-      const outputOptions = ['-threads', '2', '-filter_complex_threads', '1', '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '23']
-      // map video
-      outputOptions.push('-map', videoOutLabel)
-      // 音频统一来自 [aout]，统一编码参数 aac/48k/stereo，保证所有合成片段流结构一致 →
-      // 拼接不丢镜头、不丢声；-shortest 让输出对齐到（更短的）视频时长，音频不足处由 apad 补静音。
-      outputOptions.push('-map', '[aout]', '-c:a', 'aac', '-ar', '48000', '-ac', '2', '-b:a', '192k', '-shortest')
+      const outputOptions = [
+        '-threads', '2',
+        '-map', '0:v', '-c:v', 'copy',
+        '-map', '[aout]', '-c:a', 'aac', '-ar', '48000', '-ac', '2', '-b:a', '192k',
+        '-shortest',
+      ]
 
       cmd.outputOptions(outputOptions)
         .output(outputPath)
