@@ -1602,6 +1602,19 @@ const fallbackVoiceProfiles = [
   { id: 'Chinese (Mandarin)_News_Anchor', label: '新闻女声', gender: '女声', traits: '专业播音腔的中年女主播', suitable: '职场、旁白' },
   { id: 'Chinese (Mandarin)_Kind-hearted_Antie', label: '热心大婶', gender: '女声', traits: '温和善良的中年大婶', suitable: '市井女性' },
   { id: 'Chinese (Mandarin)_Kind-hearted_Elder', label: '花甲奶奶', gender: '女声', traits: '慈祥和蔼的老年女性', suitable: '奶奶、长辈' },
+  // —— 经典系列（更多选择）——
+  { id: 'male-qn-badao', label: '霸道总裁', gender: '男声', traits: '低沉霸气的青年男性', suitable: '总裁、霸总' },
+  { id: 'male-qn-jingying', label: '精英青年', gender: '男声', traits: '干练自信的青年男性', suitable: '职场精英' },
+  { id: 'male-qn-daxuesheng', label: '青年大学生', gender: '男声', traits: '阳光的青年男性', suitable: '学生、邻家' },
+  { id: 'male-qn-qingse', label: '青涩青年', gender: '男声', traits: '青涩自然的青年男性', suitable: '少年、校园' },
+  { id: 'audiobook_male_1', label: '有声书男声', gender: '男声', traits: '沉稳叙事的男声', suitable: '旁白、有声书' },
+  { id: 'presenter_male', label: '男主播', gender: '男声', traits: '清晰有力的男主播', suitable: '解说、旁白' },
+  { id: 'female-yujie', label: '御姐', gender: '女声', traits: '成熟妩媚的御姐声', suitable: '女上司、强势女' },
+  { id: 'female-chengshu', label: '成熟女性', gender: '女声', traits: '知性沉稳的成熟女性', suitable: '职场、母亲' },
+  { id: 'female-tianmei', label: '甜美女声', gender: '女声', traits: '甜美可爱的女声', suitable: '娇俏女主' },
+  { id: 'female-shaonv', label: '少女', gender: '女声', traits: '清纯娇俏的少女声', suitable: '青春女主' },
+  { id: 'audiobook_female_1', label: '有声书女声', gender: '女声', traits: '温润叙事的女声', suitable: '旁白、有声书' },
+  { id: 'presenter_female', label: '女主播', gender: '女声', traits: '清晰亲和的女主播', suitable: '解说、旁白' },
 ]
 const voiceProfiles = ref(fallbackVoiceProfiles)
 const voiceSelectOptions = computed(() => voiceProfiles.value.map(v => ({ label: `${v.label} · ${v.traits}`, value: v.id })))

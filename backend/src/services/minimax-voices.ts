@@ -48,6 +48,21 @@ export const MINIMAX_VOICE_CATALOG: MinimaxVoice[] = [
   { voiceId: 'Chinese (Mandarin)_News_Anchor',         voiceName: '新闻女声',     gender: '女声', desc: '专业播音腔的中年女主播，职场/旁白' },
   { voiceId: 'Chinese (Mandarin)_Kind-hearted_Antie',  voiceName: '热心大婶',     gender: '女声', desc: '温和善良的中年大婶，市井女性' },
   { voiceId: 'Chinese (Mandarin)_Kind-hearted_Elder',  voiceName: '花甲奶奶',     gender: '女声', desc: '慈祥和蔼的老年女性，奶奶/长辈' },
+
+  // —— 经典系列（更多选择）·男声 ——
+  { voiceId: 'male-qn-badao',        voiceName: '霸道总裁',   gender: '男声', desc: '低沉霸气的青年男性，总裁/霸总' },
+  { voiceId: 'male-qn-jingying',     voiceName: '精英青年',   gender: '男声', desc: '干练自信的青年男性，职场精英' },
+  { voiceId: 'male-qn-daxuesheng',   voiceName: '青年大学生', gender: '男声', desc: '阳光的青年男性，学生/邻家' },
+  { voiceId: 'male-qn-qingse',       voiceName: '青涩青年',   gender: '男声', desc: '青涩自然的青年男性，少年/校园' },
+  { voiceId: 'audiobook_male_1',     voiceName: '有声书男声', gender: '男声', desc: '沉稳叙事的男声，旁白/有声书' },
+  { voiceId: 'presenter_male',       voiceName: '男主播',     gender: '男声', desc: '清晰有力的男主播，解说/旁白' },
+  // —— 经典系列·女声 ——
+  { voiceId: 'female-yujie',         voiceName: '御姐',       gender: '女声', desc: '成熟妩媚的御姐声，女上司/强势女' },
+  { voiceId: 'female-chengshu',      voiceName: '成熟女性',   gender: '女声', desc: '知性沉稳的成熟女性，职场/母亲' },
+  { voiceId: 'female-tianmei',       voiceName: '甜美女声',   gender: '女声', desc: '甜美可爱的女声，娇俏女主' },
+  { voiceId: 'female-shaonv',        voiceName: '少女',       gender: '女声', desc: '清纯娇俏的少女声，青春女主' },
+  { voiceId: 'audiobook_female_1',   voiceName: '有声书女声', gender: '女声', desc: '温润叙事的女声，旁白/有声书' },
+  { voiceId: 'presenter_female',     voiceName: '女主播',     gender: '女声', desc: '清晰亲和的女主播，解说/旁白' },
 ]
 
 export const MINIMAX_MALE_VOICES = MINIMAX_VOICE_CATALOG.filter(v => v.gender === '男声').map(v => v.voiceId)

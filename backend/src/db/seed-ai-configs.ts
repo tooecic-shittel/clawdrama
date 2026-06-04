@@ -142,21 +142,22 @@ function migrateAudioToMinimax(ts: string): void {
  * 运营方可在后台 POST /ai-voices/sync 从官方 get_voice 拉全量覆盖。
  */
 export function seedMinimaxVoices(): void {
-  const existing = db.select().from(schema.aiVoices)
+  // 增量补种：按 voiceId 补齐目录里还没入库的音色（不动运营方 sync 进来的其它音色）。
+  const existing = new Set(db.select().from(schema.aiVoices)
     .where(eq(schema.aiVoices.provider, 'minimax')).all()
-  if (existing.length > 0) return
+    .map(r => r.voiceId))
 
   const ts = now()
-  const rows = MINIMAX_VOICE_CATALOG.map(v => ({
+  const toAdd = MINIMAX_VOICE_CATALOG.filter(v => !existing.has(v.voiceId))
+  if (!toAdd.length) return
+
+  db.insert(schema.aiVoices).values(toAdd.map(v => ({
     voiceId: v.voiceId,
     voiceName: v.voiceName,
     description: JSON.stringify([v.desc]),
     language: '中文',
     provider: 'minimax',
     createdAt: ts,
-  }))
-  if (rows.length) {
-    db.insert(schema.aiVoices).values(rows).run()
-    console.log(`🎙️ MiniMax 音色播种完成：${rows.length} 个`)
-  }
+  }))).run()
+  console.log(`🎙️ MiniMax 音色播种：新增 ${toAdd.length} 个（库内原有 ${existing.size}）`)
 }
