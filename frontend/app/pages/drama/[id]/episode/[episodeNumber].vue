@@ -3978,6 +3978,9 @@ onMounted(() => { refresh(); loadConfigs(); loadVoices() })
 
 /* Asset grid */
 .asset-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 12px; }
+/* 大屏：限制列数并放大卡片，避免一行铺满一堆小图、下方一大片空白 */
+@media (min-width: 1500px) { .asset-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 16px; } }
+@media (min-width: 2200px) { .asset-grid { grid-template-columns: repeat(8, minmax(0, 1fr)); } }
 .asset-card {
   display: flex; flex-direction: column; overflow: hidden;
   transition: transform 0.18s var(--ease-out), box-shadow 0.18s var(--ease-out), border-color 0.18s var(--ease-out);
@@ -4181,6 +4184,9 @@ onMounted(() => { refresh(); loadConfigs(); loadVoices() })
 
 /* Prod grid */
 .prod-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px; }
+/* 大屏：限制每行列数并放大卡片，避免一行铺满 8 张小图、下方一大片空白显得很空 */
+@media (min-width: 1500px) { .prod-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 16px; } }
+@media (min-width: 2200px) { .prod-grid { grid-template-columns: repeat(7, minmax(0, 1fr)); } }
 .prod-card {
   display: flex; flex-direction: column; overflow: hidden;
   transition: transform 0.18s var(--ease-out), box-shadow 0.18s var(--ease-out), border-color 0.18s var(--ease-out);
