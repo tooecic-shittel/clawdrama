@@ -170,7 +170,13 @@ export async function composeStoryboard(storyboardId: number, userId?: number): 
 
     await new Promise<void>((resolve, reject) => {
       let cmd = ffmpeg(videoPath)
-      if (audioPath) cmd = cmd.input(audioPath)
+      if (audioPath) {
+        cmd = cmd.input(audioPath)
+      } else {
+        // 无对白镜头：补一条静音音轨，保证每个合成片段都是一致的「视频+音频」流结构。
+        // 否则拼接（concat demuxer 要求各片段流结构完全一致）会丢镜头、丢声音。
+        cmd = cmd.input('anullsrc=channel_layout=stereo:sample_rate=48000').inputOptions(['-f', 'lavfi'])
+      }
 
       // Build a single complexFilter graph that does both subtitle burn-in (video side)
       // and audio mixing (audio side) — mixing videoFilter + complexFilter doesn't work
@@ -191,29 +197,18 @@ export async function composeStoryboard(storyboardId: number, userId?: number): 
         logTaskProgress('ComposeTask', 'subtitle-filter-unavailable', { storyboardId, subtitlePath })
       }
 
-      let audioOutLabel: string | null = null
-      if (audioPath) {
-        // TTS 对白存在时：直接用 TTS 替换原视频音频。
-        // (不再混入 Veo 原声 —— Veo 自带的对白会和 TTS 重叠出现"两个人说同一句话"。
-        //  环境音 / 背景音乐 后续可以通过专门的 BGM 轨道叠加。)
-        // No filter needed — just map TTS audio directly.
-      }
+      // 音频：把 input 1（TTS 对白 或 静音垫底）用 apad 补静音到不短于视频，再配合 -shortest 对齐视频时长。
+      // 关键：避免「短台词镜头被 -shortest 截成台词长度」——那会让镜头一闪而过、看着像被拼接掉了。
+      filterParts.push('[1:a]apad[aout]')
 
-      if (filterParts.length > 0) {
-        cmd = cmd.complexFilter(filterParts.join(';'))
-      }
+      cmd = cmd.complexFilter(filterParts.join(';'))
 
       const outputOptions = ['-c:v', 'libx264', '-preset', 'fast', '-crf', '23']
       // map video
       outputOptions.push('-map', videoOutLabel)
-      // map audio
-      if (audioPath) {
-        // TTS 对白：用 TTS 替换原音轨（避免和 Veo 自带对白重叠）
-        outputOptions.push('-map', '1:a', '-c:a', 'aac', '-b:a', '192k', '-shortest')
-      } else {
-        // 无 TTS：保留视频原始音轨（Veo 等自带音效），源视频没音轨也不报错
-        outputOptions.push('-map', '0:a?', '-c:a', 'aac')
-      }
+      // 音频统一来自 [aout]，统一编码参数 aac/48k/stereo，保证所有合成片段流结构一致 →
+      // 拼接不丢镜头、不丢声；-shortest 让输出对齐到（更短的）视频时长，音频不足处由 apad 补静音。
+      outputOptions.push('-map', '[aout]', '-c:a', 'aac', '-ar', '48000', '-ac', '2', '-b:a', '192k', '-shortest')
 
       cmd.outputOptions(outputOptions)
         .output(outputPath)
