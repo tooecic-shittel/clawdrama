@@ -26,7 +26,7 @@ import auth from './routes/auth.js'
 import credits from './routes/credits.js'
 import { requestLogger, errorHandler } from './middleware/logger.js'
 import { requireAuth } from './middleware/auth.js'
-import { seedAiConfigs } from './db/seed-ai-configs.js'
+import { seedAiConfigs, seedMinimaxVoices } from './db/seed-ai-configs.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const projectRoot = path.resolve(__dirname, '../..')
@@ -93,6 +93,7 @@ app.get('*', serveStatic({ root: distPath, path: 'index.html' }))
 // 启动时按环境变量预置全局 AI 配置（key 只来自环境变量，不进 git）
 try {
   seedAiConfigs()
+  seedMinimaxVoices()
 } catch (err) {
   console.error('⚠️  AI 配置播种失败（不影响启动，可在设置页手动配置）:', err)
 }

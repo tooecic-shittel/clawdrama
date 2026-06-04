@@ -1,18 +1,21 @@
 /**
- * Map character → Gemini TTS voice deterministically.
- * Gemini 原生 TTS 中文最自然，现作为标准音色集。共 30 个官方音色，
- * 这里按性别/定位分池，并保证「同一部剧里不同角色音色不重复」。
+ * Map character → MiniMax TTS voice deterministically.
+ * 现以 MiniMax 官方系统音色为准（见 minimax-voices.ts）。pickVoiceForCharacter 返回 minimax 音色：
+ *   1. 角色已分配音色 → 沿用：minimax id 直接用；旧 Gemini/OpenAI id 映射到同性别 minimax。
+ *   2. 未分配 → 按性别/旁白关键词推断，确定性选池（同角色恒定同音色）。
  *
- * Strategy:
- *   1. If character.voiceStyle is already a Gemini voice → use as-is.
- *   1b. If it's a legacy OpenAI id (classic alloy.. or newer coral..) → remap to Gemini.
- *   2. Otherwise infer from character traits (gender / role keywords).
- *   3. Same character always gets same voice (deterministic by character id).
- *
- * 去重由调用方（assign_voice 工具）配合 nextUnusedVoice() 完成。
+ * 说明：下方 GEMINI_VOICE_CATALOG / isGeminiVoice / nextUnusedVoice 仍保留——
+ *   一是给历史 Gemini 音色做兼容映射，二是 list_voices 在 ai_voices 为空时的兜底目录。
  */
 import { db, schema } from '../db/index.js'
 import { eq } from 'drizzle-orm'
+import {
+  MINIMAX_MALE_VOICES,
+  MINIMAX_FEMALE_VOICES,
+  MINIMAX_NARRATOR_VOICES,
+  DEFAULT_MINIMAX_VOICE,
+  isMinimaxCatalogVoice,
+} from './minimax-voices.js'
 
 export type VoiceGender = '男声' | '女声' | '中性'
 export interface VoiceProfile {
@@ -120,9 +123,19 @@ const FEMALE_KEYWORDS = /(女|姑娘|小姐|妹|姐|妈|奶奶|阿姨|女主|女
 const MALE_KEYWORDS = /(男|爷爷|爸|叔|哥|弟|先生|男主|男孩|male|man|boy|他)/i
 const NARRATOR_KEYWORDS = /(旁白|解说|narrator|voiceover)/i
 
+/** 旧 Gemini 音色 → 同性别 minimax 音色（确定性散列，保留角色间区分度）。 */
+function minimaxForGemini(geminiId: string): string {
+  const profile = GEMINI_VOICE_CATALOG.find(v => v.id.toLowerCase() === geminiId.toLowerCase())
+  const pool = profile?.gender === '女声' ? MINIMAX_FEMALE_VOICES
+    : profile?.gender === '男声' ? MINIMAX_MALE_VOICES
+    : MINIMAX_NARRATOR_VOICES
+  return pool[hashStr(geminiId) % pool.length]
+}
+
 /**
- * Pick Gemini voice for a character (by id or name).
- * Falls back to deterministic hashing if no character info available.
+ * Pick a MiniMax voice for a character (by id or name).
+ * 已分配音色优先沿用：minimax id 直接用；旧 Gemini/OpenAI id 映射到同性别 minimax；
+ * 未分配则按性别/旁白推断，确定性选池（同角色恒定同音色）。
  */
 export function pickVoiceForCharacter(opts: {
   characterId?: number | null
@@ -130,7 +143,7 @@ export function pickVoiceForCharacter(opts: {
   dramaId?: number | null
   fallback?: string
 }): string {
-  const fallback = opts.fallback || 'Aoede'
+  const fallback = isMinimaxCatalogVoice(opts.fallback) ? (opts.fallback as string) : DEFAULT_MINIMAX_VOICE
 
   // Try resolve full character record
   let character: any = null
@@ -146,19 +159,21 @@ export function pickVoiceForCharacter(opts: {
     }
   } catch {}
 
-  // 1. Already set to a valid Gemini voice → use it (规范大小写)
-  if (character?.voiceStyle && VALID_RE.test(character.voiceStyle)) {
-    return canonicalVoice(character.voiceStyle)
-  }
-  // 1b. Legacy OpenAI id (classic alloy.. / newer coral..) → remap to Gemini
-  if (character?.voiceStyle && LEGACY_VOICE_MAP[character.voiceStyle.toLowerCase()]) {
-    return LEGACY_VOICE_MAP[character.voiceStyle.toLowerCase()]
+  // 1. 已分配音色 → 尽量沿用
+  const assigned = (character?.voiceStyle || '').trim()
+  if (assigned) {
+    // 1a. 旧 Gemini 音色 → 同性别 minimax
+    if (VALID_RE.test(assigned)) return minimaxForGemini(canonicalVoice(assigned))
+    // 1b. 旧 OpenAI id → 先到 Gemini 再到 minimax
+    if (LEGACY_VOICE_MAP[assigned.toLowerCase()]) return minimaxForGemini(LEGACY_VOICE_MAP[assigned.toLowerCase()])
+    // 1c. 其它（minimax 目录 / 运营方 sync 的官方 id）→ 直接用
+    return assigned
   }
 
   // 2. Narrator check by name
   const name = (opts.characterName || character?.name || '').trim()
   if (NARRATOR_KEYWORDS.test(name)) {
-    return NARRATOR_VOICES[hashStr(name) % NARRATOR_VOICES.length]
+    return MINIMAX_NARRATOR_VOICES[hashStr(name) % MINIMAX_NARRATOR_VOICES.length]
   }
 
   // 3. Infer gender from character description fields
@@ -172,12 +187,12 @@ export function pickVoiceForCharacter(opts: {
 
   let pool: string[]
   if (FEMALE_KEYWORDS.test(corpus)) {
-    pool = FEMALE_VOICES
+    pool = MINIMAX_FEMALE_VOICES
   } else if (MALE_KEYWORDS.test(corpus)) {
-    pool = MALE_VOICES
+    pool = MINIMAX_MALE_VOICES
   } else {
     // Unknown gender — pick from broader pool, prefer narrator if no character match
-    pool = character ? [...MALE_VOICES, ...FEMALE_VOICES] : NARRATOR_VOICES
+    pool = character ? [...MINIMAX_MALE_VOICES, ...MINIMAX_FEMALE_VOICES] : MINIMAX_NARRATOR_VOICES
   }
 
   // 4. Deterministic pick by character id / name

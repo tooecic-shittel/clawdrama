@@ -1572,41 +1572,36 @@ const prodTabIdx = computed({
   set: (v) => { prodTab.value = prodTabDefs.value[v]?.id || 'chars' },
 })
 const frameMode = ref('first')
+// 兜底音色表：仅当 /ai-voices 返回空时才用（正常情况下从后端 ai_voices 取 MiniMax 全量）。
+// id 即 MiniMax 官方 voice_id，直接写回角色 voice_style。
 const fallbackVoiceProfiles = [
-  // Gemini 原生 TTS 音色，中文最自然，共 30 个。id 即 Gemini voiceName，直接写回角色 voice_style。
-  // —— 女声 14 ——
-  { id: 'Kore', label: 'Kore', gender: '女声', traits: '温暖、亲和、自然', suitable: '女主、温柔母亲、知心朋友' },
-  { id: 'Leda', label: 'Leda', gender: '女声', traits: '清新、有少女感', suitable: '少女、清纯女主、明亮角色' },
-  { id: 'Despina', label: 'Despina', gender: '女声', traits: '柔美、甜美', suitable: '甜美女主、邻家女孩' },
-  { id: 'Achernar', label: 'Achernar', gender: '女声', traits: '柔和、轻柔', suitable: '温柔配角、抒情女声' },
-  { id: 'Callirrhoe', label: 'Callirrhoe', gender: '女声', traits: '随和、松弛', suitable: '知性女性、都市女主' },
-  { id: 'Autonoe', label: 'Autonoe', gender: '女声', traits: '明亮、活泼', suitable: '活泼少女、元气角色' },
-  { id: 'Erinome', label: 'Erinome', gender: '女声', traits: '清晰、干净', suitable: '职场女性、干练角色' },
-  { id: 'Laomedeia', label: 'Laomedeia', gender: '女声', traits: '轻快、俏皮', suitable: '俏皮少女、喜剧角色' },
-  { id: 'Gacrux', label: 'Gacrux', gender: '女声', traits: '成熟、稳重', suitable: '御姐、成熟女性、女上司' },
-  { id: 'Pulcherrima', label: 'Pulcherrima', gender: '女声', traits: '直率、有态度', suitable: '强势女性、大女主' },
-  { id: 'Vindemiatrix', label: 'Vindemiatrix', gender: '女声', traits: '温柔、平和', suitable: '温婉女性、抒情旁白' },
-  { id: 'Sulafat', label: 'Sulafat', gender: '女声', traits: '温暖、明亮', suitable: '温暖女声、抒情旁白' },
-  { id: 'Sadachbia', label: 'Sadachbia', gender: '女声', traits: '活力、轻盈', suitable: '灵动角色、少女' },
-  { id: 'Zephyr', label: 'Zephyr', gender: '女声', traits: '明亮、轻盈', suitable: '清亮女声、青春角色' },
-  // —— 男声 15 ——
-  { id: 'Charon', label: 'Charon', gender: '男声', traits: '低沉、沉稳、有磁性', suitable: '男主、霸总、成熟男性' },
-  { id: 'Orus', label: 'Orus', gender: '男声', traits: '醇厚、稳重', suitable: '父辈、长者、正气角色' },
-  { id: 'Algieba', label: 'Algieba', gender: '男声', traits: '柔和、抒情、温润', suitable: '温润男主、暖男、内心戏' },
-  { id: 'Fenrir', label: 'Fenrir', gender: '男声', traits: '富有表现力、戏剧张力', suitable: '反派、戏精角色、张力场景' },
-  { id: 'Puck', label: 'Puck', gender: '男声', traits: '活泼、俏皮', suitable: '少年、活力男主、喜剧角色' },
-  { id: 'Iapetus', label: 'Iapetus', gender: '男声', traits: '清晰、沉静', suitable: '文质男性、书生角色' },
-  { id: 'Umbriel', label: 'Umbriel', gender: '男声', traits: '松弛、随和', suitable: '邻家男孩、暖男配角' },
-  { id: 'Enceladus', label: 'Enceladus', gender: '男声', traits: '低沉、气声', suitable: '神秘角色、低语场景' },
-  { id: 'Algenib', label: 'Algenib', gender: '男声', traits: '沙哑、粗粝', suitable: '硬汉、江湖角色' },
-  { id: 'Rasalgethi', label: 'Rasalgethi', gender: '男声', traits: '知性、清晰', suitable: '旁白、解说、学者' },
-  { id: 'Alnilam', label: 'Alnilam', gender: '男声', traits: '坚定、有力', suitable: '军人、领袖、正派' },
-  { id: 'Schedar', label: 'Schedar', gender: '男声', traits: '平稳、均衡', suitable: '旁白、成熟男性' },
-  { id: 'Achird', label: 'Achird', gender: '男声', traits: '友好、亲切', suitable: '邻家男孩、朋友角色' },
-  { id: 'Zubenelgenubi', label: 'Zubenelgenubi', gender: '男声', traits: '随性、口语化', suitable: '市井角色、喜剧男配' },
-  { id: 'Sadaltager', label: 'Sadaltager', gender: '男声', traits: '知性、沉稳', suitable: '专家、长者、旁白' },
-  // —— 中性 / 旁白 1 ——
-  { id: 'Aoede', label: 'Aoede', gender: '中性', traits: '轻盈、自然、叙事感', suitable: '旁白、知性角色、解说' },
+  // —— 男声 ——
+  { id: 'Chinese (Mandarin)_Gentleman', label: '温润男声', gender: '男声', traits: '温润磁性的青年男性', suitable: '男主、暖男' },
+  { id: 'Chinese (Mandarin)_Reliable_Executive', label: '沉稳高管', gender: '男声', traits: '沉稳可靠的中年男性', suitable: '霸总、成熟男性' },
+  { id: 'Chinese (Mandarin)_Gentle_Youth', label: '温润青年', gender: '男声', traits: '温柔的青年男性', suitable: '暖男配角' },
+  { id: 'Chinese (Mandarin)_Unrestrained_Young_Man', label: '不羁青年', gender: '男声', traits: '潇洒不羁的青年男性', suitable: '痞帅、反派' },
+  { id: 'Chinese (Mandarin)_Sincere_Adult', label: '真诚青年', gender: '男声', traits: '真诚有鼓励性的青年男性', suitable: '正派' },
+  { id: 'Chinese (Mandarin)_Lyrical_Voice', label: '抒情男声', gender: '男声', traits: '磁性抒情的青年男性', suitable: '深情、内心戏' },
+  { id: 'Chinese (Mandarin)_Radio_Host', label: '电台男主播', gender: '男声', traits: '富有诗意的青年男主播', suitable: '旁白、解说' },
+  { id: 'Chinese (Mandarin)_Straightforward_Boy', label: '率真弟弟', gender: '男声', traits: '认真率真的少年', suitable: '活力男配' },
+  { id: 'Chinese (Mandarin)_Pure-hearted_Boy', label: '清澈邻家弟弟', gender: '男声', traits: '清澈的邻家少年', suitable: '学生角色' },
+  { id: 'Chinese (Mandarin)_Stubborn_Friend', label: '嘴硬竹马', gender: '男声', traits: '嘴硬心软不羁的青年竹马', suitable: '竹马' },
+  { id: 'Chinese (Mandarin)_Southern_Young_Man', label: '南方小哥', gender: '男声', traits: '质朴的青年男性', suitable: '市井角色' },
+  { id: 'Chinese (Mandarin)_Male_Announcer', label: '播报男声', gender: '男声', traits: '磁性权威的中年播报员', suitable: '旁白' },
+  { id: 'Chinese (Mandarin)_Humorous_Elder', label: '搞笑大爷', gender: '男声', traits: '爽朗幽默的老年男性', suitable: '长者、喜剧' },
+  { id: 'Chinese (Mandarin)_Cute_Spirit', label: '憨憨萌兽', gender: '男声', traits: '呆萌可爱的少年男声', suitable: '萌系、喜剧' },
+  // —— 女声 ——
+  { id: 'Chinese (Mandarin)_Warm_Girl', label: '温暖少女', gender: '女声', traits: '温柔温暖的少女', suitable: '女主' },
+  { id: 'Chinese (Mandarin)_Sweet_Lady', label: '甜美女声', gender: '女声', traits: '温柔甜美的青年女性', suitable: '甜美女主' },
+  { id: 'Chinese (Mandarin)_Mature_Woman', label: '傲娇御姐', gender: '女声', traits: '妩媚成熟的御姐', suitable: '女上司、强势女' },
+  { id: 'Chinese (Mandarin)_Gentle_Senior', label: '温柔学姐', gender: '女声', traits: '温暖温柔的青年学姐', suitable: '温婉角色' },
+  { id: 'Chinese (Mandarin)_Crisp_Girl', label: '清脆少女', gender: '女声', traits: '温暖清脆的少女', suitable: '青春女配' },
+  { id: 'Chinese (Mandarin)_Warm_Bestie', label: '温暖闺蜜', gender: '女声', traits: '温暖清脆的青年女性', suitable: '闺蜜、好友' },
+  { id: 'Chinese (Mandarin)_Wise_Women', label: '阅历姐姐', gender: '女声', traits: '富有阅历抒情的中年姐姐', suitable: '知性女性' },
+  { id: 'Chinese (Mandarin)_Soft_Girl', label: '软软女孩', gender: '女声', traits: '温暖柔软的青年女性', suitable: '软妹' },
+  { id: 'Chinese (Mandarin)_News_Anchor', label: '新闻女声', gender: '女声', traits: '专业播音腔的中年女主播', suitable: '职场、旁白' },
+  { id: 'Chinese (Mandarin)_Kind-hearted_Antie', label: '热心大婶', gender: '女声', traits: '温和善良的中年大婶', suitable: '市井女性' },
+  { id: 'Chinese (Mandarin)_Kind-hearted_Elder', label: '花甲奶奶', gender: '女声', traits: '慈祥和蔼的老年女性', suitable: '奶奶、长辈' },
 ]
 const voiceProfiles = ref(fallbackVoiceProfiles)
 const voiceSelectOptions = computed(() => voiceProfiles.value.map(v => ({ label: `${v.label} · ${v.traits}`, value: v.id })))
@@ -1617,12 +1612,12 @@ const videoConfigSelectOptions = computed(() => videoConfigs.value.map(c => {
   return { label, value: c.id }
 }))
 
-// TTS quick-switch — each preset is tied to a provider's audio config.
-// 切换时会把对应 provider 的音频配置设为最高优先级（即默认生效的配置）并更新其模型。
-// Gemini 原生 TTS 中文最自然且不"机器人"；OpenAI 作为备选保留。
+// TTS quick-switch — 全量走 MiniMax 官方语音，这里切换的是 MiniMax 模型档（影响清晰度/成本）。
+// 切换时把 minimax 音频配置设为最高优先级并更新其模型。
 const TTS_MODEL_PRESETS = [
-  { value: 'gemini-2.5-flash-preview-tts', provider: 'gemini', label: 'Gemini Flash（中文最自然，推荐）' },
-  { value: 'gpt-4o-mini-tts', provider: 'openai', label: 'gpt-4o-mini-tts（OpenAI 备选）' },
+  { value: 'speech-2.8-hd', provider: 'minimax', label: 'MiniMax 2.8 HD（最自然，推荐）' },
+  { value: 'speech-2.8-turbo', provider: 'minimax', label: 'MiniMax 2.8 Turbo（快/省）' },
+  { value: 'speech-2.6-hd', provider: 'minimax', label: 'MiniMax 2.6 HD' },
 ]
 
 // Video model quick-switch — overrides the active config's model per-generation.

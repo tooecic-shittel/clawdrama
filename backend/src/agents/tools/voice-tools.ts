@@ -7,7 +7,8 @@ import { db, schema } from '../../db/index.js'
 import { eq } from 'drizzle-orm'
 import { now } from '../../utils/response.js'
 import { logTaskProgress, logTaskSuccess } from '../../utils/task-logger.js'
-import { GEMINI_VOICE_CATALOG, isGeminiVoice, nextUnusedVoice } from '../../services/voice-mapper.js'
+import { isGeminiVoice, nextUnusedVoice } from '../../services/voice-mapper.js'
+import { MINIMAX_VOICE_CATALOG, nextUnusedMinimaxVoice } from '../../services/minimax-voices.js'
 
 export function createVoiceTools(episodeId: number, dramaId: number) {
   function getEpisodeAudioProvider() {
@@ -57,10 +58,10 @@ export function createVoiceTools(episodeId: number, dramaId: number) {
           language: v.language,
           provider,
         }
-      }) : GEMINI_VOICE_CATALOG.map(v => ({
-        // Gemini 原生 TTS 标准音色集（中文最自然，共 30 个）。id 即 Gemini voiceName。
-        id: v.id, name: v.id, gender: v.gender, traits: v.traits,
-        suitable_for: v.suitable, language: '多语言', provider,
+      }) : MINIMAX_VOICE_CATALOG.map(v => ({
+        // ai_voices 为空时的兜底目录：MiniMax 官方中文精选音色
+        id: v.voiceId, name: v.voiceName, gender: v.gender, traits: v.desc,
+        suitable_for: v.desc, language: '中文', provider,
       }))
 
       const payload = {
@@ -85,20 +86,18 @@ export function createVoiceTools(episodeId: number, dramaId: number) {
       const provider = getEpisodeAudioProvider() || 'minimax'
       logTaskProgress('VoiceTool', 'assign-begin', { episodeId, dramaId, characterId: character_id, voiceId: voice_id, provider, reason })
 
-      // 自动去重：若该 Gemini 音色已被本剧其它角色占用，顺延到同性别池里下一个未使用的，
-      // 保证「同一部剧里不同角色音色不重复」（仅对 Gemini 音色生效，其它 provider 不动）。
+      // 自动去重：若该音色已被本剧其它角色占用，顺延到同性别池里下一个未使用的，
+      // 保证「同一部剧里不同角色音色不重复」。minimax / Gemini 各走各的池。
+      const others = db.select().from(schema.characters)
+        .where(eq(schema.characters.dramaId, dramaId)).all()
+        .filter(c => c.id !== character_id)
       let finalVoice = voice_id
-      let bumped = false
       if (isGeminiVoice(voice_id)) {
-        const others = db.select().from(schema.characters)
-          .where(eq(schema.characters.dramaId, dramaId)).all()
-          .filter(c => c.id !== character_id)
-        const taken = others
-          .map(c => c.voiceStyle || '')
-          .filter(v => isGeminiVoice(v))
-        finalVoice = nextUnusedVoice(voice_id, taken)
-        bumped = finalVoice.toLowerCase() !== voice_id.toLowerCase()
+        finalVoice = nextUnusedVoice(voice_id, others.map(c => c.voiceStyle || '').filter(v => isGeminiVoice(v)))
+      } else {
+        finalVoice = nextUnusedMinimaxVoice(voice_id, others.map(c => c.voiceStyle || '').filter(Boolean))
       }
+      const bumped = finalVoice.toLowerCase() !== voice_id.toLowerCase()
 
       db.update(schema.characters)
         .set({ voiceStyle: finalVoice, voiceProvider: provider, voiceSampleUrl: null, updatedAt: now() })

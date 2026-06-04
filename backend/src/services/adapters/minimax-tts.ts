@@ -5,6 +5,7 @@
  */
 import type { TTSProviderAdapter } from './types'
 import { joinProviderUrl } from './url'
+import { normalizeMinimaxEmotion } from '../minimax-voices.js'
 
 export interface TTSParams {
   text: string
@@ -40,7 +41,7 @@ export class MiniMaxTTSAdapter implements TTSProviderAdapter {
     }
 
     const body: any = {
-      model: params.model || 'speech-2.8-hd',
+      model: params.model || config.model || 'speech-2.8-hd',
       text: params.text,
       stream: false,
       voice_setting: {
@@ -48,7 +49,8 @@ export class MiniMaxTTSAdapter implements TTSProviderAdapter {
         speed: params.speed ?? 1,
         vol: 1,
         pitch: 0,
-        emotion: params.emotion || 'happy',
+        // 上游传来的可能是「自然语言语气指令」，minimax 只认枚举 → 归一化（识别不出按 neutral）
+        emotion: normalizeMinimaxEmotion(params.emotion),
       },
       audio_setting: {
         sample_rate: 32000,
