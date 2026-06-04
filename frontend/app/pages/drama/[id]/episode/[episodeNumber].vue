@@ -1275,6 +1275,7 @@
                   <option value="720P">720P（快）</option>
                   <option value="1080P">1080P（清晰）</option>
                 </select>
+                <span class="dim" style="font-size:11px;margin:0 4px" :title="`每条视频扣 ${pricing.video} 积分`">≈{{ pricing.video }} 积分/条</span>
                 <button class="btn btn-sm" @click="batchVideos">
                   <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
                   批量视频
@@ -1534,7 +1535,7 @@ import { toast } from 'vue-sonner'
 import {
   Users, MapPin, Video, ImageIcon, Layers, Mic2, FileText, FolderKanban, Clapperboard, Download,
 } from 'lucide-vue-next'
-import { dramaAPI, episodeAPI, storyboardAPI, characterAPI, sceneAPI, imageAPI, videoAPI, composeAPI, mergeAPI, gridAPI, aiConfigAPI, voicesAPI, humanizeError } from '~/composables/useApi'
+import { dramaAPI, episodeAPI, storyboardAPI, characterAPI, sceneAPI, imageAPI, videoAPI, composeAPI, mergeAPI, gridAPI, aiConfigAPI, voicesAPI, creditsAPI, humanizeError } from '~/composables/useApi'
 import { useAgent } from '~/composables/useAgent'
 import BaseSelect from '~/components/BaseSelect.vue'
 import ImageGenerateDialog from '~/components/ImageGenerateDialog.vue'
@@ -1681,8 +1682,10 @@ function handleImageViewerKeydown(event) {
   if (event.key === 'Escape' && imageViewer.value.open) closeImageViewer()
 }
 
+const pricing = ref({ image: 1000, video: 7500, tts: 150 })
 onMounted(() => {
   window.addEventListener('keydown', handleImageViewerKeydown)
+  creditsAPI.pricing().then(p => { if (p) pricing.value = p }).catch(() => {})
 })
 
 onBeforeUnmount(() => {

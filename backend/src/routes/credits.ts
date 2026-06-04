@@ -2,7 +2,7 @@ import { Hono } from 'hono'
 import { desc, eq, like, or } from 'drizzle-orm'
 import { db, schema } from '../db/index.js'
 import { requireAuth } from '../middleware/auth.js'
-import { applyCreditOp, getBalance, listHistory, PACKAGES } from '../services/credits.js'
+import { applyCreditOp, getBalance, listHistory, PACKAGES, ACTION_COST } from '../services/credits.js'
 
 const credits = new Hono()
 
@@ -27,6 +27,11 @@ credits.get('/history', async (c) => {
 // GET /credits/packages — public catalog
 credits.get('/packages', (c) => {
   return c.json({ data: { items: PACKAGES } })
+})
+
+// GET /credits/pricing — 各操作扣费（前端显示成本用）
+credits.get('/pricing', (c) => {
+  return c.json({ data: ACTION_COST })
 })
 
 // POST /credits/grant — ADMIN ONLY: manually add/remove credits for a user

@@ -242,6 +242,7 @@ export const creditsAPI = {
     return api.get<{ items: any[] }>(`/credits/history${q.size ? `?${q.toString()}` : ''}`)
   },
   packages: () => api.get<{ items: any[] }>('/credits/packages'),
+  pricing: () => api.get<{ image: number; video: number; tts: number }>('/credits/pricing'),
   grant: (d: { user_id: number; amount: number; description?: string }) =>
     api.post<{ balance: number; transaction: any }>('/credits/grant', d),
   listUsers: (q?: string) => api.get<{ items: any[] }>(`/credits/users${q ? `?q=${encodeURIComponent(q)}` : ''}`),
