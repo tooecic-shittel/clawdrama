@@ -169,15 +169,15 @@ export async function composeStoryboard(storyboardId: number, userId?: number): 
         cmd = cmd.input('anullsrc=channel_layout=stereo:sample_rate=48000').inputOptions(['-f', 'lavfi', '-t', '60'])
       }
 
-      // 视频「流拷贝」不重编码（-c:v copy）→ 合成秒出、内存极低、画质无损、不再 OOM。
-      // 按产品决定不把字幕烧进画面（SRT 仍生成保存，留作以后导出/外挂字幕用）。
-      // 只处理音频：[1:a]apad 把配音(或静音垫底)补到不短于视频，-shortest 对齐到视频时长，
-      //   避免短台词镜头被截短；统一 aac/48k/stereo 保证各片段流一致，拼接不丢镜头/不丢声。
+      // 视频必须重编码（不能 -c:v copy）：Seedance 等真实 MP4 带 edit list，流拷贝会保留偏移，
+      // 跨镜头拼接后音画累积错位。重编码会把 edit list 解码应用、时间戳归零 → 一定同步。
+      // ultrafast 关掉前瞻/B帧，内存/耗时已是 libx264 最低档；不烧字幕（SRT 仍生成保存）。
+      // 音频：[1:a]apad 补到不短于视频，-shortest 对齐视频时长（短台词不截短）；统一 aac/48k/stereo。
       cmd = cmd.complexFilter('[1:a]apad[aout]')
 
       const outputOptions = [
         '-threads', '2',
-        '-map', '0:v', '-c:v', 'copy',
+        '-map', '0:v', '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '23',
         '-map', '[aout]', '-c:a', 'aac', '-ar', '48000', '-ac', '2', '-b:a', '192k',
         '-shortest',
       ]
