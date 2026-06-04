@@ -1280,6 +1280,9 @@
                   <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
                   批量视频
                 </button>
+                <span v-if="pendingVideoIds.length || videoQueue.length" class="dim" style="font-size:11px;margin-left:6px" :title="`每次最多并发 ${VIDEO_CONCURRENCY} 条，自动排队`">
+                  生成中 {{ pendingVideoIds.length }}<template v-if="videoQueue.length"> · 排队 {{ videoQueue.length }}</template>
+                </span>
               </div>
             </div>
             <div class="prod-grid">
@@ -1310,14 +1313,14 @@
                   <div class="prod-meta-line">{{ sb.shot_type || sb.shotType || '未设景别' }} · {{ sb.duration || 10 }}s</div>
                   <div class="prod-dots">
                     <span :class="['dot', hasImg(sb) && 'ok']" /><span style="font-size:10px">图</span>
-                    <span :class="['dot', hasVid(sb) && 'ok', isPendingVideo(sb.id) && 'pending']" /><span style="font-size:10px">{{ isPendingVideo(sb.id) ? '视频生成中' : '视频' }}</span>
+                    <span :class="['dot', hasVid(sb) && 'ok', (isPendingVideo(sb.id) || isQueuedVideo(sb.id)) && 'pending']" /><span style="font-size:10px">{{ isQueuedVideo(sb.id) ? '排队中' : (isPendingVideo(sb.id) ? '视频生成中' : '视频') }}</span>
                   </div>
                   <div v-if="videoFailMessage(sb.id)" class="prod-error">{{ videoFailMessage(sb.id) }}</div>
                 </div>
                 <div class="prod-actions">
-                  <button class="btn btn-sm" :disabled="isPendingVideo(sb.id)" @click="genVid(sb)">
+                  <button class="btn btn-sm" :disabled="isPendingVideo(sb.id) || isQueuedVideo(sb.id)" @click="genVid(sb)">
                     <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
-                    {{ isPendingVideo(sb.id) ? '生成中' : (hasVid(sb) ? '重新生成视频' : '生成视频') }}
+                    {{ isQueuedVideo(sb.id) ? '排队中' : (isPendingVideo(sb.id) ? '生成中' : (hasVid(sb) ? '重新生成视频' : '生成视频')) }}
                   </button>
                 </div>
               </div>
@@ -1653,6 +1656,9 @@ const pendingCharViewKeys = ref([])  // "characterId:view" pairs (view = 'side'|
 const pendingSceneImageIds = ref([])
 const pendingShotFrameKeys = ref([])
 const pendingVideoIds = ref([])
+// 批量视频：限并发队列，避免一次性全发出去把上游（云雾）挤爆报错
+const VIDEO_CONCURRENCY = 3
+const videoQueue = ref([]) // 等待中的 storyboard id（排队中，尚未发起）
 const pendingComposeIds = ref([])
 const failedVideoMessages = ref({})
 const failedComposeMessages = ref({})
@@ -1706,6 +1712,10 @@ function isPendingShotFrame(id, frameType) {
 
 function isPendingVideo(id) {
   return pendingVideoIds.value.includes(id)
+}
+
+function isQueuedVideo(id) {
+  return videoQueue.value.includes(id)
 }
 
 function videoFailMessage(id) {
@@ -3036,10 +3046,24 @@ async function genVid(sb) {
     const generation = await videoAPI.generate(params)
     toast.success('视频生成中')
     await refresh()
-    pollVideoGeneration(generation?.id, sb.id)
+    await pollVideoGeneration(generation?.id, sb.id)
   } catch (e) {
     pendingVideoIds.value = pendingVideoIds.value.filter(item => item !== sb.id)
     toast.error(e.message)
+  } finally {
+    // 本条结束（成功/失败）→ 腾出一个并发槽，放队列里的下一条进来
+    pumpVideoQueue()
+  }
+}
+
+// 按并发上限从队列里取镜头发起生成；一条完成就补一条，始终最多 VIDEO_CONCURRENCY 条在跑
+function pumpVideoQueue() {
+  while (pendingVideoIds.value.length < VIDEO_CONCURRENCY && videoQueue.value.length) {
+    const id = videoQueue.value.shift()
+    const sb = sbs.value.find(item => item.id === id)
+    if (sb && !isPendingVideo(sb.id) && !hasVid(sb)) {
+      genVid(sb) // genVid 在首个 await 前会同步把 id 推进 pendingVideoIds，故并发计数即时生效
+    }
   }
 }
 async function pollVideoGeneration(generationId, storyboardId) {
@@ -3099,20 +3123,18 @@ async function doCompose(sb) {
   }
 }
 function batchVideos() {
-  const pendingIds = sbs.value.filter(s => !hasVid(s)).map(s => s.id)
-  pendingIds.forEach(id => {
-    const sb = sbs.value.find(item => item.id === id)
-    if (sb) genVid(sb)
-  })
-  if (pendingIds.length) {
-    pendingVideoIds.value = [...new Set([...pendingVideoIds.value, ...pendingIds])]
-    watchAsyncResult(() => pendingIds.every(id => {
-      const target = sbs.value.find(s => s.id === id)
-      const done = !!(target?.video_url || target?.videoUrl)
-      if (done) pendingVideoIds.value = pendingVideoIds.value.filter(item => item !== id)
-      return done
-    }), 80, 4000)
+  // 只排还没出片、且不在生成中/不在队列里的镜头
+  const newIds = sbs.value
+    .filter(s => !hasVid(s) && !isPendingVideo(s.id) && !isQueuedVideo(s.id))
+    .map(s => s.id)
+  if (!newIds.length) {
+    toast.info('没有需要生成的镜头（都已出片或在队列中）')
+    return
   }
+  // 入队 → 按并发上限分批跑，避免一次性全发出去把上游挤爆
+  videoQueue.value.push(...newIds)
+  toast.success(`已加入队列 ${newIds.length} 条，每次并发 ${VIDEO_CONCURRENCY} 条，自动排队生成`)
+  pumpVideoQueue()
 }
 async function batchCompose() {
   await composeAPI.all(epId.value)
