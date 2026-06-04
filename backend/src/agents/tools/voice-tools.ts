@@ -47,12 +47,14 @@ export function createVoiceTools(episodeId: number, dramaId: number) {
     execute: async () => {
       const provider = getEpisodeAudioProvider() || 'minimax'
       const rows = db.select().from(schema.aiVoices).where(eq(schema.aiVoices.provider, provider)).all()
+      // 音色目录里的性别是权威值；同步进来的额外音色才退回关键词推断
+      const catalogGender = new Map(MINIMAX_VOICE_CATALOG.map(v => [v.voiceId.toLowerCase(), v.gender]))
       const voices = rows.length ? rows.map(v => {
         const desc = v.description ? JSON.parse(v.description) : []
         return {
           id: v.voiceId,
           name: v.voiceName,
-          gender: inferGender(v.voiceName, desc),
+          gender: catalogGender.get(v.voiceId.toLowerCase()) || inferGender(v.voiceName, desc),
           traits: Array.isArray(desc) && desc.length ? desc.slice(0, 2).join('、') : `${v.language || '多语言'}音色`,
           suitable_for: Array.isArray(desc) && desc.length > 2 ? desc.slice(2).join('、') : `${v.language || '通用'}角色`,
           language: v.language,
@@ -116,9 +118,11 @@ export function createVoiceTools(episodeId: number, dramaId: number) {
 }
 
 function inferGender(name: string, desc: unknown) {
-  const description = Array.isArray(desc) ? desc.join(' ') : ''
+  const description = Array.isArray(desc) ? desc.join(' ') : (typeof desc === 'string' ? desc : '')
   const text = `${name} ${description}`
-  if (/[男|青年|大爷|学长|boy|man|male]/i.test(text)) return '男声'
-  if (/[女|少女|御姐|奶奶|girl|woman|female]/i.test(text)) return '女声'
+  // 用真正的「或」分组 (a|b)，不是字符集 [a|b]；女声标志更具体，先判女后判男，
+  // 避免「青年男性/女性」里的「年」字误命中（旧版字符集 bug 导致女声被标成男声）。
+  if (/(女性|女声|女主|少女|御姐|大婶|闺蜜|奶奶|姐姐|妹妹|女孩|woman|female|girl|lady)/i.test(text)) return '女声'
+  if (/(男性|男声|男主|大爷|大叔|先生|哥哥|弟弟|男孩|man|male|boy|gentleman)/i.test(text)) return '男声'
   return '中性'
 }

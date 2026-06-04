@@ -3209,8 +3209,9 @@ async function loadConfigs() {
 
 function inferVoiceGender(name, desc = []) {
   const text = `${name} ${Array.isArray(desc) ? desc.join(' ') : ''}`
-  if (/[男|青年|大爷|学长|boy|man|male]/i.test(text)) return '男声'
-  if (/[女|少女|御姐|奶奶|girl|woman|female]/i.test(text)) return '女声'
+  // 真正的「或」分组，先判女后判男；修复旧版字符集 [男|青年..] 把「青年女性」误判成男声的 bug
+  if (/(女性|女声|女主|少女|御姐|大婶|闺蜜|奶奶|姐姐|妹妹|女孩|woman|female|girl|lady)/i.test(text)) return '女声'
+  if (/(男性|男声|男主|大爷|大叔|先生|哥哥|弟弟|男孩|man|male|boy|gentleman)/i.test(text)) return '男声'
   return '中性'
 }
 
