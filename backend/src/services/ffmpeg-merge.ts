@@ -11,6 +11,7 @@ import { db, schema } from '../db/index.js'
 import { eq } from 'drizzle-orm'
 import { now } from '../utils/response.js'
 import { logTaskError, logTaskStart, logTaskSuccess } from '../utils/task-logger.js'
+import { runFfmpegExclusive } from './ffmpeg-lock.js'
 
 // @ts-ignore
 import ffmpegInstaller from '@ffmpeg-installer/ffmpeg'
@@ -120,11 +121,13 @@ async function doMerge(mergeId: number, episodeId: number, videos: string[]) {
   const outputFilename = `${uuid()}.mp4`
   const outputPath = path.join(outputDir, outputFilename)
 
-  await new Promise<void>((resolve, reject) => {
+  // 全局串行 + 限线程，避免与合成的 ffmpeg 并发把容器资源打满（pthread_create/OOM）。
+  await runFfmpegExclusive(() => new Promise<void>((resolve, reject) => {
     ffmpeg()
       .input(listPath)
       .inputOptions(['-f', 'concat', '-safe', '0'])
       .outputOptions([
+        '-threads', '2',
         '-fflags', '+genpts',
         '-c:v', 'libx264',
         '-preset', 'medium',
@@ -138,7 +141,7 @@ async function doMerge(mergeId: number, episodeId: number, videos: string[]) {
       .on('end', () => resolve())
       .on('error', (err) => reject(err))
       .run()
-  })
+  }))
 
   // 清理临时文件
   fs.unlinkSync(listPath)

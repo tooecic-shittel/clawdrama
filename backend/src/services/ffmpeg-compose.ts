@@ -14,6 +14,7 @@ import { now } from '../utils/response.js'
 import { generateTTS } from './tts-generation.js'
 import { pickVoiceForCharacter } from './voice-mapper.js'
 import { buildTTSInstruction } from './tts-instruction.js'
+import { runFfmpegExclusive } from './ffmpeg-lock.js'
 import { logTaskError, logTaskProgress, logTaskStart, logTaskSuccess } from '../utils/task-logger.js'
 
 // @ts-ignore - declared via dynamic require fallback
@@ -168,7 +169,8 @@ export async function composeStoryboard(storyboardId: number, userId?: number): 
     const outputFilename = `${uuid()}.mp4`
     const outputPath = path.join(outputDir, outputFilename)
 
-    await new Promise<void>((resolve, reject) => {
+    // 全局串行 + 限线程，避免容器里多 ffmpeg/超多线程导致 pthread_create 失败 / OOM。
+    await runFfmpegExclusive(() => new Promise<void>((resolve, reject) => {
       let cmd = ffmpeg(videoPath)
       if (audioPath) {
         cmd = cmd.input(audioPath)
@@ -203,7 +205,9 @@ export async function composeStoryboard(storyboardId: number, userId?: number): 
 
       cmd = cmd.complexFilter(filterParts.join(';'))
 
-      const outputOptions = ['-c:v', 'libx264', '-preset', 'fast', '-crf', '23']
+      // -threads/-filter_threads 限制：ffmpeg 默认按宿主 CPU 数（共享机可能几十核）开线程，
+      // 会撞容器线程上限 → pthread_create failed。这里压到 2。
+      const outputOptions = ['-threads', '2', '-filter_complex_threads', '1', '-c:v', 'libx264', '-preset', 'fast', '-crf', '23']
       // map video
       outputOptions.push('-map', videoOutLabel)
       // 音频统一来自 [aout]，统一编码参数 aac/48k/stereo，保证所有合成片段流结构一致 →
@@ -215,7 +219,7 @@ export async function composeStoryboard(storyboardId: number, userId?: number): 
         .on('end', () => resolve())
         .on('error', (err) => reject(err))
         .run()
-    })
+    }))
 
     const composedRelative = `static/composed/${outputFilename}`
     db.update(schema.storyboards).set({ composedVideoUrl: composedRelative, status: 'compose_completed', updatedAt: now() })
