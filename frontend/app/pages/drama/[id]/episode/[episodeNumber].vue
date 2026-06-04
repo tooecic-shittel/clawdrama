@@ -1270,6 +1270,11 @@
                 <select v-model="videoModelOverride" class="input" style="height:28px;font-size:12px;padding:0 8px;min-width:200px" :title="videoModelOverride ? `本次生成使用：${videoModelOverride}` : '使用配置中的默认模型'">
                   <option v-for="opt in VIDEO_MODEL_PRESETS" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
                 </select>
+                <label class="dim" style="font-size:11px;margin:0 4px 0 8px">画质</label>
+                <select v-model="videoResolution" class="input" style="height:28px;font-size:12px;padding:0 8px" title="720P 更快更省，1080P 更清晰">
+                  <option value="720P">720P（快）</option>
+                  <option value="1080P">1080P（清晰）</option>
+                </select>
                 <button class="btn btn-sm" @click="batchVideos">
                   <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
                   批量视频
@@ -1624,6 +1629,8 @@ const VIDEO_MODEL_PRESETS = [
   { value: 'wan2.5-i2v-preview', label: 'wan2.5-i2v-preview（云雾，预览）' },
 ]
 const videoModelOverride = ref(typeof window !== 'undefined' ? (localStorage.getItem('claw_video_model') || '') : '')
+const videoResolution = ref(typeof window !== 'undefined' ? (localStorage.getItem('claw_video_res') || '720P') : '720P')
+watch(videoResolution, (v) => { if (typeof window !== 'undefined') localStorage.setItem('claw_video_res', v) })
 watch(videoModelOverride, (v) => {
   if (typeof window === 'undefined') return
   if (v) localStorage.setItem('claw_video_model', v)
@@ -3010,6 +3017,7 @@ async function genVid(sb) {
     drama_id: dramaId,
     prompt: sb.video_prompt || sb.videoPrompt || '',
     duration: Number(sb.duration || 5),
+    resolution: videoResolution.value,
   }
   // Per-generation model override from the workbench dropdown (empty → use config default)
   if (videoModelOverride.value) params.model = videoModelOverride.value

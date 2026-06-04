@@ -21,6 +21,7 @@ interface GenerateVideoParams {
   referenceImageUrls?: string[]
   duration?: number
   aspectRatio?: string
+  resolution?: string   // 用户选的画质档 '720P'/'1080P'
   configId?: number
   /** Owner of this generation — used to meter credits (undefined = unmetered/system). */
   userId?: number
@@ -68,6 +69,7 @@ export async function generateVideo(params: GenerateVideoParams): Promise<number
     referenceImageUrls: params.referenceImageUrls ? JSON.stringify(params.referenceImageUrls) : null,
     duration: params.duration || 5,
     aspectRatio: params.aspectRatio || '16:9',
+    resolution: params.resolution || null,
     status: 'processing',
     createdAt: ts,
     updatedAt: ts,
@@ -194,6 +196,7 @@ async function attemptVideoWithConfig(
       referenceImageUrls: refs.referenceImageUrls.length ? JSON.stringify(refs.referenceImageUrls) : null,
       duration: record.duration,
       aspectRatio: record.aspectRatio,
+      resolution: record.resolution,
     })
     logTaskProgress('VideoTask', 'request', {
       id,

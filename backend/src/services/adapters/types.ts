@@ -96,6 +96,7 @@ export interface VideoGenerationRecord {
   referenceImageUrls?: string | null
   duration?: number | null
   aspectRatio?: string | null
+  resolution?: string | null   // 用户选的画质档 '720P'/'1080P'（happyhorse 用）
   // ... 其他字段
 }
 

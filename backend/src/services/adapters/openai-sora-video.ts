@@ -36,7 +36,8 @@ export class OpenAISoraVideoAdapter implements VideoProviderAdapter {
       const body: any = {
         model,
         prompt: record.prompt || '',
-        resolution: this.resolveResolution(record.aspectRatio),
+        // 优先用用户选的画质档；没选则按画幅默认
+        resolution: this.normalizeResolution(record.resolution) || this.resolveResolution(record.aspectRatio),
         ratio: this.resolveRatio(record.aspectRatio),  // 横竖比，独立于 resolution（画质档）
         duration: Math.round(Number(record.duration) || 5),
       }
@@ -111,6 +112,14 @@ export class OpenAISoraVideoAdapter implements VideoProviderAdapter {
     if (parsed <= 4) return 4
     if (parsed <= 8) return 8
     return 12
+  }
+
+  /** 把用户选的画质档规范成 '720P'/'1080P'；非法/空返回 ''（交由 resolveResolution 给默认）。 */
+  private normalizeResolution(res?: string | null): string {
+    const r = String(res || '').trim().toLowerCase()
+    if (r === '1080p' || r === '1080') return '1080P'
+    if (r === '720p' || r === '720') return '720P'
+    return ''
   }
 
   /** happyhorse 用 '720P' / '1080P' 枚举（画质档，不含横竖）。 */
