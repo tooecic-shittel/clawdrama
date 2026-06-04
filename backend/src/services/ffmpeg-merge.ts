@@ -130,7 +130,7 @@ async function doMerge(mergeId: number, episodeId: number, videos: string[]) {
         '-threads', '2',
         '-fflags', '+genpts',
         '-c:v', 'libx264',
-        '-preset', 'medium',
+        '-preset', 'ultrafast',
         '-crf', '23',
         '-c:a', 'aac',
         '-ar', '48000',

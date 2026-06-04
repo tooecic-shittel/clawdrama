@@ -207,7 +207,8 @@ export async function composeStoryboard(storyboardId: number, userId?: number): 
 
       // -threads/-filter_threads 限制：ffmpeg 默认按宿主 CPU 数（共享机可能几十核）开线程，
       // 会撞容器线程上限 → pthread_create failed。这里压到 2。
-      const outputOptions = ['-threads', '2', '-filter_complex_threads', '1', '-c:v', 'libx264', '-preset', 'fast', '-crf', '23']
+      // ultrafast：关掉 libx264 的前瞻/B帧缓冲，内存占用大幅下降（容器内存有限，防 OOM SIGKILL）。
+      const outputOptions = ['-threads', '2', '-filter_complex_threads', '1', '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '23']
       // map video
       outputOptions.push('-map', videoOutLabel)
       // 音频统一来自 [aout]，统一编码参数 aac/48k/stereo，保证所有合成片段流结构一致 →
