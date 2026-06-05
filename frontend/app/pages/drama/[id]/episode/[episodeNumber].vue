@@ -337,7 +337,7 @@
             <aside class="card voice-stage-panel">
               <div class="voice-stage-kicker">Voice Casting</div>
               <div class="voice-stage-title">角色声音分配台</div>
-              <div class="voice-stage-desc">先为每个角色选择合适音色，再生成试听。音色标签会帮助你快速区分旁白、主角、反派和配角的表达方向。</div>
+              <div class="voice-stage-desc">对白已由 Seedance 原生人声 + 对口型生成，嗓音由模型决定；这里分配的音色用于：① 旁白 / 内心独白的 TTS 配音（会真实发声），② 给对白提供性别 / 音调倾向（进视频提示词，不直接指定对白嗓音）。性别选对最关键。</div>
               <div class="voice-stage-stats">
                 <div class="voice-stage-stat">
                   <span class="voice-stage-stat-label">已分配</span>
