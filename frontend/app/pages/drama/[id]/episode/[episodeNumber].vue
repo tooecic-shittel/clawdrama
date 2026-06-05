@@ -1420,6 +1420,16 @@
                   下载视频
                 </a>
               </div>
+              <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:10px;width:100%;max-width:720px">
+                <span class="dim" style="font-size:12px">想精修（重排 / 裁剪 / 转场 / 配乐）？导出素材包到剪辑器自己剪：</span>
+                <button class="btn btn-ghost btn-sm" :disabled="packaging" @click="exportPackage">
+                  {{ packaging ? '打包中…' : '导出素材包' }}
+                </button>
+                <button class="btn btn-ghost btn-sm" @click="openOpenreel" title="浏览器剪辑器，导入刚导出的素材包即可剪辑">
+                  用 OpenReel 剪辑 ↗
+                </button>
+                <span class="dim" style="font-size:11px">可导入 OpenReel / 剪映 / CapCut</span>
+              </div>
             </template>
             <template v-else>
               <div class="step-empty">
@@ -1539,6 +1549,7 @@
 
 <script setup>
 import { toast } from 'vue-sonner'
+import JSZip from 'jszip'
 import {
   Users, MapPin, Video, ImageIcon, Layers, Mic2, FileText, FolderKanban, Clapperboard, Download,
 } from 'lucide-vue-next'
@@ -3162,6 +3173,43 @@ async function doMerge() {
     }
   }, 3000)
 }
+
+const packaging = ref(false)
+// 导出剪辑素材包：抓各镜头(含原生音轨)+镜头清单，前端打 zip 下载，可导入 OpenReel / 剪映 / CapCut 自由剪辑。
+async function exportPackage() {
+  if (packaging.value) return
+  packaging.value = true
+  try {
+    const zip = new JSZip()
+    const lines = ['文件\t景别\t时长(s)\t描述\t对白']
+    let n = 0
+    for (let i = 0; i < sbs.value.length; i++) {
+      const sb = sbs.value[i]
+      const rel = sb.composed_video_url || sb.composedVideoUrl || sb.video_url || sb.videoUrl
+      if (!rel) continue
+      const url = String(rel).startsWith('http') ? rel : '/' + String(rel).replace(/^\/+/, '')
+      const blob = await (await fetch(url)).blob()
+      const name = `镜头${String(i + 1).padStart(2, '0')}.mp4`
+      zip.file(name, blob)
+      lines.push(`${name}\t${sb.shot_type || sb.shotType || ''}\t${sb.duration || ''}\t${String(sb.description || sb.title || '').slice(0, 40)}\t${sb.dialogue || ''}`)
+      n++
+    }
+    if (!n) { toast.error('没有可导出的镜头'); return }
+    zip.file('镜头清单.txt', lines.join('\n'))
+    const content = await zip.generateAsync({ type: 'blob' })
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(content)
+    a.download = `episode-${epId.value}-素材包.zip`
+    document.body.appendChild(a); a.click(); a.remove()
+    URL.revokeObjectURL(a.href)
+    toast.success(`已导出 ${n} 个镜头素材包，可导入 OpenReel / 剪映 剪辑`)
+  } catch (e) {
+    toast.error('导出失败：' + (e?.message || e))
+  } finally {
+    packaging.value = false
+  }
+}
+function openOpenreel() { window.open('https://openreel.video', '_blank') }
 
 async function pollComposeStatus() {
   for (let i = 0; i < 120; i++) {
