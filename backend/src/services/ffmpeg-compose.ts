@@ -47,6 +47,14 @@ const _ffprobeBin = resolveBin('FFPROBE_PATH', (ffprobeInstaller as any)?.path, 
 if (_ffmpegBin) ffmpeg.setFfmpegPath(_ffmpegBin)
 if (_ffprobeBin) ffmpeg.setFfprobePath(_ffprobeBin)
 
+// 启动时打印容器实际用的 ffmpeg（路径 + 版本）——线上 "Option not found" 多半是这里的二进制/版本问题，便于根治。
+try {
+  const _v = execFileSync(_ffmpegBin || 'ffmpeg', ['-version']).toString().split('\n')[0]
+  logTaskProgress('ComposeTask', 'ffmpeg-binary', { bin: _ffmpegBin || 'ffmpeg(PATH)', version: _v })
+} catch (e: any) {
+  logTaskProgress('ComposeTask', 'ffmpeg-binary-probe-failed', { bin: _ffmpegBin, error: String(e?.message || e).slice(0, 120) })
+}
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const STORAGE_ROOT = process.env.STORAGE_PATH || path.resolve(__dirname, '../../../data/static')
 const DATA_ROOT = path.resolve(__dirname, '../../../data')

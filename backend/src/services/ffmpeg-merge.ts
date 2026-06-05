@@ -10,7 +10,7 @@ import { v4 as uuid } from 'uuid'
 import { db, schema } from '../db/index.js'
 import { eq } from 'drizzle-orm'
 import { now } from '../utils/response.js'
-import { logTaskError, logTaskStart, logTaskSuccess } from '../utils/task-logger.js'
+import { logTaskError, logTaskStart, logTaskSuccess, logTaskProgress } from '../utils/task-logger.js'
 import { runFfmpegExclusive } from './ffmpeg-lock.js'
 import { ensureEpisodeBgm } from './bgm-music.js'
 
@@ -136,22 +136,23 @@ async function doMerge(mergeId: number, episodeId: number, videos: string[]) {
   }
 
   // 全局串行 + 限线程，避免与合成的 ffmpeg 并发把容器资源打满（pthread_create/OOM）。
-  await runFfmpegExclusive(() => new Promise<void>((resolve, reject) => {
+  const runMergeFfmpeg = (useBgm: boolean) => runFfmpegExclusive(() => new Promise<void>((resolve, reject) => {
     const cmd = ffmpeg()
       .input(listPath)
       .inputOptions(['-f', 'concat', '-safe', '0'])
 
-    if (bgmAbs && videoSec > 0) {
+    if (useBgm && bgmAbs && videoSec > 0) {
       const fadeOutStart = Math.max(0, videoSec - 2)
       cmd
         .input(bgmAbs)
         // 循环 BGM 并截到整集时长（-t 上界，杜绝无限输入把 ffmpeg 缓冲打爆 → OOM）
         .inputOptions(['-stream_loop', '-1', '-t', videoSec.toFixed(3)])
         .complexFilter([
-          // BGM 压到 ~22% 垫底 + 首尾淡入淡出
-          `[1:a]volume=0.22,afade=t=in:d=2,afade=t=out:st=${fadeOutStart.toFixed(2)}:d=2[bg]`,
-          // normalize=0：保对白原音量（amix 默认按输入数衰减，会把人声压小）
-          `[0:a][bg]amix=inputs=2:duration=first:dropout_transition=3:normalize=0[aout]`,
+          // 用「音量补偿」代替 amix normalize=0（后者要 ffmpeg≥4.4，容器老版本会 "Option not found"）：
+          // amix 默认按输入数(2)各 ×1/2 → 对白预乘 2 还原全量、BGM 预乘 0.44 → 最终 0.22 垫底。
+          `[1:a]volume=0.44,afade=t=in:d=2,afade=t=out:st=${fadeOutStart.toFixed(2)}:d=2[bg]`,
+          `[0:a]volume=2.0[dia]`,
+          `[dia][bg]amix=inputs=2:duration=first:dropout_transition=3[aout]`,
         ])
         .outputOptions([
           '-threads', '2',
@@ -187,6 +188,18 @@ async function doMerge(mergeId: number, episodeId: number, videos: string[]) {
       .on('error', (err) => reject(err))
       .run()
   }))
+
+  try {
+    await runMergeFfmpeg(!!(bgmAbs && videoSec > 0))
+  } catch (mergeErr: any) {
+    if (bgmAbs && videoSec > 0) {
+      // BGM 混音失败（多半是容器 ffmpeg 版本问题）→ 退回无 BGM 的纯拼接，绝不因 BGM 阻断成片。
+      logTaskProgress('MergeTask', 'bgm-mix-failed-retry-plain', { episodeId, error: String(mergeErr?.message || mergeErr).slice(0, 200) })
+      await runMergeFfmpeg(false)
+    } else {
+      throw mergeErr
+    }
+  }
 
   // 清理临时文件
   fs.unlinkSync(listPath)
