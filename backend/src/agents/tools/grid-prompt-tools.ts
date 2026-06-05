@@ -105,9 +105,11 @@ export function createGridPromptTools(episodeId: number, dramaId: number) {
       if (s.location) parts.push(s.location)
       if (s.time) parts.push(s.time)
       if (s.prompt) parts.push(s.prompt)
-
       const base = parts.join(', ')
-      const prompt = `${base}, cinematic scene, atmospheric lighting, high quality, consistent art style, no text, no watermark`
+      // 纯背景空镜：强调空间纵深、电影光影、材质质感、无人物（场景图作为后续镜头的环境底）
+      const prompt = `Cinematic establishing background of ${s.location || 'the scene'}: ${base}. `
+        + `Strong spatial depth with clear foreground / midground / background layers, atmospheric directional lighting, defined color palette, rich material textures. `
+        + `Empty environment, no people, no characters. Consistent art style, high quality, sharp focus, no text, no watermark.`
 
       return {
         scene_id: s.id,
