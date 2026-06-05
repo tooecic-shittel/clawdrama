@@ -72,6 +72,21 @@ export function isNativeDialogueShot(sb: { dialogue?: string | null }): boolean 
   return parseDialogueLite(sb.dialogue).onScreen
 }
 
+/**
+ * 这条镜头是否需要 TTS「旁白配音」（旁白/画外音说话人 + 有实质文本）。
+ * 只有这种才不保留视频原生音轨、走 TTS 补旁白；
+ * 其余（角色对白 / 纯环境无对白镜头）都应保留视频自带的原生音轨，绝不被静音盖掉。
+ */
+export function needsTtsVoiceover(dialogue?: string | null): boolean {
+  const raw = (dialogue || '').trim()
+  if (!raw) return false
+  const m = raw.match(/^(.+?)[:：]/)
+  const speaker = m ? m[1].replace(/[（(].+?[)）]/g, '').trim() : ''
+  const pureText = raw.replace(/^.+?[:：]\s*/, '').replace(/[（(].+?[)）]/g, '').trim()
+  if (!pureText || NA_IGNORE_TEXT.test(pureText)) return false
+  return !!(speaker && NA_NARRATOR_SPEAKERS.test(speaker))
+}
+
 const STYLE_PROMPTS: Record<string, string> = {
   realistic: 'photorealistic, cinematic photography, natural lighting, fine skin detail',
   anime: 'anime style, vibrant colors, japanese animation aesthetic, expressive characters, sharp lineart',

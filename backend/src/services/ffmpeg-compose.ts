@@ -12,7 +12,7 @@ import { db, schema } from '../db/index.js'
 import { eq } from 'drizzle-orm'
 import { now } from '../utils/response.js'
 import { generateTTS } from './tts-generation.js'
-import { isNativeDialogueShot } from './prompt-enhance.js'
+import { NATIVE_AUDIO_DIALOGUE, needsTtsVoiceover } from './prompt-enhance.js'
 import { pickVoiceForCharacter } from './voice-mapper.js'
 import { buildTTSInstruction } from './tts-instruction.js'
 import { runFfmpegExclusive } from './ffmpeg-lock.js'
@@ -128,10 +128,11 @@ export async function composeStoryboard(storyboardId: number, userId?: number): 
   if (!sb) throw new Error(`Storyboard ${storyboardId} not found`)
   if (!sb.videoUrl) throw new Error(`Storyboard ${storyboardId} has no video`)
 
-  // 原生音频对白：on-screen 角色对白 + 视频自带原生音轨（Seedance 配音+对口型）→ 直接透传，
-  // 绝不贴 TTS（贴 TTS 会盖掉对口型的原生人声 = 割裂）。静音视频（早期 generate_audio=false 生成）
-  // 则不透传、继续走下面 TTS 路径补配音。（拼接那步会重编码修 edit list / A-V 同步并垫 BGM。）
-  if (isNativeDialogueShot(sb) && await videoHasAudioStream(toAbsPath(sb.videoUrl))) {
+  // 保留原生音轨：只要视频自带原生音轨、且这条不是「旁白配音」镜头，就直接透传（角色对白的原生人声、
+  // 以及无对白镜头的环境音/音效，统统保留），绝不贴 TTS/垫静音去盖掉它。
+  // 只有「旁白/画外音 + 有实质文本」的镜头才走下面 TTS 路径补旁白；静音视频也走 TTS 路径。
+  // （拼接那步会重编码修 edit list / A-V 同步并垫 BGM。）
+  if (NATIVE_AUDIO_DIALOGUE && !needsTtsVoiceover(sb.dialogue) && await videoHasAudioStream(toAbsPath(sb.videoUrl))) {
     db.update(schema.storyboards)
       .set({ composedVideoUrl: sb.videoUrl, status: 'composed', updatedAt: now() })
       .where(eq(schema.storyboards.id, storyboardId)).run()
