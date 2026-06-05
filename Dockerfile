@@ -41,8 +41,9 @@ COPY backend/tsconfig.json ./backend/
 # Frontend static output
 COPY --from=frontend-build /app/frontend/.output/public ./frontend/dist
 
-# Skills
-COPY skills/ ./backend/skills/
+# Skills —— 必须落到 /app/skills，与后端 path.resolve(__dirname,'../../../skills')
+# 对齐（skills.ts 在 /app/backend/src/agents 下解析为 /app/skills）。拷到 backend/skills 会导致 SKILL.md 全部加载不到。
+COPY skills/ ./skills/
 
 # Config
 COPY configs/config.example.yaml ./configs/config.yaml
