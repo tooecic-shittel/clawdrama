@@ -881,7 +881,7 @@
           <!-- Sub: Dubbing -->
           <div v-else-if="prodTab === 'dubbing'" class="prod-content">
             <div class="prod-section-bar">
-              <span class="dim" style="font-size:12px">{{ ttsEligibleCount }} 条可生成配音</span>
+              <span class="dim" style="font-size:12px">{{ ttsEligibleCount }} 条旁白待配音</span>
               <span class="tag mono">{{ ttsGeneratedCount }}/{{ ttsEligibleCount }} 已生成</span>
               <span class="tag">{{ lockedAudioConfigLabel }}</span>
               <div class="ml-auto flex gap-1">
@@ -901,7 +901,7 @@
             </div>
 
             <div v-else class="dub-grid">
-                <div v-for="(sb, i) in sbs.filter(hasDialogue)" :key="sb.id" class="card dub-card">
+                <div v-for="(sb, i) in sbs.filter(isNarrationShot)" :key="sb.id" class="card dub-card">
                   <div class="dub-head">
                     <div class="dub-copy">
                     <div class="dub-title">
@@ -2286,8 +2286,8 @@ async function doGridSplit() {
 
 const charImgCount = computed(() => visualChars.value.filter(c => c.image_url || c.imageUrl).length)
 const sceneImgCount = computed(() => scenes.value.filter(s => s.image_url || s.imageUrl).length)
-const ttsEligibleCount = computed(() => sbs.value.filter(s => hasDialogue(s)).length)
-const ttsGeneratedCount = computed(() => sbs.value.filter(s => hasDialogue(s) && hasTTS(s)).length)
+const ttsEligibleCount = computed(() => sbs.value.filter(s => isNarrationShot(s)).length)
+const ttsGeneratedCount = computed(() => sbs.value.filter(s => isNarrationShot(s) && hasTTS(s)).length)
 const shotImgCount = computed(() => sbs.value.filter(s => s.first_frame_image || s.firstFrameImage || s.last_frame_image || s.lastFrameImage || s.composed_image || s.composedImage).length)
 const shotVidCount = computed(() => sbs.value.filter(s => s.video_url || s.videoUrl).length)
 const visualCharTotal = computed(() => visualChars.value.length)
@@ -2297,7 +2297,7 @@ const prodTabDefs = computed(() => [
   { id: 'scenes', label: '场景图片', icon: MapPin, badge: sceneImgCount.value ? `${sceneImgCount.value}/${scenes.value.length}` : '' },
   { id: 'shots', label: '镜头图片', icon: ImageIcon, badge: shotImgCount.value ? `${shotImgCount.value}/${sbs.value.length}` : '' },
   { id: 'videos', label: '视频生成', icon: Video, badge: shotVidCount.value ? `${shotVidCount.value}/${sbs.value.length}` : '' },
-  { id: 'dubbing', label: '配音生成', icon: Mic2, badge: '' },
+  { id: 'dubbing', label: '旁白配音', icon: Mic2, badge: '' },
   { id: 'compose', label: '视频合成', icon: Layers, badge: composedCount.value ? `${composedCount.value}/${sbs.value.length}` : '' },
 ])
 
@@ -2328,7 +2328,7 @@ const sidebarSections = computed(() => ([
       { key: 'prod:scenes', label: '场景图片', desc: '', icon: MapPin, done: prodStepDone('scenes') },
       { key: 'prod:shots', label: '镜头图片', desc: '', icon: ImageIcon, done: prodStepDone('shots') },
       { key: 'prod:videos', label: '视频生成', desc: '', icon: Video, done: prodStepDone('videos') },
-      { key: 'prod:dubbing', label: '配音生成', desc: '', icon: Mic2, done: prodStepDone('dubbing') },
+      { key: 'prod:dubbing', label: '旁白配音', desc: '', icon: Mic2, done: prodStepDone('dubbing') },
       { key: 'prod:compose', label: '视频合成', desc: '', icon: Layers, done: prodStepDone('compose') },
     ],
   },
@@ -2422,7 +2422,7 @@ const activeSubSteps = computed(() => {
       { key: 'script:storyboard', label: '分镜拆解', done: !!sbs.value.length },
       { key: 'prod:shots', label: '镜头图片', done: !!sbs.value.length && shotImgCount.value === sbs.value.length },
       { key: 'prod:videos', label: '视频生成', done: !!sbs.value.length && shotVidCount.value === sbs.value.length },
-      { key: 'prod:dubbing', label: '配音生成', done: !ttsEligibleCount.value || ttsGeneratedCount.value === ttsEligibleCount.value },
+      { key: 'prod:dubbing', label: '旁白配音', done: !ttsEligibleCount.value || ttsGeneratedCount.value === ttsEligibleCount.value },
       { key: 'prod:compose', label: '视频合成', done: !!sbs.value.length && composedCount.value === sbs.value.length },
     ]
   }
@@ -2890,6 +2890,13 @@ function isTTSIgnorable(sb) {
 }
 
 function hasDialogue(sb) { return !isTTSIgnorable(sb) }
+// 旁白镜头：有实质文本 + 说话人是旁白/画外音。对白已走 Seedance 原生音频，只有旁白还需 TTS 配音。
+const NARRATOR_SPEAKERS = /^(旁白|画外音|voice ?over|narrator|os|ob|内心|内心独白|心声|独白)$/i
+function isNarrationShot(sb) {
+  if (isTTSIgnorable(sb)) return false
+  const speaker = getDialogueSpeakerRaw(sb)
+  return !!(speaker && NARRATOR_SPEAKERS.test(speaker))
+}
 function hasTTS(sb) { return !!(sb?.tts_audio_url || sb?.ttsAudioUrl) }
 function getTTSUrl(sb) { return sb?.tts_audio_url || sb?.ttsAudioUrl || '' }
 function getDialogueSpeaker(sb) {
@@ -2905,7 +2912,7 @@ async function genShotTTS(sb) {
   } catch (e) { toast.error(e.message) }
 }
 async function batchShotTTS() {
-  const pending = sbs.value.filter(sb => hasDialogue(sb) && !hasTTS(sb))
+  const pending = sbs.value.filter(sb => isNarrationShot(sb) && !hasTTS(sb))
   if (!pending.length) {
     toast.info(ttsEligibleCount.value ? '所有镜头配音已生成' : '当前没有可生成的对白或旁白')
     return
@@ -2913,8 +2920,8 @@ async function batchShotTTS() {
   const results = await Promise.allSettled(pending.map(sb => storyboardAPI.generateTTS(sb.id)))
   const okCount = results.filter(r => r.status === 'fulfilled').length
   const failCount = results.length - okCount
-  if (okCount) toast.success(`已生成 ${okCount} 条镜头配音`)
-  if (failCount) toast.error(`${failCount} 条镜头配音生成失败`)
+  if (okCount) toast.success(`已生成 ${okCount} 条镜头旁白配音`)
+  if (failCount) toast.error(`${failCount} 条镜头旁白配音失败`)
   await refresh()
 }
 
