@@ -5,6 +5,7 @@ import ffmpeg from 'fluent-ffmpeg'
 import fs from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
+import { execFileSync } from 'child_process'
 import { v4 as uuid } from 'uuid'
 import os from 'os'
 import { db, schema } from '../db/index.js'
@@ -55,6 +56,39 @@ function toAbsPath(relativePath: string): string {
   if (path.isAbsolute(relativePath)) return relativePath
   if (relativePath.startsWith('static/')) return path.join(DATA_ROOT, relativePath)
   return path.join(STORAGE_ROOT, relativePath)
+}
+
+// 容器的 ffmpeg 是否带 libass（subtitles 滤镜）。缺则优雅跳过烧字幕，避免合成整体失败。
+let subtitleFilterSupport: boolean | null = null
+function supportsSubtitleFilter(): boolean {
+  if (subtitleFilterSupport != null) return subtitleFilterSupport
+  try {
+    // 用已解析的二进制路径（容器里 ffmpeg 不在 PATH，写死 'ffmpeg' 会探测失败→永不烧字幕）
+    const output = execFileSync(_ffmpegBin || 'ffmpeg', ['-hide_banner', '-filters'], { encoding: 'utf8' })
+    subtitleFilterSupport = /\bsubtitles\b/.test(output)
+  } catch {
+    subtitleFilterSupport = false
+  }
+  return subtitleFilterSupport
+}
+
+/** 探测媒体时长（秒）。失败返回 0。 */
+function getMediaDuration(filePath: string): Promise<number> {
+  return new Promise((resolve) => {
+    ffmpeg.ffprobe(filePath, (err, meta) => {
+      resolve(err ? 0 : (meta?.format?.duration || 0))
+    })
+  })
+}
+
+/** 秒 → SRT 时间戳 HH:MM:SS,mmm */
+function srtTime(sec: number): string {
+  const t = Math.max(0, sec)
+  const h = Math.floor(t / 3600)
+  const m = Math.floor((t % 3600) / 60)
+  const s = Math.floor(t % 60)
+  const ms = Math.round((t - Math.floor(t)) * 1000)
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')},${String(ms).padStart(3, '0')}`
 }
 
 function parseDialogueForTTS(dialogue?: string | null) {
@@ -140,9 +174,17 @@ export async function composeStoryboard(storyboardId: number, userId?: number): 
       const srtFilename = `${uuid()}.srt`
       subtitlePath = path.join(srtDir, srtFilename)
 
-      const duration = sb.duration || 10
+      const videoDur = sb.duration || 10
       const pureText = parsedDialogue.pureText
-      const srtContent = `1\n00:00:00,500 --> 00:00:${String(Math.min(duration - 1, 59)).padStart(2, '0')},000\n${pureText}\n`
+      // 字幕跟着配音走：从 0.2s 起，到配音结束(+0.3s 缓冲)，夹在视频时长内。
+      // 这样「台词显示时段 ≈ 配音说话时段」，不会念完了字幕还挂着、也不会念着没字幕。
+      const startSec = 0.2
+      let endSec = Math.max(1.5, videoDur - 0.3)
+      if (audioPath) {
+        const audioDur = await getMediaDuration(audioPath)
+        if (audioDur > 0.3) endSec = Math.min(videoDur, audioDur + 0.3)
+      }
+      const srtContent = `1\n${srtTime(startSec)} --> ${srtTime(endSec)}\n${pureText}\n`
       fs.writeFileSync(subtitlePath, srtContent, 'utf-8')
 
       const srtRelative = `static/subtitles/${srtFilename}`
@@ -155,6 +197,10 @@ export async function composeStoryboard(storyboardId: number, userId?: number): 
     fs.mkdirSync(outputDir, { recursive: true })
     const outputFilename = `${uuid()}.mp4`
     const outputPath = path.join(outputDir, outputFilename)
+
+    // 探测真实视频时长：用来把音频精确补齐到视频长度（apad=whole_dur）。
+    // 关键：不能用无限的 [1:a]apad —— 它会一直生成静音，配合烧字幕/重编码时缓冲堆积 → OOM（Cannot allocate memory）。
+    const videoSec = (await getMediaDuration(videoPath)) || sb.duration || 10
 
     // 全局串行 + 限线程，避免容器里多 ffmpeg/超多线程导致 pthread_create 失败 / OOM。
     await runFfmpegExclusive(() => new Promise<void>((resolve, reject) => {
@@ -171,13 +217,26 @@ export async function composeStoryboard(storyboardId: number, userId?: number): 
 
       // 视频必须重编码（不能 -c:v copy）：Seedance 等真实 MP4 带 edit list，流拷贝会保留偏移，
       // 跨镜头拼接后音画累积错位。重编码会把 edit list 解码应用、时间戳归零 → 一定同步。
-      // ultrafast 关掉前瞻/B帧，内存/耗时已是 libx264 最低档；不烧字幕（SRT 仍生成保存）。
-      // 音频：[1:a]apad 补到不短于视频，-shortest 对齐视频时长（短台词不截短）；统一 aac/48k/stereo。
-      cmd = cmd.complexFilter('[1:a]apad[aout]')
+      // ultrafast 关掉前瞻/B帧，内存/耗时已是 libx264 最低档。
+      const filterParts: string[] = []
+      let videoOutLabel = '0:v'
+      // 把台词字幕烧进画面：字幕与配音同源（parsedDialogue.pureText），保证「配音 + 台词都有、内容一致」。
+      if (subtitlePath && supportsSubtitleFilter()) {
+        const escapedPath = subtitlePath.replace(/\\/g, '/').replace(/:/g, '\\:').replace(/'/g, "\\'")
+        const forceStyle = 'FontSize=20\\,PrimaryColour=&HFFFFFF&\\,OutlineColour=&H000000&\\,Outline=2'
+        filterParts.push(`[0:v]subtitles=filename='${escapedPath}':force_style='${forceStyle}'[vout]`)
+        videoOutLabel = '[vout]'
+      } else if (subtitlePath) {
+        logTaskProgress('ComposeTask', 'subtitle-filter-unavailable', { storyboardId, subtitlePath })
+      }
+      // 音频：apad=whole_dur 把配音(或静音垫底)精确补齐到视频时长（有限、不缓冲爆内存），
+      // 短台词不会被 -shortest 截短，整段时长=视频；统一 aac/48k/stereo 保证拼接流一致。
+      filterParts.push(`[1:a]apad=whole_dur=${videoSec.toFixed(3)}[aout]`)
+      cmd = cmd.complexFilter(filterParts.join(';'))
 
       const outputOptions = [
-        '-threads', '2',
-        '-map', '0:v', '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '23',
+        '-threads', '2', '-filter_complex_threads', '1',
+        '-map', videoOutLabel, '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '23',
         '-map', '[aout]', '-c:a', 'aac', '-ar', '48000', '-ac', '2', '-b:a', '192k',
         '-shortest',
       ]
