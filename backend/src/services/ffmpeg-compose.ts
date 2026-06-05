@@ -215,6 +215,7 @@ export async function composeStoryboard(storyboardId: number, userId?: number): 
     const videoSec = (await getMediaDuration(videoPath)) || sb.duration || 10
 
     // 全局串行 + 限线程，避免容器里多 ffmpeg/超多线程导致 pthread_create 失败 / OOM。
+    try {
     await runFfmpegExclusive(() => new Promise<void>((resolve, reject) => {
       let cmd = ffmpeg(videoPath)
       if (audioPath) {
@@ -259,6 +260,18 @@ export async function composeStoryboard(storyboardId: number, userId?: number): 
         .on('error', (err) => reject(err))
         .run()
     }))
+    } catch (composeErr: any) {
+      // 合成 ffmpeg 失败（多半是容器里解析到的 ffmpeg 跟本地 4.4 不是同一个、不支持某滤镜选项）
+      // → 退回用原始视频。原始视频自带 Seedance 原生音轨（对白镜头本身就是对口型的好声音），
+      //   绝不因为合成失败就卡死整条镜头。日志带上 _ffmpegBin 以便定位容器到底用的哪个 ffmpeg。
+      logTaskProgress('ComposeTask', 'ffmpeg-failed-fallback-raw', {
+        storyboardId, ffmpegBin: _ffmpegBin, error: String(composeErr?.message || composeErr).slice(0, 240),
+      })
+      db.update(schema.storyboards)
+        .set({ composedVideoUrl: sb.videoUrl, status: 'compose_completed', updatedAt: now() })
+        .where(eq(schema.storyboards.id, storyboardId)).run()
+      return sb.videoUrl
+    }
 
     const composedRelative = `static/composed/${outputFilename}`
     db.update(schema.storyboards).set({ composedVideoUrl: composedRelative, status: 'compose_completed', updatedAt: now() })
