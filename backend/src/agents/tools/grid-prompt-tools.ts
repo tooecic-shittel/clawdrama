@@ -52,14 +52,14 @@ export function createGridPromptTools(episodeId: number, dramaId: number) {
       if (c.appearance) traits.push(c.appearance)
       if (c.description) traits.push(c.description)
       const traitStr = traits.join(', ')
-      const styleHint = c.personality ? ` Demeanor cue: ${c.personality}.` : ''
+      const styleHint = c.personality ? `气质神态：${c.personality}。` : ''
       // 角色资产「母图」：清晰、中性、锁定特征（发型/发色/五官标志/服装版型/配饰/色板），
       // 供后续所有镜头与参考图复用以保一致性（专业漫剧的「角色资产标准化」做法）。
-      const prompt = `Character design reference of ${c.name}: ${traitStr}. `
-        + `Full-body, front-facing, neutral standing pose, looking at the camera. `
-        + `Clearly defined and distinctive facial features, hairstyle and hair color, outfit silhouette, accessories and a consistent color palette (keep identical across all shots). `
-        + `Even soft studio lighting, clean plain background, sharp focus, highly detailed.${styleHint} `
-        + `Consistent art style, character-sheet quality, no text, no watermark.`
+      const prompt = `${c.name} 角色设定参考图：${traitStr}。`
+        + `全身、正面、中性站姿、面向镜头。`
+        + `五官清晰鲜明，发型与发色、服装版型、配饰与统一色板（所有镜头保持完全一致）。`
+        + `柔和均匀的影棚布光，干净纯色背景，清晰锐利，高细节。${styleHint}`
+        + `画风一致，设定稿级别质感，无文字，无水印。`
 
       return {
         character_id: c.id,
@@ -107,9 +107,9 @@ export function createGridPromptTools(episodeId: number, dramaId: number) {
       if (s.prompt) parts.push(s.prompt)
       const base = parts.join(', ')
       // 纯背景空镜：强调空间纵深、电影光影、材质质感、无人物（场景图作为后续镜头的环境底）
-      const prompt = `Cinematic establishing background of ${s.location || 'the scene'}: ${base}. `
-        + `Strong spatial depth with clear foreground / midground / background layers, atmospheric directional lighting, defined color palette, rich material textures. `
-        + `Empty environment, no people, no characters. Consistent art style, high quality, sharp focus, no text, no watermark.`
+      const prompt = `${s.location || '场景'} 电影感空镜背景：${base}。`
+        + `强烈空间纵深（前景/中景/远景分层），氛围定向光影，明确调色板，丰富材质质感。`
+        + `空旷环境，无人物、无角色。画风一致，高质量，清晰锐利，无文字，无水印。`
 
       return {
         scene_id: s.id,
@@ -168,11 +168,11 @@ export function createGridPromptTools(episodeId: number, dramaId: number) {
 
       if (mode === 'multi_ref') {
         const sb = shots[0]
-        const gridPrompt = `${rows}x${cols} grid layout, exactly ${totalCells} visible panels, consistent art style, cinematic quality, ${legendPrefix}${sb.description}, all cells with identical lighting and color palette, no merged panels, no missing panels, no text, no watermark`
+        const gridPrompt = `${rows}x${cols} 宫格布局，正好 ${totalCells} 个可见分格，画风一致，电影质感，${legendPrefix}${sb.description}，所有分格光影与色板完全一致，不要合并分格、不要缺格，无文字，无水印`
         const cellPrompts = Array.from({ length: totalCells }, (_, i) => ({
           shot_number: sb.shot_number,
           frame_type: 'reference',
-          prompt: `格${i + 1}：${reference_legend ? `参考${reference_legend}，` : ''}${sb.description}, cinematic lighting, consistent with other cells in the ${rows}x${cols} grid`,
+          prompt: `格${i + 1}：${reference_legend ? `参考${reference_legend}，` : ''}${sb.description}，电影感光影，与 ${rows}x${cols} 宫格其他分格保持一致`,
         }))
         return { grid_prompt: gridPrompt, cell_prompts: cellPrompts }
       }
@@ -186,11 +186,11 @@ export function createGridPromptTools(episodeId: number, dramaId: number) {
             shot_number: s.shot_number,
             frame_type: isFirst ? 'first_frame' : 'last_frame',
             prompt: isFirst
-              ? `格${i + 1}：${reference_legend ? `参考${reference_legend}，` : ''}${s.description}${s.location ? `, ${s.location}` : ''}${s.shot_type ? `, ${s.shot_type}` : ''}, opening scene`
-              : `格${i + 1}：${reference_legend ? `参考${reference_legend}，` : ''}${s.description}${s.location ? `, ${s.location}` : ''}${s.shot_type ? `, ${s.shot_type}` : ''}, ending scene, continuous motion`,
+              ? `格${i + 1}：${reference_legend ? `参考${reference_legend}，` : ''}${s.description}${s.location ? `, ${s.location}` : ''}${s.shot_type ? `, ${s.shot_type}` : ''}，开场画面`
+              : `格${i + 1}：${reference_legend ? `参考${reference_legend}，` : ''}${s.description}${s.location ? `, ${s.location}` : ''}${s.shot_type ? `, ${s.shot_type}` : ''}，结束画面，动作连续`,
           })
         }
-        const gridPrompt = `${rows}x${cols} grid layout, exactly ${totalCells} visible panels, consistent art style, cinematic quality, ${legendPrefix}${shots.map(s => s.description).join(' | ')}, no merged panels, no missing panels, no text, no watermark`
+        const gridPrompt = `${rows}x${cols} 宫格布局，正好 ${totalCells} 个可见分格，画风一致，电影质感，${legendPrefix}${shots.map(s => s.description).join(' | ')}，不要合并分格、不要缺格，无文字，无水印`
         return { grid_prompt: gridPrompt, cell_prompts: cellPrompts }
       }
 
@@ -200,10 +200,10 @@ export function createGridPromptTools(episodeId: number, dramaId: number) {
         return {
           shot_number: s.shot_number,
           frame_type: 'first_frame',
-          prompt: `格${i + 1}：${reference_legend ? `参考${reference_legend}，` : ''}${s.description}${s.location ? `, ${s.location}` : ''}${s.shot_type ? `, ${s.shot_type}` : ''}, opening scene`,
+          prompt: `格${i + 1}：${reference_legend ? `参考${reference_legend}，` : ''}${s.description}${s.location ? `, ${s.location}` : ''}${s.shot_type ? `, ${s.shot_type}` : ''}，开场画面`,
         }
       })
-      const gridPrompt = `${rows}x${cols} grid layout, exactly ${totalCells} visible panels, consistent art style, cinematic quality, ${legendPrefix}${shots.map(s => s.description).join(' | ')}, no merged panels, no missing panels, no text, no watermark`
+      const gridPrompt = `${rows}x${cols} 宫格布局，正好 ${totalCells} 个可见分格，画风一致，电影质感，${legendPrefix}${shots.map(s => s.description).join(' | ')}，不要合并分格、不要缺格，无文字，无水印`
       return { grid_prompt: gridPrompt, cell_prompts: cellPrompts }
     },
   })

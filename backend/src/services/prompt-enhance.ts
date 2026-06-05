@@ -88,18 +88,18 @@ export function needsTtsVoiceover(dialogue?: string | null): boolean {
 }
 
 const STYLE_PROMPTS: Record<string, string> = {
-  realistic: 'photorealistic, cinematic photography, natural lighting, fine skin detail',
-  anime: 'anime style, vibrant colors, japanese animation aesthetic, expressive characters, sharp lineart',
-  ghibli: 'Studio Ghibli style, soft watercolor backgrounds, dreamy atmosphere, warm tones',
-  cinematic: 'cinematic film look, dramatic lighting, shallow depth of field, color graded',
-  comic: 'comic book illustration, bold outlines, dynamic composition, vivid pop colors',
-  watercolor: 'watercolor painting style, soft brush strokes, gentle gradients, artistic feel',
-  '3d': '3D CGI animation render, Pixar / Dreamworks style, soft global illumination, subsurface scattering, polished stylized shading',
-  ink: 'Chinese ink wash painting (shuimo), flowing calligraphic brush strokes, ample negative space, muted ink tones, elegant guofeng / wuxia aesthetic',
-  painterly: 'semi-realistic painted CG illustration, thick-paint (houtu) rendering, rich brush texture, dramatic rim lighting, detailed character art',
-  cyberpunk: 'cyberpunk aesthetic, neon-drenched, high-tech low-life, rain-slick reflective streets, holograms, saturated cyan-and-magenta palette',
-  webtoon: 'Korean webtoon / manhwa style, clean crisp lineart, soft cel shading, bright modern coloring',
-  oil: 'oil painting style, visible impasto brushstrokes, rich classical color, painterly chiaroscuro lighting, fine-art texture',
+  realistic: '写实摄影风格，电影质感，自然光影，皮肤细节细腻',
+  anime: '日系动漫风格，色彩鲜明，赛璐璐上色，表情生动，线条干净利落',
+  ghibli: '吉卜力风格，柔和水彩背景，梦幻氛围，温暖色调',
+  cinematic: '电影感画面，戏剧性光影，浅景深，专业电影调色',
+  comic: '美式漫画插画，粗黑描边，动态构图，鲜艳波普色彩',
+  watercolor: '水彩画风格，柔和笔触，温柔渐变，手绘艺术感',
+  '3d': '3D CGI 动画渲染，皮克斯/梦工厂风格，柔和全局光，次表面散射，精致风格化材质',
+  ink: '中国水墨画风格，书法笔触，大量留白，淡雅墨色，古风武侠美学',
+  painterly: '半写实厚涂 CG 插画，笔触质感丰富，戏剧性轮廓光，精细人物作画',
+  cyberpunk: '赛博朋克美学，霓虹浸染，高科技低生活，雨夜反光街道，全息投影，青品红高饱和',
+  webtoon: '韩系条漫风格，干净利落线稿，柔和赛璐璐上色，明亮现代配色',
+  oil: '油画风格，可见厚涂笔触，古典浓郁色彩，古典明暗光影，美术质感',
 }
 
 /** Look up the drama and return its visual style descriptor (or empty string). */
@@ -156,7 +156,7 @@ export function resolveDramaId(opts: {
 export function enhanceImagePrompt(prompt: string, dramaId: number | null | undefined): string {
   const styleSuffix = getStyleSuffix(dramaId)
   if (!styleSuffix) return prompt
-  return `${prompt}. Style: ${styleSuffix}.`
+  return `${prompt}。风格：${styleSuffix}。`
 }
 
 /**
@@ -207,8 +207,8 @@ export function enhanceVideoPrompt(
   }
 
   const parts = [base]
-  if (styleSuffix) parts.push(`Visual style: ${styleSuffix}`)
-  if (sb?.soundEffect) parts.push(`Audio: ${sb.soundEffect.trim()}`)
+  if (styleSuffix) parts.push(`画面风格：${styleSuffix}`)
+  if (sb?.soundEffect) parts.push(`音效：${sb.soundEffect.trim()}`)
 
   // 镜头电影维度（用户可在故事板下拉里改：景别/视角/运镜/布光/构图/情绪）→ 真实进视频提示词
   const cine = [sb?.shotType, sb?.angle, sb?.movement, sb?.lighting, sb?.composition].filter(Boolean)
