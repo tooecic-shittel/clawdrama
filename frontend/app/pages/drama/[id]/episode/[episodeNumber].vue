@@ -238,7 +238,7 @@
                   <strong>{{ scenes.length }}</strong>
                 </div>
               </div>
-              <div class="extract-summary-note">如果角色描述过于简短，后续分配音色和生成形象时建议先补充人物特征。</div>
+              <div class="extract-summary-note">如果角色描述过于简短，后续设定性别和生成形象时建议先补充人物特征。</div>
             </aside>
 
             <div class="card extract-card">
@@ -291,12 +291,11 @@
             <div class="toolbar-left">
               <div class="step-indicator">
                 <span class="step-num">04</span>
-                <span class="step-name">分配音色</span>
+                <span class="step-name">分配性别</span>
               </div>
             </div>
             <div class="toolbar-right">
-              <span v-if="charsVoiced" class="char-count">{{ charsVoiced }}/{{ chars.length }} 已分配</span>
-              <span v-if="voiceSampleCount" class="char-count">{{ voiceSampleCount }}/{{ charsVoiced }} 试听文件</span>
+              <span v-if="charsVoiced" class="char-count">{{ charsVoiced }}/{{ chars.length }} 已设性别</span>
               <label v-if="isAdmin && activeAudioConfig" class="dim" style="font-size:11px;margin-left:8px">TTS 模型</label>
               <select v-if="isAdmin && activeAudioConfig"
                 :value="currentTTSModel"
@@ -309,11 +308,7 @@
               <button v-if="charsVoiced" class="btn btn-sm" @click="doVoice" :disabled="rn">
                 <Loader2 v-if="rn && rt === 'voice_assigner'" :size="11" class="animate-spin" />
                 <svg v-else width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg>
-                重新分配
-              </button>
-              <button v-if="charsVoiced" class="btn btn-sm" @click="batchGenSamples">
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19 5v14"/></svg>
-                生成试听文件
+                重新判别
               </button>
             </div>
           </div>
@@ -322,44 +317,26 @@
             <div class="empty-visual">
               <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg>
             </div>
-            <div class="empty-title">为角色分配合适的音色</div>
-            <div class="empty-desc">AI 根据角色特征自动分配最匹配的 TTS 音色</div>
+            <div class="empty-title">为角色设定性别</div>
+            <div class="empty-desc">AI 根据角色特征自动判别性别（对白嗓音由 Seedance 生成，此处只定性别）</div>
             <button class="btn btn-primary" @click="doVoice">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
-              AI 自动分配
+              AI 自动判别
             </button>
           </div>
           <div v-else-if="rn && rt === 'voice_assigner'" class="step-loading">
             <Loader2 :size="24" class="animate-spin" style="color:var(--accent-dark)" />
-            <div class="loading-text">正在分配音色...</div>
+            <div class="loading-text">正在判别性别...</div>
           </div>
           <div v-else class="voice-stage">
             <aside class="card voice-stage-panel">
-              <div class="voice-stage-kicker">Voice Casting</div>
-              <div class="voice-stage-title">角色声音分配台</div>
-              <div class="voice-stage-desc">对白已由 Seedance 原生人声 + 对口型生成，嗓音由模型决定；这里分配的音色用于：① 旁白 / 内心独白的 TTS 配音（会真实发声），② 给对白提供性别 / 音调倾向（进视频提示词，不直接指定对白嗓音）。性别选对最关键。</div>
+              <div class="voice-stage-kicker">Character Gender</div>
+              <div class="voice-stage-title">角色性别设定</div>
+              <div class="voice-stage-desc">对白由 Seedance 原生人声 + 对口型生成，嗓音由模型决定。这里只需为每个角色定性别——它决定对白的性别表现；若角色有旁白 / 内心独白，则用对应性别的嗓音真实配音。真要挑具体旁白嗓音，可在「旁白配音」步处理。</div>
               <div class="voice-stage-stats">
                 <div class="voice-stage-stat">
-                  <span class="voice-stage-stat-label">已分配</span>
+                  <span class="voice-stage-stat-label">已设性别</span>
                   <strong>{{ charsVoiced }}/{{ chars.length }}</strong>
-                </div>
-                <div class="voice-stage-stat">
-                  <span class="voice-stage-stat-label">试听文件</span>
-                  <strong>{{ voiceSampleCount }}/{{ charsVoiced }}</strong>
-                </div>
-              </div>
-              <div class="voice-library-meta">
-                <span>音色库</span>
-                <span>{{ voiceProfiles.length }} 条</span>
-              </div>
-              <div class="voice-library">
-                <div v-for="voice in voiceProfiles" :key="voice.id" class="voice-library-item">
-                  <div class="voice-library-head">
-                    <span class="voice-library-name">{{ voice.label }}</span>
-                    <span class="tag">{{ voice.gender }}</span>
-                  </div>
-                  <div class="voice-library-traits">{{ voice.traits }}</div>
-                  <div class="voice-library-fit">{{ voice.suitable }}</div>
                 </div>
               </div>
             </aside>
@@ -380,41 +357,16 @@
                 </div>
 
                 <div class="voice-card-copy">
-                  <div class="voice-card-text">{{ c.description || c.personality || c.appearance || '暂无角色描述，可根据人物定位手动挑选音色。' }}</div>
+                  <div class="voice-card-text">{{ c.description || c.personality || c.appearance || '暂无角色描述，可根据人物定位设定性别。' }}</div>
                 </div>
 
                 <div class="voice-select-block">
-                  <span class="voice-block-label">音色</span>
-                  <span class="dim" style="font-size:11px;display:block;margin:-2px 0 6px">旁白 / 内心独白用此音色真实配音；对白由 Seedance 生成，仅取其性别 · 音调</span>
-                  <BaseSelect
-                    :model-value="c.voice_style || c.voiceStyle || ''"
-                    :options="voiceSelectOptions"
-                    placeholder="选择音色"
-                    searchable
-                    style="width:100%"
-                    @update:model-value="updateCharVoice(c.id, $event)"
-                  />
-                </div>
-
-                <div v-if="getVoiceProfile(c.voice_style || c.voiceStyle)" class="voice-profile-card">
-                  <div class="voice-profile-head">
-                    <span class="voice-profile-name">{{ getVoiceProfile(c.voice_style || c.voiceStyle)?.label }}</span>
-                    <span class="tag">{{ getVoiceProfile(c.voice_style || c.voiceStyle)?.gender }}</span>
+                  <span class="voice-block-label">性别</span>
+                  <span class="dim" style="font-size:11px;display:block;margin:-2px 0 6px">对白由 Seedance 按此性别生成；若该角色有旁白 / 内心独白，会用对应性别嗓音真实配音。</span>
+                  <div class="gender-toggle">
+                    <button type="button" class="gender-btn" :class="{ active: genderOf(c) === '男' }" @click="setCharGender(c, '男')">男</button>
+                    <button type="button" class="gender-btn" :class="{ active: genderOf(c) === '女' }" @click="setCharGender(c, '女')">女</button>
                   </div>
-                  <div class="voice-profile-traits">{{ getVoiceProfile(c.voice_style || c.voiceStyle)?.traits }}</div>
-                  <div class="voice-profile-fit">{{ getVoiceProfile(c.voice_style || c.voiceStyle)?.suitable }}</div>
-                </div>
-
-                <div class="voice-actions-row">
-                  <button class="btn btn-sm" :disabled="!(c.voice_style || c.voiceStyle)" @click="genSample(c.id)">
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
-                    {{ (c.voice_sample_url || c.voiceSampleUrl) ? '重新试听' : '生成试听' }}
-                  </button>
-                  <span class="dim" style="font-size:11px">试听 = 旁白 / 独白的配音；对白由 Seedance 现场生成，未必相同</span>
-                </div>
-
-                <div v-if="c.voice_sample_url || c.voiceSampleUrl" class="voice-player">
-                  <audio :src="'/' + (c.voice_sample_url || c.voiceSampleUrl)" controls preload="none" />
                 </div>
               </div>
             </div>
@@ -1597,7 +1549,6 @@ const epId = computed(() => episode.value?.id || 0)
 const rawLen = computed(() => localRaw.value.replace(/\s/g, '').length || 0)
 const scriptLen = computed(() => localScript.value.replace(/\s/g, '').length || 0)
 const charsVoiced = computed(() => chars.value.filter(c => c.voice_style || c.voiceStyle).length)
-const voiceSampleCount = computed(() => chars.value.filter(c => c.voice_sample_url || c.voiceSampleUrl).length)
 const composedCount = computed(() => sbs.value.filter(s => s.composed_video_url || s.composedVideoUrl).length)
 const mergeUrl = computed(() => mergeData.value?.merged_url || mergeData.value?.mergedUrl || null)
 
@@ -1640,7 +1591,6 @@ const fallbackVoiceProfiles = [
   { id: 'Chinese (Mandarin)_Kind-hearted_Elder', label: '花甲奶奶', gender: '女声', traits: '慈祥和蔼的老年女性', suitable: '奶奶、长辈' },
 ]
 const voiceProfiles = ref(fallbackVoiceProfiles)
-const voiceSelectOptions = computed(() => voiceProfiles.value.map(v => ({ label: `${v.label} · ${v.traits}`, value: v.id })))
 const videoConfigSelectOptions = computed(() => videoConfigs.value.map(c => {
   let modelName = ''
   try { const m = JSON.parse(c.model || '[]'); modelName = Array.isArray(m) ? (m[0] || '') : (m || '') } catch { modelName = c.model || '' }
@@ -2015,7 +1965,7 @@ function goNextProd() {
 }
 
 // Script step navigation
-const stepLabels = ['原始内容', 'AI 改写', '提取', '音色', '分镜']
+const stepLabels = ['原始内容', 'AI 改写', '提取', '性别', '分镜']
 const prevStepLabel = computed(() => scriptStep.value > 0 ? stepLabels[scriptStep.value - 1] : '')
 const nextStepLabel = computed(() => {
   if (scriptStep.value === 4) return '进入制作'
@@ -2348,7 +2298,7 @@ const sidebarSections = computed(() => ([
       { key: 'script:raw', label: '原始内容', desc: '', icon: FileText, done: !!rawContent.value },
       { key: 'script:rewrite', label: 'AI 改写', desc: '', icon: FileText, done: !!scriptContent.value },
       { key: 'script:extract', label: '提取', desc: '', icon: Users, done: !!chars.value.length },
-      { key: 'script:voice', label: '音色', desc: '', icon: Mic2, done: !!chars.value.length && charsVoiced.value === chars.value.length },
+      { key: 'script:voice', label: '性别', desc: '', icon: Mic2, done: !!chars.value.length && charsVoiced.value === chars.value.length },
       { key: 'script:storyboard', label: '分镜', desc: '', icon: Clapperboard, done: !!sbs.value.length },
     ],
   },
@@ -2444,7 +2394,7 @@ const activeSubSteps = computed(() => {
   if (activeMainStage.value === 'assets') {
     return [
       { key: 'script:extract', label: '提取角色场景', done: !!chars.value.length },
-      { key: 'script:voice', label: '分配音色', done: !!chars.value.length && charsVoiced.value === chars.value.length },
+      { key: 'script:voice', label: '分配性别', done: !!chars.value.length && charsVoiced.value === chars.value.length },
       { key: 'prod:chars', label: '角色形象', done: !visualCharTotal.value || charImgCount.value === visualCharTotal.value },
       { key: 'prod:scenes', label: '场景图片', done: !scenes.value.length || sceneImgCount.value === scenes.value.length },
     ]
@@ -2486,7 +2436,7 @@ const bubbleSteps = computed(() => {
       { key: 'script:raw', label: '原始内容', done: !!rawContent.value },
       { key: 'script:rewrite', label: 'AI 改写', done: !!scriptContent.value },
       { key: 'script:extract', label: '提取', done: !!chars.value.length },
-      { key: 'script:voice', label: '音色', done: !!chars.value.length && charsVoiced.value === chars.value.length },
+      { key: 'script:voice', label: '性别', done: !!chars.value.length && charsVoiced.value === chars.value.length },
       { key: 'script:storyboard', label: '分镜', done: !!sbs.value.length },
     ]
   }
@@ -2574,6 +2524,17 @@ function updateCharVoice(charId, voiceId) {
 }
 function getVoiceProfile(voiceId) {
   return voiceProfiles.value.find(v => v.id === voiceId) || null
+}
+function genderOf(c) {
+  const g = getVoiceProfile(c.voice_style || c.voiceStyle)?.gender || ''
+  if (g.includes('男')) return '男'
+  if (g.includes('女')) return '女'
+  return ''
+}
+function setCharGender(c, gender) {
+  if (genderOf(c) === gender) return
+  const v = voiceProfiles.value.find(p => (p.gender || '').includes(gender))
+  if (v) updateCharVoice(c.id, v.id)
 }
 const totalDuration = computed(() => sbs.value.reduce((s, sb) => s + (sb.duration || 10), 0))
 
@@ -2664,7 +2625,7 @@ const scriptSteps = computed(() => {
     { label: '原始内容', state: rawContent.value ? 'done' : 'active', spinning: false },
     { label: 'AI 改写', state: hasScript ? 'done' : (rawContent.value ? 'active' : ''), spinning: rt.value === 'script_rewriter' },
     { label: '提取', state: hasChars ? 'done' : (hasScript ? 'active' : ''), spinning: rt.value === 'extractor' },
-    { label: '音色', state: hasVoice ? 'done' : (hasChars ? 'active' : ''), spinning: rt.value === 'voice_assigner' },
+    { label: '性别', state: hasVoice ? 'done' : (hasChars ? 'active' : ''), spinning: rt.value === 'voice_assigner' },
     { label: '分镜', state: hasSbs ? 'done' : (hasVoice ? 'active' : ''), spinning: rt.value === 'storyboard_breaker' },
   ]
 })
@@ -2736,26 +2697,12 @@ function skipRewrite() {
   scriptStep.value = 2
 }
 function doExtract() { saveScr(); runAgent('extractor', '请从剧本中提取所有角色和场景信息，提取时自动与项目已有数据进行去重合并', dramaId, epId.value, refresh) }
-function doVoice() { runAgent('voice_assigner', '请为所有角色分配合适的音色', dramaId, epId.value, refresh) }
-async function batchGenSamples() {
-  const pending = chars.value.filter(c => (c.voice_style || c.voiceStyle) && !(c.voice_sample_url || c.voiceSampleUrl))
-  if (!pending.length) {
-    toast.info(charsVoiced.value ? '所有角色的试听文件已生成' : '请先分配音色')
-    return
-  }
-  const results = await Promise.allSettled(pending.map(c => characterAPI.voiceSample(c.id, epId.value)))
-  const okCount = results.filter(r => r.status === 'fulfilled').length
-  const failCount = results.length - okCount
-  if (okCount) toast.success(`已生成 ${okCount} 份试听文件`)
-  if (failCount) toast.error(`${failCount} 份试听文件生成失败`)
-  await refresh()
-}
+function doVoice() { runAgent('voice_assigner', '请为所有角色判别性别并分配合适的音色（对白由模型按性别生成，旁白/独白用此音色真实配音）', dramaId, epId.value, refresh) }
 function doBreakdown() {
   const cfg = videoConfigs.value.find(c => c.id === lockedVideoConfigId.value)
   const label = cfg ? `${cfg.name} (${cfg.provider})` : '默认'
   runAgent('storyboard_breaker', `请拆解分镜并生成视频提示词。视频模型：${label}，请根据该模型的特性和时长限制生成合适的视频提示词。`, dramaId, epId.value, refresh)
 }
-async function genSample(id) { try { await characterAPI.voiceSample(id, epId.value); toast.success('试听已生成'); refresh() } catch (e) { toast.error(e.message) } }
 async function addShot() { await storyboardAPI.create({ episode_id: epId.value, storyboard_number: sbs.value.length + 1, title: `镜头${sbs.value.length + 1}`, duration: 10 }); refresh() }
 
 function sleep(ms) {
@@ -3863,6 +3810,10 @@ onMounted(() => { refresh(); loadConfigs(); loadVoices() })
 .voice-card-text { font-size: 12px; line-height: 1.7; color: var(--text-2); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .voice-select-block { display: flex; flex-direction: column; gap: 6px; }
 .voice-block-label { font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-3); }
+.gender-toggle { display: flex; gap: 8px; }
+.gender-btn { flex: 1; height: 38px; border-radius: 10px; border: 1px solid rgba(19,51,121,0.18); background: rgba(255,255,255,0.7); color: var(--text-1); font-size: 14px; font-weight: 700; cursor: pointer; transition: all .15s ease; }
+.gender-btn:hover { border-color: rgba(19,51,121,0.5); }
+.gender-btn.active { background: var(--accent-dark); color: #fff; border-color: var(--accent-dark); }
 .voice-profile-card { padding: 12px; border-radius: 16px; background: linear-gradient(135deg, rgba(19, 51, 121, 0.08), rgba(255,255,255,0.78)); border: 1px solid rgba(19, 51, 121, 0.1); display: flex; flex-direction: column; gap: 4px; }
 .voice-profile-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .voice-profile-name { font-size: 13px; font-weight: 700; color: var(--accent-text); }
