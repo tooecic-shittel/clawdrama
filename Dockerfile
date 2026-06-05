@@ -49,6 +49,10 @@ COPY configs/config.example.yaml ./configs/config.yaml
 
 RUN mkdir -p data/static
 
+# 强制用 apt 装的系统 ffmpeg（5.x，支持 apad=whole_dur / amix=normalize / subtitles 等所有滤镜选项），
+# 而不是 @ffmpeg-installer 的 linux-x64 二进制（那是 2018 年的老 static build ~4.0，新选项会 "Option not found"）。
+ENV FFMPEG_PATH=/usr/bin/ffmpeg
+ENV FFPROBE_PATH=/usr/bin/ffprobe
 ENV NODE_ENV=production
 ENV PORT=5679
 

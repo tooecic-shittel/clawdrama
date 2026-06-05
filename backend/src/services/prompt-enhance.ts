@@ -6,9 +6,9 @@ import { db, schema } from '../db/index.js'
 import { eq, and } from 'drizzle-orm'
 import { MINIMAX_MALE_VOICES, MINIMAX_FEMALE_VOICES } from './minimax-voices.js'
 
-// 原生音频对白（Seedance 自带配音+对口型）总开关。默认关 → 完全维持旧的「静音视频 + TTS」流程。
-// 线上验证通过后再置 1（Railway 环境变量）设为默认。
-export const NATIVE_AUDIO_DIALOGUE = process.env.NATIVE_AUDIO_DIALOGUE === '1'
+// 原生音频对白（Seedance 自带配音+对口型）总开关。默认开 —— 实测视频本就自带对口型原生人声，
+// 贴 TTS 反而盖掉它造成割裂。要回退旧的「静音视频 + TTS」流程：设环境变量 NATIVE_AUDIO_DIALOGUE=0。
+export const NATIVE_AUDIO_DIALOGUE = process.env.NATIVE_AUDIO_DIALOGUE !== '0'
 
 // 这些「说话人/文本」不是角色对白，不做原生口型注入（环境音/音效、以及旁白画外音→仍走 TTS）
 const NA_IGNORE_SPEAKERS = /^(环境音|环境声|音效|效果音|sfx|sound ?effect|bgm|背景音|背景音乐|ambient)$/i

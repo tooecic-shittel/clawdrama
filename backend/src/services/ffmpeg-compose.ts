@@ -110,6 +110,16 @@ function parseDialogueForTTS(dialogue?: string | null) {
   return { speaker, pureText, ignorable }
 }
 
+/** 视频里有没有真实音轨（audio 流）—— 判断 Seedance 是否自带了原生配音。 */
+function videoHasAudioStream(filePath: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    ffmpeg.ffprobe(filePath, (err, md) => {
+      if (err) { resolve(false); return }
+      resolve((md?.streams || []).some((s: any) => s.codec_type === 'audio'))
+    })
+  })
+}
+
 /**
  * 合成单个镜头：视频 + TTS对白音频 + 烧录字幕
  */
@@ -118,9 +128,10 @@ export async function composeStoryboard(storyboardId: number, userId?: number): 
   if (!sb) throw new Error(`Storyboard ${storyboardId} not found`)
   if (!sb.videoUrl) throw new Error(`Storyboard ${storyboardId} has no video`)
 
-  // 原生音频对白：视频已自带配音 + 对口型 → 无需 TTS/字幕合成，直接作为合成结果透传。
-  // （拼接那步会重编码修 Seedance edit list / A-V 同步，并垫 BGM，所以这里不必再动。）
-  if (isNativeDialogueShot(sb)) {
+  // 原生音频对白：on-screen 角色对白 + 视频自带原生音轨（Seedance 配音+对口型）→ 直接透传，
+  // 绝不贴 TTS（贴 TTS 会盖掉对口型的原生人声 = 割裂）。静音视频（早期 generate_audio=false 生成）
+  // 则不透传、继续走下面 TTS 路径补配音。（拼接那步会重编码修 edit list / A-V 同步并垫 BGM。）
+  if (isNativeDialogueShot(sb) && await videoHasAudioStream(toAbsPath(sb.videoUrl))) {
     db.update(schema.storyboards)
       .set({ composedVideoUrl: sb.videoUrl, status: 'composed', updatedAt: now() })
       .where(eq(schema.storyboards.id, storyboardId)).run()
