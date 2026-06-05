@@ -59,6 +59,7 @@ export const episodes = sqliteTable('episodes', {
   duration: integer('duration').default(0),
   status: text('status').default('draft'),
   videoUrl: text('video_url'),
+  bgmUrl: text('bgm_url'), // 整集背景音乐（MiniMax 按剧情情绪生成的纯音乐），拼接时混入
   thumbnail: text('thumbnail'),
   imageConfigId: integer('image_config_id'),
   videoConfigId: integer('video_config_id'),

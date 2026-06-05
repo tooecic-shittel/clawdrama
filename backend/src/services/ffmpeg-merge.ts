@@ -12,6 +12,7 @@ import { eq } from 'drizzle-orm'
 import { now } from '../utils/response.js'
 import { logTaskError, logTaskStart, logTaskSuccess } from '../utils/task-logger.js'
 import { runFfmpegExclusive } from './ffmpeg-lock.js'
+import { ensureEpisodeBgm } from './bgm-music.js'
 
 // @ts-ignore
 import ffmpegInstaller from '@ffmpeg-installer/ffmpeg'
@@ -121,12 +122,53 @@ async function doMerge(mergeId: number, episodeId: number, videos: string[]) {
   const outputFilename = `${uuid()}.mp4`
   const outputPath = path.join(outputDir, outputFilename)
 
+  // BGM：拼接前确保整集有背景音乐（按剧情情绪生成、缓存到 episode.bgmUrl）。
+  // 失败返回 null → 走「无 BGM」分支，绝不阻断成片（BGM 是增强项）。
+  const bgmRel = await ensureEpisodeBgm(episodeId)
+  const bgmAbs = bgmRel ? toAbsPath(bgmRel) : null
+
+  // 整集时长（各镜头时长求和）——仅在要混 BGM 时计算，用于 BGM 淡出定位。
+  let videoSec = 0
+  if (bgmAbs) {
+    const durs = await Promise.all(videos.map(v => probeDurationPrecise(toAbsPath(v))))
+    videoSec = durs.reduce((a, b) => a + b, 0)
+    logTaskStart('MergeTask', 'bgm-mix', { episodeId, bgm: bgmRel, videoSec: Number(videoSec.toFixed(2)) })
+  }
+
   // 全局串行 + 限线程，避免与合成的 ffmpeg 并发把容器资源打满（pthread_create/OOM）。
   await runFfmpegExclusive(() => new Promise<void>((resolve, reject) => {
-    ffmpeg()
+    const cmd = ffmpeg()
       .input(listPath)
       .inputOptions(['-f', 'concat', '-safe', '0'])
-      .outputOptions([
+
+    if (bgmAbs && videoSec > 0) {
+      const fadeOutStart = Math.max(0, videoSec - 2)
+      cmd
+        .input(bgmAbs)
+        // 循环 BGM 并截到整集时长（-t 上界，杜绝无限输入把 ffmpeg 缓冲打爆 → OOM）
+        .inputOptions(['-stream_loop', '-1', '-t', videoSec.toFixed(3)])
+        .complexFilter([
+          // BGM 压到 ~22% 垫底 + 首尾淡入淡出
+          `[1:a]volume=0.22,afade=t=in:d=2,afade=t=out:st=${fadeOutStart.toFixed(2)}:d=2[bg]`,
+          // normalize=0：保对白原音量（amix 默认按输入数衰减，会把人声压小）
+          `[0:a][bg]amix=inputs=2:duration=first:dropout_transition=3:normalize=0[aout]`,
+        ])
+        .outputOptions([
+          '-threads', '2',
+          '-fflags', '+genpts',
+          '-map', '0:v',
+          '-map', '[aout]',
+          '-c:v', 'libx264',
+          '-preset', 'ultrafast',
+          '-crf', '23',
+          '-c:a', 'aac',
+          '-ar', '48000',
+          '-b:a', '192k',
+          '-movflags', '+faststart',
+          '-shortest',
+        ])
+    } else {
+      cmd.outputOptions([
         '-threads', '2',
         '-fflags', '+genpts',
         '-c:v', 'libx264',
@@ -137,6 +179,9 @@ async function doMerge(mergeId: number, episodeId: number, videos: string[]) {
         '-b:a', '192k',
         '-movflags', '+faststart',
       ])
+    }
+
+    cmd
       .output(outputPath)
       .on('end', () => resolve())
       .on('error', (err) => reject(err))
@@ -169,6 +214,15 @@ function getVideoDuration(filePath: string): Promise<number> {
     ffmpeg.ffprobe(filePath, (err, metadata) => {
       if (err) { resolve(0); return }
       resolve(Math.round(metadata.format.duration || 0))
+    })
+  })
+}
+
+// 不取整的时长（秒）——给 BGM 淡出/截断定位用
+function probeDurationPrecise(filePath: string): Promise<number> {
+  return new Promise((resolve) => {
+    ffmpeg.ffprobe(filePath, (err, metadata) => {
+      resolve(err ? 0 : (metadata?.format?.duration || 0))
     })
   })
 }
