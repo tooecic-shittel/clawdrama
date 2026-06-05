@@ -129,6 +129,9 @@ sqlite.exec(`
     shot_type TEXT,
     angle TEXT,
     movement TEXT,
+    lighting TEXT,
+    composition TEXT,
+    emotion_beat TEXT,
     action TEXT,
     result TEXT,
     atmosphere TEXT,
@@ -388,6 +391,9 @@ ensureColumn('episodes', 'image_config_id', 'INTEGER')
 ensureColumn('episodes', 'video_config_id', 'INTEGER')
 ensureColumn('episodes', 'audio_config_id', 'INTEGER')
 ensureColumn('episodes', 'bgm_url', 'TEXT')
+ensureColumn('storyboards', 'lighting', 'TEXT')
+ensureColumn('storyboards', 'composition', 'TEXT')
+ensureColumn('storyboards', 'emotion_beat', 'TEXT')
 ensureColumn('users', 'credits', 'INTEGER NOT NULL DEFAULT 0')
 ensureColumn('characters', 'view_side', 'TEXT')
 ensureColumn('characters', 'view_back', 'TEXT')

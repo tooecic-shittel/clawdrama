@@ -166,6 +166,9 @@ export function createStoryboardTools(episodeId: number, dramaId: number) {
         video_prompt: z.string().optional(),
         bgm_prompt: z.string().optional(),
         sound_effect: z.string().optional(),
+        lighting: z.string().optional(),
+        composition: z.string().optional(),
+        emotion_beat: z.string().optional(),
         duration: z.number().optional(),
         scene_id: z.number().nullable().optional(),
         character_ids: z.array(z.number()).optional(),
@@ -203,6 +206,7 @@ export function createStoryboardTools(episodeId: number, dramaId: number) {
           atmosphere: sb.atmosphere, imagePrompt: sb.image_prompt,
           videoPrompt: sb.video_prompt, bgmPrompt: sb.bgm_prompt,
           soundEffect: sb.sound_effect,
+          lighting: sb.lighting, composition: sb.composition, emotionBeat: sb.emotion_beat,
           sceneId: sb.scene_id, duration: sb.duration || 10,
           createdAt: ts, updatedAt: ts,
         }).run()
@@ -241,6 +245,9 @@ export function createStoryboardTools(episodeId: number, dramaId: number) {
       video_prompt: z.string().optional(),
       bgm_prompt: z.string().optional(),
       sound_effect: z.string().optional(),
+      lighting: z.string().optional(),
+      composition: z.string().optional(),
+      emotion_beat: z.string().optional(),
       description: z.string().optional(),
       dialogue: z.string().optional(),
       scene_id: z.number().nullable().optional(),
@@ -280,6 +287,9 @@ export function createStoryboardTools(episodeId: number, dramaId: number) {
       if ('video_prompt' in fields) updates.videoPrompt = fields.video_prompt
       if ('bgm_prompt' in fields) updates.bgmPrompt = fields.bgm_prompt
       if ('sound_effect' in fields) updates.soundEffect = fields.sound_effect
+      if ('lighting' in fields) updates.lighting = fields.lighting
+      if ('composition' in fields) updates.composition = fields.composition
+      if ('emotion_beat' in fields) updates.emotionBeat = fields.emotion_beat
       if ('description' in fields) updates.description = fields.description
       if ('dialogue' in fields) updates.dialogue = fields.dialogue
       if ('scene_id' in fields) updates.sceneId = fields.scene_id

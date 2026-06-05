@@ -136,6 +136,9 @@ export const storyboards = sqliteTable('storyboards', {
   shotType: text('shot_type'),
   angle: text('angle'),
   movement: text('movement'),
+  lighting: text('lighting'),          // 布光方案（三点光/伦勃朗/金时/逆光剪影…）
+  composition: text('composition'),    // 构图（三分法/中心/对角线/前景框架/纵深…）
+  emotionBeat: text('emotion_beat'),   // 情绪节拍（这个镜头的戏剧张力点）
   action: text('action'),
   result: text('result'),
   atmosphere: text('atmosphere'),

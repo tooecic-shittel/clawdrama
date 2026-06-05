@@ -592,6 +592,26 @@
                   </div>
                   <div class="field-grid field-grid-4">
                     <label class="field">
+                      <span class="field-label">布光</span>
+                      <input list="shot-lighting-list" :value="selectedSb.lighting || ''" class="input" placeholder="选择或输入布光"
+                        @change="updateField(selectedSb, 'lighting', $event.target.value)" />
+                      <datalist id="shot-lighting-list"><option v-for="t in shotLighting" :key="t" :value="t" /></datalist>
+                    </label>
+                    <label class="field">
+                      <span class="field-label">构图</span>
+                      <input list="shot-composition-list" :value="selectedSb.composition || ''" class="input" placeholder="选择或输入构图"
+                        @change="updateField(selectedSb, 'composition', $event.target.value)" />
+                      <datalist id="shot-composition-list"><option v-for="t in shotCompositions" :key="t" :value="t" /></datalist>
+                    </label>
+                    <label class="field">
+                      <span class="field-label">情绪节拍</span>
+                      <input list="shot-emotion-list" :value="selectedSb.emotion_beat || selectedSb.emotionBeat || ''" class="input" placeholder="选择或输入情绪"
+                        @change="updateField(selectedSb, 'emotion_beat', $event.target.value)" />
+                      <datalist id="shot-emotion-list"><option v-for="t in shotEmotions" :key="t" :value="t" /></datalist>
+                    </label>
+                  </div>
+                  <div class="field-grid field-grid-4">
+                    <label class="field">
                       <span class="field-label">绑定角色</span>
                       <div class="role-pills">
                         <button
@@ -2563,7 +2583,11 @@ const shotTypes = [
   '过肩', '主观视角', '航拍', '运动镜头',
 ]
 const shotAngles = ['平视', '仰视', '俯视', '侧拍', '背拍', '斜侧', '主观视角', '过肩']
-const shotMovements = ['固定', '推镜', '拉镜', '摇镜', '移镜', '跟拍', '升降', '手持', '环绕']
+const shotMovements = ['固定', '推镜', '拉镜', '摇镜', '移镜', '跟拍', '升降', '手持', '环绕', '甩镜']
+// 专业电影维度 —— 布光 / 构图 / 情绪节拍（AI 生成、用户可改，真实进提示词）
+const shotLighting = ['三点布光', '伦勃朗光', '高反差暗调', '逆光剪影', '金色时刻', '冷调月光', '霓虹实用光', '柔光阴天', '体积光(丁达尔)', '火光烛光', '顶光', '底光']
+const shotCompositions = ['三分法', '中心构图', '对角线', '前景框架', '纵深层次', '留白', '对称', '低角度', '俯瞰布局']
+const shotEmotions = ['平静铺垫', '悬疑', '紧张', '爆发', '温情', '甜蜜', '悲伤', '震撼', '转折', '压抑', '释然']
 
 function updateField(sb, field, value) {
   const current = sb[field] ?? sb[toCamel(field)]

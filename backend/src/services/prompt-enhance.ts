@@ -210,6 +210,11 @@ export function enhanceVideoPrompt(
   if (styleSuffix) parts.push(`Visual style: ${styleSuffix}`)
   if (sb?.soundEffect) parts.push(`Audio: ${sb.soundEffect.trim()}`)
 
+  // 镜头电影维度（用户可在故事板下拉里改：景别/视角/运镜/布光/构图/情绪）→ 真实进视频提示词
+  const cine = [sb?.shotType, sb?.angle, sb?.movement, sb?.lighting, sb?.composition].filter(Boolean)
+  if (cine.length) parts.push(`镜头语言：${cine.join('、')}`)
+  if (sb?.emotionBeat) parts.push(`情绪基调：${sb.emotionBeat}`)
+
   if (parsed && parsed.pureText) {
     const voiceDesc = deriveVoiceDescription(parsed.speaker, dramaId)
     parts.push(`画面中的角色开口说出这句台词："${parsed.pureText}"，配音音色：${voiceDesc}，全程音色保持不变，口型与台词精确同步`)
