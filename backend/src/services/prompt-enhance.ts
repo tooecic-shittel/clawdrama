@@ -38,16 +38,22 @@ function deriveVoiceDescription(speaker: string, dramaId: number | null): string
         .where(and(eq(schema.characters.dramaId, dramaId), eq(schema.characters.name, speaker))).all()
       if (ch) {
         const vs = ch.voiceStyle || ''
+        // 1) 精选 catalog 命中最准
         if (MINIMAX_MALE_VOICES.includes(vs)) gender = 'male'
         else if (MINIMAX_FEMALE_VOICES.includes(vs)) gender = 'female'
-        persona = `${ch.personality || ''} ${ch.description || ''}`
+        // 2) 否则看音色 id 名里的性别线索（catalog 外的 minimax 音色）
+        else if (/girl|woman|lady|female|妹|姐|母|奶|婆|少女|女/i.test(vs)) gender = 'female'
+        else if (/\b(man|gentleman|boy|male|brother|uncle)\b|哥|爷|叔|男/i.test(vs)) gender = 'male'
+        persona = `${ch.personality || ''} ${ch.description || ''} ${ch.appearance || ''} ${ch.role || ''}`
       }
     }
   } catch {}
   if (!gender) {
+    // 3) 角色文字兜底
     const t = `${persona} ${speaker}`
-    if (/女|她|girl|female|小姐|女士|姑娘|妈|母/.test(t)) gender = 'female'
-    else gender = 'male' // 兜底男声（确定性优先，宁可固定不可乱跳）
+    if (/女|她|girl|female|小姐|女士|姑娘|妈|母|妹|姐/.test(t)) gender = 'female'
+    else if (/男|他|boy|male|先生|大叔|哥|父|爷/.test(t)) gender = 'male'
+    else gender = 'male' // 实在推不出 → 默认男声（确定性优先，宁可固定不乱跳；个别错的用户改音色即可）
   }
   // 人设微调（关键词命中才加，保持确定性）
   let tone = ''
@@ -165,15 +171,27 @@ export function enhanceVideoPrompt(
     }
   } catch {}
 
-  const parts = [prompt]
+  // 原生音频对白：开关开且为真·角色对白时，下面会统一注入台词+音色。
+  const parsed = (sb && isNativeDialogueShot(sb)) ? parseDialogueLite(sb.dialogue) : null
+
+  let base = prompt
+  if (parsed) {
+    // 分镜 prompt 有时已内嵌台词（<voice>名</voice>："台词"）。避免和注入重复：
+    // <voice> 标签降级为 <role>（纯视觉），并删掉内嵌的这句台词，台词统一由下面注入定。
+    base = base.replace(/<voice>(.*?)<\/voice>\s*[:：]?\s*/g, '<role>$1</role>，')
+    if (parsed.pureText) {
+      const esc = parsed.pureText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+      base = base.replace(new RegExp(`["“”]?${esc}["“”]?`, 'g'), '')
+    }
+  }
+
+  const parts = [base]
   if (styleSuffix) parts.push(`Visual style: ${styleSuffix}`)
   if (sb?.soundEffect) parts.push(`Audio: ${sb.soundEffect.trim()}`)
 
-  // 原生音频对白：把台词 + 角色音色描述注入 prompt，让 Seedance 直接配音 + 对口型（开关开且为真·角色对白时）
-  if (sb && isNativeDialogueShot(sb)) {
-    const { pureText, speaker } = parseDialogueLite(sb.dialogue)
-    const voiceDesc = deriveVoiceDescription(speaker, dramaId)
-    parts.push(`画面中的角色开口说出这句台词："${pureText}"，配音音色：${voiceDesc}，全程音色保持不变，口型与台词精确同步`)
+  if (parsed && parsed.pureText) {
+    const voiceDesc = deriveVoiceDescription(parsed.speaker, dramaId)
+    parts.push(`画面中的角色开口说出这句台词："${parsed.pureText}"，配音音色：${voiceDesc}，全程音色保持不变，口型与台词精确同步`)
   }
 
   return parts.join('. ')
