@@ -405,7 +405,7 @@
               <div class="shot-list-head">
                 <div>
                   <div class="shot-list-title">镜头序列</div>
-                  <div class="shot-list-sub">按镜头顺序检查内容与素材状态</div>
+                  <div class="shot-list-sub">点任一镜头 → 右侧逐项编辑全部字段</div>
                 </div>
                 <span class="tag mono">{{ totalDuration }}s</span>
               </div>
@@ -443,7 +443,7 @@
             <div class="detail-panel" v-if="selectedSb">
                 <div class="detail-head">
                   <div class="detail-head-copy">
-                    <span class="detail-head-title">镜头 #{{ sbs.indexOf(selectedSb) + 1 }}</span>
+                    <span class="detail-head-title"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:5px"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>编辑镜头 #{{ sbs.indexOf(selectedSb) + 1 }}</span>
                   <span class="detail-head-sub">{{ selectedSb.title || `镜头 ${sbs.indexOf(selectedSb) + 1}` }} · {{ selectedSb.shot_type || selectedSb.shotType || '未设置景别' }}</span>
                   </div>
                   <span class="tag mono">{{ (selectedSb.duration || 10) }}s</span>
@@ -452,6 +452,7 @@
                   </button>
               </div>
               <div class="detail-body">
+                <div class="edit-hint">✏️ AI 已自动填好以下全部字段，均可逐项手动修改（景别 / 运镜 / 布光 / 对白 / 首尾帧提示词…）</div>
                 <div class="detail-hero">
                   <div class="detail-hero-copy">
                     <div class="detail-hero-label">镜头概览</div>
@@ -3893,6 +3894,7 @@ onMounted(() => { refresh(); loadConfigs(); loadVoices() })
 .detail-head-copy { display: flex; flex-direction: column; gap: 2px; }
 .detail-head-title { font-size: 14px; font-weight: 700; color: var(--text-0); }
 .detail-head-sub { font-size: 11px; color: var(--text-3); }
+.edit-hint { margin: 12px 14px 0; padding: 8px 12px; border-radius: 10px; background: rgba(19,51,121,0.06); border: 1px solid rgba(19,51,121,0.14); color: var(--text-1); font-size: 12px; line-height: 1.5; }
 .detail-body { padding: 14px 16px; display: flex; flex-direction: column; gap: 12px; }
 .detail-hero {
   display: grid;
