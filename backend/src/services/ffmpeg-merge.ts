@@ -148,11 +148,13 @@ async function doMerge(mergeId: number, episodeId: number, videos: string[]) {
         // 循环 BGM 并截到整集时长（-t 上界，杜绝无限输入把 ffmpeg 缓冲打爆 → OOM）
         .inputOptions(['-stream_loop', '-1', '-t', videoSec.toFixed(3)])
         .complexFilter([
-          // 用「音量补偿」代替 amix normalize=0（后者要 ffmpeg≥4.4，容器老版本会 "Option not found"）：
-          // amix 默认按输入数(2)各 ×1/2 → 对白预乘 2 还原全量、BGM 预乘 0.44 → 最终 0.22 垫底。
-          `[1:a]volume=0.44,afade=t=in:d=2,afade=t=out:st=${fadeOutStart.toFixed(2)}:d=2[bg]`,
-          `[0:a]volume=2.0[dia]`,
-          `[dia][bg]amix=inputs=2:duration=first:dropout_transition=3[aout]`,
+          // 原生人声偏轻且忽大忽小（Seedance 自带音轨 ~-25dB）→ dynaudnorm 拉到稳定响度，
+          // 否则会被 BGM 糊住（实测 BGM×0.22≈-26.5dB ≈ 人声，听不清）。dynaudnorm 后人声 ~-16dB。
+          `[0:a]dynaudnorm=f=200:g=8[dia]`,
+          // BGM 压很低（0.16≈-29dB）垫底 + 首尾淡入淡出，让人声高出 ~13dB 清晰可辨。
+          // normalize=0 保各自电平（容器已强制 apt ffmpeg 5.1，支持该选项；失败也有上层退回纯拼接兜底）。
+          `[1:a]volume=0.16,afade=t=in:d=2,afade=t=out:st=${fadeOutStart.toFixed(2)}:d=2[bg]`,
+          `[dia][bg]amix=inputs=2:duration=first:dropout_transition=3:normalize=0[aout]`,
         ])
         .outputOptions([
           '-threads', '2',
