@@ -372,7 +372,7 @@
                     <div class="voice-name">
                       <div class="voice-name-row">
                         <div class="extract-name">{{ c.name }}</div>
-                        <span class="tag" :class="(c.voice_style || c.voiceStyle) ? 'tag-success' : ''">{{ (c.voice_style || c.voiceStyle) ? '已分配' : '待分配' }}</span>
+                        <span class="tag" :class="(c.voice_style || c.voiceStyle) ? 'tag-success' : ''">{{ (c.voice_style || c.voiceStyle) ? (getVoiceProfile(c.voice_style || c.voiceStyle)?.gender || '已选') : '待定' }}</span>
                       </div>
                       <div class="extract-meta">{{ c.role || '角色' }}</div>
                     </div>
@@ -384,7 +384,8 @@
                 </div>
 
                 <div class="voice-select-block">
-                  <span class="voice-block-label">选择音色</span>
+                  <span class="voice-block-label">音色</span>
+                  <span class="dim" style="font-size:11px;display:block;margin:-2px 0 6px">旁白 / 内心独白用此音色真实配音；对白由 Seedance 生成，仅取其性别 · 音调</span>
                   <BaseSelect
                     :model-value="c.voice_style || c.voiceStyle || ''"
                     :options="voiceSelectOptions"
@@ -409,7 +410,7 @@
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
                     {{ (c.voice_sample_url || c.voiceSampleUrl) ? '重新试听' : '生成试听' }}
                   </button>
-                  <span class="dim" style="font-size:11px">{{ (c.voice_sample_url || c.voiceSampleUrl) ? '已生成声音样本，可直接播放' : '生成后可快速确认角色声音' }}</span>
+                  <span class="dim" style="font-size:11px">试听 = 旁白 / 独白的配音；对白由 Seedance 现场生成，未必相同</span>
                 </div>
 
                 <div v-if="c.voice_sample_url || c.voiceSampleUrl" class="voice-player">
