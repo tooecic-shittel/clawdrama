@@ -44,8 +44,8 @@ export class VolcEngineVideoAdapter implements VideoProviderAdapter {
     const body: any = {
       model,
       content,
-      // 我们的流程是「无声视频 + 单独 TTS 合成」，让 Seedance 不要自带音轨，避免和配音叠音
-      generate_audio: false,
+      // 默认无声（走「静音视频 + 单独 TTS」）；原生音频对白路径下置 true → Seedance 自带配音 + 对口型
+      generate_audio: !!record.generateAudio,
       ratio: this.resolveRatio(record.aspectRatio),
       resolution: this.normalizeResolution(record.resolution),
       duration: this.normalizeDuration(record.duration),

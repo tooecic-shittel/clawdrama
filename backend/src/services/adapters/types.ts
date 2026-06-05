@@ -97,6 +97,7 @@ export interface VideoGenerationRecord {
   duration?: number | null
   aspectRatio?: string | null
   resolution?: string | null   // 用户选的画质档 '720P'/'1080P'（happyhorse 用）
+  generateAudio?: boolean | null // true=让模型自带配音+对口型（原生音频对白路径，火山 Seedance 用）
   // ... 其他字段
 }
 

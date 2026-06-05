@@ -12,6 +12,7 @@ import { db, schema } from '../db/index.js'
 import { eq } from 'drizzle-orm'
 import { now } from '../utils/response.js'
 import { generateTTS } from './tts-generation.js'
+import { isNativeDialogueShot } from './prompt-enhance.js'
 import { pickVoiceForCharacter } from './voice-mapper.js'
 import { buildTTSInstruction } from './tts-instruction.js'
 import { runFfmpegExclusive } from './ffmpeg-lock.js'
@@ -108,6 +109,17 @@ export async function composeStoryboard(storyboardId: number, userId?: number): 
   const [sb] = db.select().from(schema.storyboards).where(eq(schema.storyboards.id, storyboardId)).all()
   if (!sb) throw new Error(`Storyboard ${storyboardId} not found`)
   if (!sb.videoUrl) throw new Error(`Storyboard ${storyboardId} has no video`)
+
+  // 原生音频对白：视频已自带配音 + 对口型 → 无需 TTS/字幕合成，直接作为合成结果透传。
+  // （拼接那步会重编码修 Seedance edit list / A-V 同步，并垫 BGM，所以这里不必再动。）
+  if (isNativeDialogueShot(sb)) {
+    db.update(schema.storyboards)
+      .set({ composedVideoUrl: sb.videoUrl, status: 'composed', updatedAt: now() })
+      .where(eq(schema.storyboards.id, storyboardId)).run()
+    logTaskProgress('ComposeTask', 'native-audio-passthrough', { storyboardId, video: sb.videoUrl })
+    return sb.videoUrl
+  }
+
   db.update(schema.storyboards)
     .set({ status: 'compose_processing', composedVideoUrl: null, updatedAt: now() })
     .where(eq(schema.storyboards.id, storyboardId))

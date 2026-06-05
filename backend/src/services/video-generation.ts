@@ -6,7 +6,7 @@ import { downloadFile, readImageAsCompressedDataUrl } from '../utils/storage.js'
 import { getVideoAdapter } from './adapters/registry'
 import type { AIConfig } from './adapters/types'
 import { logTaskError, logTaskPayload, logTaskProgress, logTaskStart, logTaskSuccess, logTaskWarn, redactUrl } from '../utils/task-logger.js'
-import { enhanceVideoPrompt } from './prompt-enhance.js'
+import { enhanceVideoPrompt, isNativeDialogueShot } from './prompt-enhance.js'
 import { assertBalance, chargeForAction, videoCost } from './credits.js'
 
 interface GenerateVideoParams {
@@ -186,6 +186,15 @@ async function attemptVideoWithConfig(
       referenceMode: record.referenceMode,
     })
 
+    // 原生音频对白：该镜头是真·角色对白时让模型自带配音+对口型（与 prompt 注入、合成跳过 TTS 三处判断同源）
+    let generateAudio = false
+    try {
+      if (record.storyboardId) {
+        const [sb] = db.select().from(schema.storyboards).where(eq(schema.storyboards.id, record.storyboardId)).all()
+        if (sb) generateAudio = isNativeDialogueShot(sb)
+      }
+    } catch {}
+
     const { url, method, headers, body } = adapter.buildGenerateRequest(config, {
       id: record.id,
       model,
@@ -198,6 +207,7 @@ async function attemptVideoWithConfig(
       duration: record.duration,
       aspectRatio: record.aspectRatio,
       resolution: record.resolution,
+      generateAudio,
     })
     logTaskProgress('VideoTask', 'request', {
       id,
