@@ -94,6 +94,12 @@ const STYLE_PROMPTS: Record<string, string> = {
   cinematic: 'cinematic film look, dramatic lighting, shallow depth of field, color graded',
   comic: 'comic book illustration, bold outlines, dynamic composition, vivid pop colors',
   watercolor: 'watercolor painting style, soft brush strokes, gentle gradients, artistic feel',
+  '3d': '3D CGI animation render, Pixar / Dreamworks style, soft global illumination, subsurface scattering, polished stylized shading',
+  ink: 'Chinese ink wash painting (shuimo), flowing calligraphic brush strokes, ample negative space, muted ink tones, elegant guofeng / wuxia aesthetic',
+  painterly: 'semi-realistic painted CG illustration, thick-paint (houtu) rendering, rich brush texture, dramatic rim lighting, detailed character art',
+  cyberpunk: 'cyberpunk aesthetic, neon-drenched, high-tech low-life, rain-slick reflective streets, holograms, saturated cyan-and-magenta palette',
+  webtoon: 'Korean webtoon / manhwa style, clean crisp lineart, soft cel shading, bright modern coloring',
+  oil: 'oil painting style, visible impasto brushstrokes, rich classical color, painterly chiaroscuro lighting, fine-art texture',
 }
 
 /** Look up the drama and return its visual style descriptor (or empty string). */

@@ -8,6 +8,12 @@ const STYLE_LABELS: Record<string, string> = {
   cinematic: '电影感',
   comic: '美漫',
   watercolor: '水彩画',
+  '3d': '3D/CGI',
+  ink: '国风水墨',
+  painterly: '厚涂插画',
+  cyberpunk: '赛博朋克',
+  webtoon: '韩系条漫',
+  oil: '油画',
 }
 
 export function styleLabel(value: string | null | undefined): string {
