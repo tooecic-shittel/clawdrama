@@ -48,14 +48,18 @@ export function createGridPromptTools(episodeId: number, dramaId: number) {
         .where(eq(schema.characters.id, character_id)).all()
       if (!c) return { error: 'Character not found' }
 
-      const parts: string[] = []
-      if (c.appearance) parts.push(c.appearance)
-      if (c.description) parts.push(c.description)
-      if (c.role) parts.push(`role: ${c.role}`)
-      if (c.personality) parts.push(`personality: ${c.personality}`)
-
-      const base = parts.join(', ')
-      const prompt = `${base}, cinematic portrait, high quality, consistent art style, no text, no watermark`
+      const traits: string[] = []
+      if (c.appearance) traits.push(c.appearance)
+      if (c.description) traits.push(c.description)
+      const traitStr = traits.join(', ')
+      const styleHint = c.personality ? ` Demeanor cue: ${c.personality}.` : ''
+      // 角色资产「母图」：清晰、中性、锁定特征（发型/发色/五官标志/服装版型/配饰/色板），
+      // 供后续所有镜头与参考图复用以保一致性（专业漫剧的「角色资产标准化」做法）。
+      const prompt = `Character design reference of ${c.name}: ${traitStr}. `
+        + `Full-body, front-facing, neutral standing pose, looking at the camera. `
+        + `Clearly defined and distinctive facial features, hairstyle and hair color, outfit silhouette, accessories and a consistent color palette (keep identical across all shots). `
+        + `Even soft studio lighting, clean plain background, sharp focus, highly detailed.${styleHint} `
+        + `Consistent art style, character-sheet quality, no text, no watermark.`
 
       return {
         character_id: c.id,
