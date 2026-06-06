@@ -893,7 +893,7 @@
                 </div>
                 <div class="dub-voice">
                   <span class="dim" style="font-size:11px;white-space:nowrap">音色 · {{ narrationCharacter(sb)?.name || '旁白' }}</span>
-                  <BaseSelect :model-value="shotVoice(sb)" :options="voiceSelectOptions" placeholder="选择音色" searchable style="flex:1;min-width:0" @update:model-value="setShotVoice(sb, $event)" />
+                  <BaseSelect :model-value="shotVoice(sb)" :options="voiceSelectOptions" placeholder="选择音色" searchable style="flex:1;min-width:0" @update:model-value="pickDubVoice(sb, $event)" />
                 </div>
                 <div class="dub-foot">
                   <audio v-if="hasTTS(sb)" :src="'/' + getTTSUrl(sb)" controls preload="none" class="dub-audio" />
@@ -2641,6 +2641,14 @@ function setShotVoice(sb, voiceId) {
   if (ch) { updateCharVoice(ch.id, voiceId); return }
   narratorVoice.value = voiceId
   try { localStorage.setItem('narratorVoice:' + epId.value, voiceId) } catch {}
+}
+// 旁白配音下拉：选音色后，若该条已配过音，立即用新音色重配，避免新旧不一致（选男声却还放旧的女声）
+async function pickDubVoice(sb, voiceId) {
+  setShotVoice(sb, voiceId)
+  if (hasTTS(sb)) {
+    toast.info('音色已改，正在用新音色重新配音…')
+    await genShotTTS(sb)
+  }
 }
 // 合成时是否把旁白配音混入镜头（关掉则旁白镜头不混 TTS，避免旁白比镜头长被截断；旁白交给剪辑器）
 const includeNarration = ref(typeof localStorage !== 'undefined' ? localStorage.getItem('includeNarration:' + epId.value) !== '0' : true)
