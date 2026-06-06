@@ -129,11 +129,11 @@ export async function composeStoryboard(storyboardId: number, userId?: number, o
   if (!sb.videoUrl) throw new Error(`Storyboard ${storyboardId} has no video`)
   const includeNarration = opts?.includeNarration !== false
 
-  // 保留原生音轨：只要视频自带原生音轨、且这条不是「旁白配音」镜头，就直接透传（角色对白的原生人声、
-  // 以及无对白镜头的环境音/音效，统统保留），绝不贴 TTS/垫静音去盖掉它。
-  // 只有「旁白/画外音 + 有实质文本」的镜头才走下面 TTS 路径补旁白；静音视频也走 TTS 路径。
-  // （拼接那步会重编码修 edit list / A-V 同步并垫 BGM。）
-  if (NATIVE_AUDIO_DIALOGUE && !needsTtsVoiceover(sb.dialogue) && await videoHasAudioStream(toAbsPath(sb.videoUrl))) {
+  // 保留原生音轨：视频自带原生音轨、且这条「不需要补旁白配音」时直接透传（角色对白原生人声、环境音/音效统统保留），
+  // 绝不贴 TTS / 垫静音盖掉它。「需要补旁白」= 旁白镜头 且 用户开了「加入旁白配音」。
+  // 关掉旁白开关时，旁白镜头也走透传（保留原声、只是不加旁白），避免把原声一起静音。
+  // 只有「需要补旁白」或静音视频才走下面 TTS 路径。（拼接那步会重编码修 edit list / A-V 同步并垫 BGM。）
+  if (NATIVE_AUDIO_DIALOGUE && !(needsTtsVoiceover(sb.dialogue) && includeNarration) && await videoHasAudioStream(toAbsPath(sb.videoUrl))) {
     db.update(schema.storyboards)
       .set({ composedVideoUrl: sb.videoUrl, status: 'composed', updatedAt: now() })
       .where(eq(schema.storyboards.id, storyboardId)).run()
