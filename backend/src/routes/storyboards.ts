@@ -209,7 +209,8 @@ app.post('/:id/generate-tts', async (c) => {
   const speaker = parsedDialogue.speaker
   const [epForVoice] = db.select().from(schema.episodes).where(eq(schema.episodes.id, sb.episodeId)).all()
   const ttsBody = await c.req.json().catch(() => ({} as any))
-  const overrideVoice = typeof ttsBody?.voice_id === 'string' && ttsBody.voice_id.trim() ? ttsBody.voice_id.trim() : ''
+  // voice 覆盖：优先 query 参数（最稳，绕开 body 解析），再退回 body。
+  const overrideVoice = (c.req.query('voice_id') || (typeof ttsBody?.voice_id === 'string' ? ttsBody.voice_id : '') || '').trim()
   const voiceId = overrideVoice || pickVoiceForCharacter({
     characterName: speaker,
     dramaId: epForVoice?.dramaId,
