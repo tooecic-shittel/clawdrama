@@ -252,16 +252,9 @@ export async function composeStoryboard(storyboardId: number, userId?: number): 
       // 跨镜头拼接后音画累积错位。重编码会把 edit list 解码应用、时间戳归零 → 一定同步。
       // ultrafast 关掉前瞻/B帧，内存/耗时已是 libx264 最低档。
       const filterParts: string[] = []
-      let videoOutLabel = '0:v'
-      // 把台词字幕烧进画面：字幕与配音同源（parsedDialogue.pureText），保证「配音 + 台词都有、内容一致」。
-      if (subtitlePath && supportsSubtitleFilter()) {
-        const escapedPath = subtitlePath.replace(/\\/g, '/').replace(/:/g, '\\:').replace(/'/g, "\\'")
-        const forceStyle = 'FontSize=20\\,PrimaryColour=&HFFFFFF&\\,OutlineColour=&H000000&\\,Outline=2'
-        filterParts.push(`[0:v]subtitles=filename='${escapedPath}':force_style='${forceStyle}'[vout]`)
-        videoOutLabel = '[vout]'
-      } else if (subtitlePath) {
-        logTaskProgress('ComposeTask', 'subtitle-filter-unavailable', { storyboardId, subtitlePath })
-      }
+      const videoOutLabel = '0:v'
+      // 不再把字幕烧进画面：字幕交给剪辑器（仍生成 SRT 文件、保留 subtitleUrl，可随素材给剪映/CapCut 导入）。
+      // 原因：容器缺中文字体，烧字幕会把中文渲染成豆腐块 □。保持成片画面干净。
       // 音频：apad=whole_dur 把配音(或静音垫底)精确补齐到视频时长（有限、不缓冲爆内存），
       // 短台词不会被 -shortest 截短，整段时长=视频；统一 aac/48k/stereo 保证拼接流一致。
       filterParts.push(`[1:a]apad=whole_dur=${videoSec.toFixed(3)}[aout]`)
