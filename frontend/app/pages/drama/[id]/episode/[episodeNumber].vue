@@ -900,7 +900,7 @@
                   <div v-else class="dim" style="font-size:12px">尚未生成语音文件</div>
                   <button class="btn btn-sm ml-auto" @click="genShotTTS(sb)">生成配音</button>
                 </div>
-                <div v-if="lastTts[sb.id]" class="dim" style="font-size:11px;margin-top:6px">实际用了：<b>{{ lastTts[sb.id].voice }}</b><span v-if="!lastTts[sb.id].override" style="color:var(--error)"> · ⚠️ 覆盖未生效（用了默认）</span></div>
+                <div v-if="lastTts[sb.id]" class="dim" style="font-size:11px;margin-top:6px">实际用了：<b>{{ lastTts[sb.id].voice }}</b><span v-if="lastTts[sb.id].engine"> · 引擎:{{ lastTts[sb.id].engine }}</span><span v-if="!lastTts[sb.id].override" style="color:var(--error)"> · ⚠️ 覆盖未生效</span></div>
               </div>
             </div>
           </div>
@@ -3029,7 +3029,8 @@ async function genShotTTS(sb) {
     const used = r?.voice_id || r?.data?.voice_id || ''
     const label = getVoiceProfile(used)?.label || used || '默认'
     const ovr = (r?.override_received ?? r?.data?.override_received)
-    lastTts[sb.id] = { voice: label, override: !!ovr }
+    const eng = r?.audio_engine || r?.data?.audio_engine || ''
+    lastTts[sb.id] = { voice: label, override: !!ovr, engine: eng }
     toast.success(`配音已生成 · 实际音色：${label}${want && !ovr ? '（⚠️覆盖未生效）' : ''}`)
     await refresh()
   } catch (e) { toast.error(e.message) }

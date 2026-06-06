@@ -193,7 +193,7 @@ export async function composeStoryboard(storyboardId: number, userId?: number, o
             parsedDialogue.speaker,
           )
           logTaskProgress('ComposeTask', 'generate-inline-tts', { storyboardId, voiceId, emotion, textPreview: pureDialogue.slice(0, 40) })
-          const ttsPath = await generateTTS({ text: pureDialogue, voice: voiceId, emotion, configId: ep?.audioConfigId ?? undefined, userId })
+          const ttsPath = await generateTTS({ text: pureDialogue, voice: voiceId, emotion, configId: null, userId })
           audioPath = toAbsPath(ttsPath)
           db.update(schema.storyboards).set({ ttsAudioUrl: ttsPath, updatedAt: now() })
             .where(eq(schema.storyboards.id, storyboardId)).run()

@@ -6,6 +6,7 @@ import { toSnakeCase } from '../utils/transform.js'
 import { canAccess, episodeOwnerId, storyboardOwnerId } from '../middleware/ownership.js'
 import { generateTTS } from '../services/tts-generation.js'
 import { pickVoiceForCharacter } from '../services/voice-mapper.js'
+import { getActiveConfig } from '../services/ai.js'
 import { buildTTSInstruction } from '../services/tts-instruction.js'
 import { enhanceShotVideoPrompt } from '../services/prompt-rewrite.js'
 import { logTaskError, logTaskPayload, logTaskProgress, logTaskStart, logTaskSuccess } from '../utils/task-logger.js'
@@ -227,7 +228,9 @@ app.post('/:id/generate-tts', async (c) => {
     speaker,
   )
   try {
-    const audioPath = await generateTTS({ text: pureDialogue, voice: voiceId, emotion, configId: ep?.audioConfigId || null, userId: (c.get('user') as any)?.id })
+    // configId 强制传 null：忽略这一集可能残留的旧音频配置（迁移前的云雾/gemini），统一走当前启用的音频引擎（MiniMax），
+    // 否则旧引擎不认 MiniMax 的 voice_id → 默认女声。
+    const audioPath = await generateTTS({ text: pureDialogue, voice: voiceId, emotion, configId: null, userId: (c.get('user') as any)?.id })
   db.update(schema.storyboards)
     .set({ ttsAudioUrl: audioPath, updatedAt: now() })
     .where(eq(schema.storyboards.id, id))
@@ -239,7 +242,9 @@ app.post('/:id/generate-tts', async (c) => {
       path: audioPath,
       textLength: pureDialogue.length,
     })
-    return success(c, { tts_audio_url: audioPath, voice_id: voiceId, text: pureDialogue, override_received: !!overrideVoice })
+    let audioEngine = ''
+    try { audioEngine = getActiveConfig('audio')?.provider || '' } catch {}
+    return success(c, { tts_audio_url: audioPath, voice_id: voiceId, text: pureDialogue, override_received: !!overrideVoice, audio_engine: audioEngine })
   } catch (err: any) {
     logTaskError('StoryboardAPI', 'generate-tts', { storyboardId: id, voiceId, error: err.message })
     if (err?.status === 402) return paymentRequired(c, err.message)
