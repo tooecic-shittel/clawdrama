@@ -1,5 +1,5 @@
 import { Hono } from 'hono'
-import { eq } from 'drizzle-orm'
+import { eq, inArray } from 'drizzle-orm'
 import { db, schema } from '../db/index.js'
 import { success, notFound, badRequest, now } from '../utils/response.js'
 import { toSnakeCaseArray, toSnakeCase } from '../utils/transform.js'
@@ -119,12 +119,27 @@ app.get('/:episode_id/storyboards', async (c) => {
   const allChars = db.select().from(schema.characters).all()
     .filter(ch => episodeCharIds.includes(ch.id) && !ch.deletedAt)
 
+  // 每镜实际出视频的 provider/model（取最近一条有产物的视频生成记录），供前端标注是否走了兜底（如 happyhorse）。
+  const sbIds = rows.map(r => r.id)
+  const vgByShot = new Map<number, { provider: string | null; model: string | null }>()
+  if (sbIds.length) {
+    const vgs = db.select().from(schema.videoGenerations)
+      .where(inArray(schema.videoGenerations.storyboardId, sbIds))
+      .orderBy(schema.videoGenerations.id)
+      .all()
+    for (const vg of vgs) {
+      if (vg.storyboardId != null && vg.videoUrl) vgByShot.set(vg.storyboardId, { provider: vg.provider, model: vg.model })
+    }
+  }
+
   return success(c, rows.map((row) => ({
     ...toSnakeCase(row),
     character_ids: charIdsByStoryboard.get(row.id) || [],
     characters: allChars
       .filter(ch => (charIdsByStoryboard.get(row.id) || []).includes(ch.id))
       .map(ch => toSnakeCase(ch)),
+    video_provider: vgByShot.get(row.id)?.provider ?? null,
+    video_model: vgByShot.get(row.id)?.model ?? null,
   })))
 })
 

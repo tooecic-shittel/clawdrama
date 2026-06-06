@@ -1294,6 +1294,7 @@
                   <div class="prod-dots">
                     <span :class="['dot', hasImg(sb) && 'ok']" /><span style="font-size:10px">图</span>
                     <span :class="['dot', hasVid(sb) && 'ok', (isPendingVideo(sb.id) || isQueuedVideo(sb.id)) && 'pending']" /><span style="font-size:10px">{{ isQueuedVideo(sb.id) ? '排队中' : (isPendingVideo(sb.id) ? '视频生成中' : '视频') }}</span>
+                    <span v-if="hasVid(sb) && videoModelInfo(sb)" class="model-tag" :class="{ warn: videoModelInfo(sb).warn }" :title="videoModelInfo(sb).warn ? '这条没走 Seedance，用了兜底模型（带水印）' : '实际生成模型'">{{ videoModelInfo(sb).text }}</span>
                   </div>
                   <div v-if="videoFailMessage(sb.id)" class="prod-error">{{ videoFailMessage(sb.id) }}</div>
                 </div>
@@ -1538,7 +1539,7 @@
       <div v-if="vidBoard.open && vidBoardSb" class="vboard-overlay" @click.self="vidBoard.open = false">
         <div class="vboard-card">
           <div class="vboard-head">
-            <div class="vboard-title">镜头 #{{ sbs.indexOf(vidBoardSb) + 1 }} · 视频故事板</div>
+            <div class="vboard-title">镜头 #{{ sbs.indexOf(vidBoardSb) + 1 }} · 视频故事板<span v-if="hasVid(vidBoardSb) && videoModelInfo(vidBoardSb)" class="model-tag" :class="{ warn: videoModelInfo(vidBoardSb).warn }" style="margin-left:8px">{{ videoModelInfo(vidBoardSb).text }}</span></div>
             <button class="btn btn-ghost btn-icon" @click="vidBoard.open = false" title="关闭">×</button>
           </div>
           <div class="vboard-hint">视频会从<b>首帧</b>运动到<b>尾帧</b>。两帧差别越大、提示词运镜越具体，画面越丰富；两帧太像会显得单调。</div>
@@ -2596,6 +2597,17 @@ function setCharGender(c, gender) {
 const vidBoard = reactive({ open: false, sbId: null })
 const vidBoardSb = computed(() => sbs.value.find(s => s.id === vidBoard.sbId) || null)
 function openVidBoard(sb) { vidBoard.sbId = sb.id; vidBoard.open = true }
+// 这条视频实际由哪个模型生成（来自后端 video_provider/video_model）；兜底(happyhorse/veo)标 warn
+function videoModelInfo(sb) {
+  const m = String(sb?.video_model || sb?.videoModel || '').toLowerCase()
+  const p = String(sb?.video_provider || sb?.videoProvider || '').toLowerCase()
+  if (!m && !p) return null
+  if (m.includes('seedance') || p === 'volcengine') return { text: 'Seedance', warn: false }
+  if (m.includes('happyhorse')) return { text: 'HappyHorse·兜底', warn: true }
+  if (m.includes('veo')) return { text: 'Veo·兜底', warn: true }
+  if (m.includes('sora')) return { text: 'Sora', warn: false }
+  return { text: sb.video_model || sb.video_provider, warn: false }
+}
 // 旁白配音音色（复用音色库）：角色独白存该角色 voiceStyle；纯旁白存「旁白音色」(本地持久)
 const voiceSelectOptions = computed(() => voiceProfiles.value.map(v => ({ label: `${v.label} · ${v.traits}`, value: v.id })))
 const narratorVoice = ref(typeof localStorage !== 'undefined' ? (localStorage.getItem('narratorVoice:' + epId.value) || '') : '')
@@ -3902,6 +3914,8 @@ onMounted(() => { refresh(); loadConfigs(); loadVoices() })
 .vboard-head { display: flex; align-items: center; }
 .vboard-head .btn { margin-left: auto; }
 .vboard-title { font-size: 16px; font-weight: 700; color: var(--text-0); }
+.model-tag { display: inline-block; font-size: 9px; font-weight: 700; padding: 1px 6px; border-radius: 5px; background: rgba(46,160,67,0.15); color: #2ea043; vertical-align: middle; }
+.model-tag.warn { background: rgba(210,140,30,0.18); color: #c8841e; }
 .vboard-hint { font-size: 12px; color: var(--text-2); line-height: 1.55; background: rgba(19,51,121,0.06); border-radius: 10px; padding: 8px 12px; }
 .vboard-frames { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .vboard-frame { display: flex; flex-direction: column; gap: 6px; }
