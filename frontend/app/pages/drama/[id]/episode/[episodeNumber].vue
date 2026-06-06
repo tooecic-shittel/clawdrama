@@ -1295,13 +1295,10 @@
                   </div>
                   <div v-if="videoFailMessage(sb.id)" class="prod-error">{{ videoFailMessage(sb.id) }}</div>
                 </div>
-                <div v-if="openVidPrompt === sb.id" class="vid-prompt-edit">
-                  <textarea :value="sb.video_prompt || sb.videoPrompt || ''" class="textarea" rows="4" placeholder="按 3 秒分段的视频提示词，改完直接点生成" @blur="updateField(sb, 'video_prompt', $event.target.value)" />
-                </div>
                 <div class="prod-actions">
-                  <button class="btn btn-sm btn-ghost" @click="openVidPrompt = openVidPrompt === sb.id ? null : sb.id" :title="openVidPrompt === sb.id ? '收起提示词' : '编辑视频提示词'">
-                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
-                    提示词
+                  <button class="btn btn-sm btn-primary" @click="openVidBoard(sb)" title="打开镜头故事板：首尾帧 + 视频提示词，改完直接生成">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+                    故事板
                   </button>
                   <button class="btn btn-sm" :disabled="isPendingVideo(sb.id) || isQueuedVideo(sb.id)" @click="genVid(sb)">
                     <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
@@ -1533,6 +1530,47 @@
       @close="closeCustomGen"
       @submit="handleCustomGenSubmit"
     />
+
+    <!-- 镜头视频故事板弹窗：首尾帧 + 视频提示词 + 生成 -->
+    <Teleport to="body">
+      <div v-if="vidBoard.open && vidBoardSb" class="vboard-overlay" @click.self="vidBoard.open = false">
+        <div class="vboard-card">
+          <div class="vboard-head">
+            <div class="vboard-title">镜头 #{{ sbs.indexOf(vidBoardSb) + 1 }} · 视频故事板</div>
+            <button class="btn btn-ghost btn-icon" @click="vidBoard.open = false" title="关闭">×</button>
+          </div>
+          <div class="vboard-hint">视频会从<b>首帧</b>运动到<b>尾帧</b>。两帧差别越大、提示词运镜越具体，画面越丰富；两帧太像会显得单调。</div>
+          <div class="vboard-frames">
+            <div class="vboard-frame">
+              <div class="vboard-frame-label">首帧</div>
+              <div class="vboard-frame-media">
+                <img v-if="getFirstFrame(vidBoardSb)" :src="'/' + getFirstFrame(vidBoardSb)" class="previewable-image" @click="openImageViewer('/' + getFirstFrame(vidBoardSb), '首帧')" />
+                <div v-else class="vboard-frame-empty">未生成</div>
+              </div>
+              <button class="btn btn-sm" style="width:100%" :disabled="isPendingShotFrame(vidBoardSb.id, 'first_frame')" @click="genShotFrame(vidBoardSb, 'first_frame')">{{ isPendingShotFrame(vidBoardSb.id, 'first_frame') ? '生成中…' : (getFirstFrame(vidBoardSb) ? '重抽首帧' : '生成首帧') }}</button>
+            </div>
+            <div class="vboard-frame">
+              <div class="vboard-frame-label">尾帧</div>
+              <div class="vboard-frame-media">
+                <img v-if="getLastFrame(vidBoardSb)" :src="'/' + getLastFrame(vidBoardSb)" class="previewable-image" @click="openImageViewer('/' + getLastFrame(vidBoardSb), '尾帧')" />
+                <div v-else class="vboard-frame-empty">未生成</div>
+              </div>
+              <button class="btn btn-sm" style="width:100%" :disabled="isPendingShotFrame(vidBoardSb.id, 'last_frame')" @click="genShotFrame(vidBoardSb, 'last_frame')">{{ isPendingShotFrame(vidBoardSb.id, 'last_frame') ? '生成中…' : (getLastFrame(vidBoardSb) ? '重抽尾帧' : '生成尾帧') }}</button>
+            </div>
+          </div>
+          <div class="vboard-field">
+            <span class="voice-block-label">视频提示词</span>
+            <textarea :value="vidBoardSb.video_prompt || vidBoardSb.videoPrompt || ''" class="textarea" rows="5" placeholder="按 3 秒分段；写清运镜与动作变化（如：0-3秒 缓慢推近…）" @blur="updateField(vidBoardSb, 'video_prompt', $event.target.value)" />
+          </div>
+          <div class="vboard-foot">
+            <button class="btn" @click="vidBoard.open = false">关闭</button>
+            <button class="btn btn-primary ml-auto" :disabled="isPendingVideo(vidBoardSb.id) || isQueuedVideo(vidBoardSb.id)" @click="genVid(vidBoardSb)">
+              {{ isPendingVideo(vidBoardSb.id) ? '生成中…' : (hasVid(vidBoardSb) ? '重新生成视频' : '生成视频') }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
   </div>
 </template>
 
@@ -2553,7 +2591,9 @@ function setCharGender(c, gender) {
   if (v) updateCharVoice(c.id, v.id)
 }
 // 视频卡：内联编辑视频提示词的展开态（同时只展开一个）
-const openVidPrompt = ref(null)
+const vidBoard = reactive({ open: false, sbId: null })
+const vidBoardSb = computed(() => sbs.value.find(s => s.id === vidBoard.sbId) || null)
+function openVidBoard(sb) { vidBoard.sbId = sb.id; vidBoard.open = true }
 // 旁白配音音色（复用音色库）：角色独白存该角色 voiceStyle；纯旁白存「旁白音色」(本地持久)
 const voiceSelectOptions = computed(() => voiceProfiles.value.map(v => ({ label: `${v.label} · ${v.traits}`, value: v.id })))
 const narratorVoice = ref(typeof localStorage !== 'undefined' ? (localStorage.getItem('narratorVoice:' + epId.value) || '') : '')
@@ -3855,7 +3895,20 @@ onMounted(() => { refresh(); loadConfigs(); loadVoices() })
 .gender-btn:hover { border-color: rgba(19,51,121,0.5); }
 .gender-btn.active { background: var(--accent-dark); color: #fff; border-color: var(--accent-dark); }
 .dub-voice { display: flex; align-items: center; gap: 8px; margin: 8px 0; }
-.vid-prompt-edit { padding: 8px 10px 0; }
+.vboard-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 20px; }
+.vboard-card { background: var(--bg-0, #fff); border-radius: 16px; width: min(720px, 96vw); max-height: 92vh; overflow-y: auto; padding: 18px; display: flex; flex-direction: column; gap: 14px; box-shadow: 0 20px 60px rgba(0,0,0,0.3); }
+.vboard-head { display: flex; align-items: center; }
+.vboard-head .btn { margin-left: auto; }
+.vboard-title { font-size: 16px; font-weight: 700; color: var(--text-0); }
+.vboard-hint { font-size: 12px; color: var(--text-2); line-height: 1.55; background: rgba(19,51,121,0.06); border-radius: 10px; padding: 8px 12px; }
+.vboard-frames { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.vboard-frame { display: flex; flex-direction: column; gap: 6px; }
+.vboard-frame-label { font-size: 11px; font-weight: 700; color: var(--text-3); }
+.vboard-frame-media { aspect-ratio: 16/9; border-radius: 10px; overflow: hidden; background: var(--bg-1, #eee); display: flex; align-items: center; justify-content: center; }
+.vboard-frame-media img { width: 100%; height: 100%; object-fit: cover; cursor: pointer; }
+.vboard-frame-empty { font-size: 12px; color: var(--text-3); }
+.vboard-field { display: flex; flex-direction: column; gap: 6px; }
+.vboard-foot { display: flex; align-items: center; gap: 8px; }
 .voice-profile-card { padding: 12px; border-radius: 16px; background: linear-gradient(135deg, rgba(19, 51, 121, 0.08), rgba(255,255,255,0.78)); border: 1px solid rgba(19, 51, 121, 0.1); display: flex; flex-direction: column; gap: 4px; }
 .voice-profile-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .voice-profile-name { font-size: 13px; font-weight: 700; color: var(--accent-text); }
