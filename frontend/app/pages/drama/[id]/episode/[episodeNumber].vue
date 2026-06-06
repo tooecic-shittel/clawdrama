@@ -900,6 +900,7 @@
                   <div v-else class="dim" style="font-size:12px">尚未生成语音文件</div>
                   <button class="btn btn-sm ml-auto" @click="genShotTTS(sb)">生成配音</button>
                 </div>
+                <div v-if="lastTts[sb.id]" class="dim" style="font-size:11px;margin-top:6px">实际用了：<b>{{ lastTts[sb.id].voice }}</b><span v-if="!lastTts[sb.id].override" style="color:var(--error)"> · ⚠️ 覆盖未生效（用了默认）</span></div>
               </div>
             </div>
           </div>
@@ -2650,6 +2651,8 @@ async function pickDubVoice(sb, voiceId) {
     await genShotTTS(sb)
   }
 }
+// 诊断：记录每条旁白「实际用了哪个音色 + 覆盖是否生效」，常驻显示在卡片上
+const lastTts = reactive({})
 // 合成时是否把旁白配音混入镜头（关掉则旁白镜头不混 TTS，避免旁白比镜头长被截断；旁白交给剪辑器）
 const includeNarration = ref(typeof localStorage !== 'undefined' ? localStorage.getItem('includeNarration:' + epId.value) !== '0' : true)
 function setIncludeNarration(v) { includeNarration.value = !!v; try { localStorage.setItem('includeNarration:' + epId.value, v ? '1' : '0') } catch {} }
@@ -3026,6 +3029,7 @@ async function genShotTTS(sb) {
     const used = r?.voice_id || r?.data?.voice_id || ''
     const label = getVoiceProfile(used)?.label || used || '默认'
     const ovr = (r?.override_received ?? r?.data?.override_received)
+    lastTts[sb.id] = { voice: label, override: !!ovr }
     toast.success(`配音已生成 · 实际音色：${label}${want && !ovr ? '（⚠️覆盖未生效）' : ''}`)
     await refresh()
   } catch (e) { toast.error(e.message) }
