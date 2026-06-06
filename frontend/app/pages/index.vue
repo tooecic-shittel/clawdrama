@@ -1905,10 +1905,10 @@ const features = [
 }
 .footer-brand { display: flex; align-items: center; gap: 14px; }
 .footer-logo {
-  width: 60px; height: 40px;
-  padding: 6px 8px;
+  width: 52px; height: 52px;
+  padding: 11px 9px;
   background: linear-gradient(160deg, #1c2436, #0a0e1a);
-  border-radius: 10px;
+  border-radius: 12px;
   border: 1px solid rgba(255,255,255,0.06);
   box-shadow: 0 4px 12px rgba(143,239,38,0.18);
   object-fit: contain;

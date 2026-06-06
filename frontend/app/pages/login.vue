@@ -189,11 +189,11 @@ async function submit() {
 }
 .auth-brand:hover { opacity: 0.85; }
 .auth-logo {
-  width: 50px; height: 34px;
+  width: 48px; height: 48px;
   object-fit: contain;
-  padding: 5px 7px;
+  padding: 9px 8px;
   background: linear-gradient(160deg, #1c2436 0%, #0a0e1a 100%);
-  border-radius: 10px;
+  border-radius: 12px;
   border: 1px solid rgba(255,255,255,0.06);
   box-shadow: 0 6px 16px rgba(143,239,38,0.22), inset 0 1px 0 rgba(255,255,255,0.08);
 }
