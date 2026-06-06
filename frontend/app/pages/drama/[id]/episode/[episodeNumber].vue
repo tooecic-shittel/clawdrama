@@ -896,7 +896,7 @@
                   <BaseSelect :model-value="shotVoice(sb)" :options="voiceSelectOptions" placeholder="选择音色" searchable style="flex:1;min-width:0" @update:model-value="pickDubVoice(sb, $event)" />
                 </div>
                 <div class="dub-foot">
-                  <audio v-if="hasTTS(sb)" :src="'/' + getTTSUrl(sb)" controls preload="none" class="dub-audio" />
+                  <audio v-if="hasTTS(sb)" :key="getTTSUrl(sb)" :src="'/' + getTTSUrl(sb)" controls preload="none" class="dub-audio" />
                   <div v-else class="dim" style="font-size:12px">尚未生成语音文件</div>
                   <button class="btn btn-sm ml-auto" @click="genShotTTS(sb)">生成配音</button>
                 </div>
