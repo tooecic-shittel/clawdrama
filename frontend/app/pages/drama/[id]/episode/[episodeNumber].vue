@@ -1562,7 +1562,10 @@
             </div>
           </div>
           <div class="vboard-field">
-            <span class="voice-block-label">视频提示词</span>
+            <div style="display:flex;align-items:center;gap:8px">
+              <span class="voice-block-label">视频提示词</span>
+              <button type="button" class="btn btn-sm btn-primary" :disabled="vidEnhancing" style="margin-left:auto" @click="enhanceVidPrompt(vidBoardSb)" title="用 storyboard_breaker skill 优化成电影级、带角色锚点">{{ vidEnhancing ? '✨ 优化中…' : '✨ AI 优化' }}</button>
+            </div>
             <textarea :value="vidBoardSb.video_prompt || vidBoardSb.videoPrompt || ''" class="textarea" rows="5" placeholder="按 3 秒分段；写清运镜与动作变化（如：0-3秒 缓慢推近…）" @blur="updateField(vidBoardSb, 'video_prompt', $event.target.value)" />
           </div>
           <div class="vboard-foot">
@@ -2607,6 +2610,18 @@ function videoModelInfo(sb) {
   if (m.includes('veo')) return { text: 'Veo·兜底', warn: true }
   if (m.includes('sora')) return { text: 'Sora', warn: false }
   return { text: sb.video_model || sb.video_provider, warn: false }
+}
+// 故事板弹窗：用 storyboard_breaker skill 把视频提示词 AI 优化成电影级
+const vidEnhancing = ref(false)
+async function enhanceVidPrompt(sb) {
+  if (!sb || vidEnhancing.value) return
+  vidEnhancing.value = true
+  try {
+    const r = await storyboardAPI.enhanceVideoPrompt(sb.id, sb.video_prompt || sb.videoPrompt || '')
+    if (r?.prompt) { updateField(sb, 'video_prompt', r.prompt); toast.success('视频提示词已优化') }
+    else toast.error('AI 未返回结果')
+  } catch (e) { toast.error(e.message || 'AI 优化失败') }
+  finally { vidEnhancing.value = false }
 }
 // 旁白配音音色（复用音色库）：角色独白存该角色 voiceStyle；纯旁白存「旁白音色」(本地持久)
 const voiceSelectOptions = computed(() => voiceProfiles.value.map(v => ({ label: `${v.label} · ${v.traits}`, value: v.id })))

@@ -1,5 +1,5 @@
 import { Hono } from 'hono'
-import { eq } from 'drizzle-orm'
+import { eq, inArray } from 'drizzle-orm'
 import { db, schema } from '../db/index.js'
 import { success, created, now, badRequest, notFound, paymentRequired } from '../utils/response.js'
 import { toSnakeCase } from '../utils/transform.js'
@@ -7,9 +7,39 @@ import { canAccess, episodeOwnerId, storyboardOwnerId } from '../middleware/owne
 import { generateTTS } from '../services/tts-generation.js'
 import { pickVoiceForCharacter } from '../services/voice-mapper.js'
 import { buildTTSInstruction } from '../services/tts-instruction.js'
+import { enhanceShotVideoPrompt } from '../services/prompt-rewrite.js'
 import { logTaskError, logTaskPayload, logTaskProgress, logTaskStart, logTaskSuccess } from '../utils/task-logger.js'
 
 const app = new Hono()
+
+// POST /storyboards/:id/enhance-video-prompt —— 用 storyboard_breaker skill 把视频提示词优化成电影级（带角色锚点）
+app.post('/:id/enhance-video-prompt', async (c) => {
+  const id = Number(c.req.param('id'))
+  const [sb] = db.select().from(schema.storyboards).where(eq(schema.storyboards.id, id)).all()
+  if (!sb) return badRequest(c, '镜头不存在')
+  if (!canAccess(c, episodeOwnerId(sb.episodeId))) return notFound(c, '镜头不存在')
+  const body = await c.req.json().catch(() => ({} as any))
+  const links = db.select().from(schema.storyboardCharacters).where(eq(schema.storyboardCharacters.storyboardId, id)).all()
+  const charIds = links.map(l => l.characterId)
+  const chars = charIds.length ? db.select().from(schema.characters).where(inArray(schema.characters.id, charIds)).all() : []
+  const scene = sb.sceneId ? (db.select().from(schema.scenes).where(eq(schema.scenes.id, sb.sceneId)).all()[0] || null) : null
+  const [ep] = db.select().from(schema.episodes).where(eq(schema.episodes.id, sb.episodeId)).all()
+  const drama = ep ? (db.select().from(schema.dramas).where(eq(schema.dramas.id, ep.dramaId)).all()[0] || null) : null
+  try {
+    const prompt = await enhanceShotVideoPrompt({
+      description: sb.description, action: sb.action, dialogue: sb.dialogue,
+      shotType: sb.shotType, angle: sb.angle, movement: sb.movement, lighting: sb.lighting,
+      location: sb.location || scene?.location || null, time: sb.time || null, atmosphere: sb.atmosphere,
+      characters: chars.map(ch => ({ name: ch.name, appearance: ch.appearance })),
+      dramaStyle: drama?.style || null,
+      currentPrompt: (typeof body?.prompt === 'string' && body.prompt.trim()) ? body.prompt : sb.videoPrompt,
+    })
+    if (!prompt) return badRequest(c, 'AI 未返回优化结果')
+    return success(c, { prompt })
+  } catch (err: any) {
+    return badRequest(c, err.message)
+  }
+})
 
 const IGNORE_TTS_SPEAKERS = /^(环境音|环境声|音效|效果音|sfx|sound ?effect|bgm|背景音|背景音乐|ambient)$/i
 const IGNORE_TTS_TEXT = /^(无|无对白|无台词|无旁白|无需配音|无需对白|none|null|n\/a|na|环境音|环境声|音效|效果音|纯音效|纯环境音|只有环境音|仅环境音|背景音|背景音乐|bgm|sfx|ambient)$/i
