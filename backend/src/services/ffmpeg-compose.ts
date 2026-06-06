@@ -123,10 +123,11 @@ function videoHasAudioStream(filePath: string): Promise<boolean> {
 /**
  * 合成单个镜头：视频 + TTS对白音频 + 烧录字幕
  */
-export async function composeStoryboard(storyboardId: number, userId?: number): Promise<string> {
+export async function composeStoryboard(storyboardId: number, userId?: number, opts?: { includeNarration?: boolean }): Promise<string> {
   const [sb] = db.select().from(schema.storyboards).where(eq(schema.storyboards.id, storyboardId)).all()
   if (!sb) throw new Error(`Storyboard ${storyboardId} not found`)
   if (!sb.videoUrl) throw new Error(`Storyboard ${storyboardId} has no video`)
+  const includeNarration = opts?.includeNarration !== false
 
   // 保留原生音轨：只要视频自带原生音轨、且这条不是「旁白配音」镜头，就直接透传（角色对白的原生人声、
   // 以及无对白镜头的环境音/音效，统统保留），绝不贴 TTS/垫静音去盖掉它。
@@ -159,7 +160,8 @@ export async function composeStoryboard(storyboardId: number, userId?: number): 
   // 视频用 Seedance/happyhorse 生成（generate_audio=false，视频是静音的），不再依赖视频自带人声。
   // 因此所有真实台词（角色 + 旁白）都要生成 TTS 配音；只跳过「环境音/无对白」这类 ignorable 行。
   // （历史背景：早期用 Veo 时只给旁白配 TTS，靠 Veo 出人物口型音，现已不适用。）
-  const shouldUseTTS = !parsedDialogue.ignorable
+  // 「加入旁白」开关：关掉时旁白镜头跳过 TTS（对白镜头不受影响），避免旁白比镜头长被截断，旁白交给剪辑器。
+  const shouldUseTTS = !parsedDialogue.ignorable && (includeNarration || !needsTtsVoiceover(sb.dialogue))
 
   // 1. 生成 TTS 音频（所有台词都配音）
   try {

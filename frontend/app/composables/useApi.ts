@@ -185,8 +185,8 @@ export const videoAPI = {
   get: (id: number) => api.get(`/videos/${id}`),
 }
 export const composeAPI = {
-  shot: (id: number) => api.post(`/compose/storyboards/${id}/compose`),
-  all: (epId: number) => api.post(`/compose/episodes/${epId}/compose-all`),
+  shot: (id: number, includeNarration = true) => api.post(`/compose/storyboards/${id}/compose`, { include_narration: includeNarration }),
+  all: (epId: number, includeNarration = true) => api.post(`/compose/episodes/${epId}/compose-all`, { include_narration: includeNarration }),
   status: (epId: number) => api.get(`/compose/episodes/${epId}/compose-status`),
 }
 export const mergeAPI = {

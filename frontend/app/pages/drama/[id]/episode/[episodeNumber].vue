@@ -1317,6 +1317,10 @@
             <div class="prod-section-bar">
               <span class="dim" style="font-size:12px">{{ sbs.length }} 个镜头</span>
               <span class="tag mono">{{ composedCount }}/{{ sbs.length }} 已合成</span>
+              <label class="dim" style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;margin-left:10px" title="关掉后旁白镜头不混入配音（避免旁白比镜头长被截断），旁白交给剪辑器">
+                <input type="checkbox" :checked="includeNarration" @change="setIncludeNarration($event.target.checked)" />
+                合成加入旁白配音
+              </label>
               <div class="ml-auto flex gap-1">
                 <button class="btn btn-sm" @click="batchCompose">
                   <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
@@ -2569,6 +2573,9 @@ function setShotVoice(sb, voiceId) {
   narratorVoice.value = voiceId
   try { localStorage.setItem('narratorVoice:' + epId.value, voiceId) } catch {}
 }
+// 合成时是否把旁白配音混入镜头（关掉则旁白镜头不混 TTS，避免旁白比镜头长被截断；旁白交给剪辑器）
+const includeNarration = ref(typeof localStorage !== 'undefined' ? localStorage.getItem('includeNarration:' + epId.value) !== '0' : true)
+function setIncludeNarration(v) { includeNarration.value = !!v; try { localStorage.setItem('includeNarration:' + epId.value, v ? '1' : '0') } catch {} }
 const totalDuration = computed(() => sbs.value.reduce((s, sb) => s + (sb.duration || 10), 0))
 
 const selectedSb = ref(null)
@@ -3150,7 +3157,7 @@ async function doCompose(sb) {
   try {
     delete failedComposeMessages.value[sb.id]
     if (!isPendingCompose(sb.id)) pendingComposeIds.value.push(sb.id)
-    await composeAPI.shot(sb.id)
+    await composeAPI.shot(sb.id, includeNarration.value)
     toast.success('合成完成')
     pendingComposeIds.value = pendingComposeIds.value.filter(item => item !== sb.id)
     refresh()
@@ -3178,7 +3185,7 @@ function batchVideos() {
   pumpVideoQueue()
 }
 async function batchCompose() {
-  await composeAPI.all(epId.value)
+  await composeAPI.all(epId.value, includeNarration.value)
   pendingComposeIds.value = [...new Set(sbs.value.filter(sb => !!sb.video_url || !!sb.videoUrl).map(sb => sb.id))]
   toast.success('批量合成已开始')
   pollComposeStatus()

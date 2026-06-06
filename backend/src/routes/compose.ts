@@ -15,7 +15,8 @@ app.post('/storyboards/:id/compose', async (c) => {
   if (!canAccess(c, storyboardOwnerId(id))) return notFound(c, '镜头不存在')
   try {
     logTaskStart('ComposeAPI', 'single-compose', { storyboardId: id })
-    const composedUrl = await composeStoryboard(id, (c.get('user') as any)?.id)
+    const body = await c.req.json().catch(() => ({} as any))
+    const composedUrl = await composeStoryboard(id, (c.get('user') as any)?.id, { includeNarration: body?.include_narration !== false })
     logTaskSuccess('ComposeAPI', 'single-compose', { storyboardId: id, output: composedUrl })
     return success(c, { id, composed_video_url: composedUrl })
   } catch (err: any) {
@@ -45,10 +46,11 @@ app.post('/episodes/:id/compose-all', async (c) => {
     .run()
 
   const userId = (c.get('user') as any)?.id
+  const includeNarration = (await c.req.json().catch(() => ({} as any)))?.include_narration !== false
   ;(async () => {
     for (const sb of withVideo) {
       try {
-        await composeStoryboard(sb.id, userId)
+        await composeStoryboard(sb.id, userId, { includeNarration })
       } catch (err: any) {
         logTaskError('ComposeAPI', 'batch-item', { storyboardId: sb.id, episodeId, error: err.message })
       }
