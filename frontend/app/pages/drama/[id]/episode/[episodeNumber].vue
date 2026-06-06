@@ -891,6 +891,10 @@
                   <span class="dim">{{ sb.duration || 10 }}s</span>
                   <span class="dim">{{ sb.location || '未设地点' }}</span>
                 </div>
+                <div class="dub-voice">
+                  <span class="dim" style="font-size:11px;white-space:nowrap">音色 · {{ narrationCharacter(sb)?.name || '旁白' }}</span>
+                  <BaseSelect :model-value="shotVoice(sb)" :options="voiceSelectOptions" placeholder="选择音色" searchable style="flex:1;min-width:0" @update:model-value="setShotVoice(sb, $event)" />
+                </div>
                 <div class="dub-foot">
                   <audio v-if="hasTTS(sb)" :src="'/' + getTTSUrl(sb)" controls preload="none" class="dub-audio" />
                   <div v-else class="dim" style="font-size:12px">尚未生成语音文件</div>
@@ -1291,7 +1295,14 @@
                   </div>
                   <div v-if="videoFailMessage(sb.id)" class="prod-error">{{ videoFailMessage(sb.id) }}</div>
                 </div>
+                <div v-if="openVidPrompt === sb.id" class="vid-prompt-edit">
+                  <textarea :value="sb.video_prompt || sb.videoPrompt || ''" class="textarea" rows="4" placeholder="按 3 秒分段的视频提示词，改完直接点生成" @blur="updateField(sb, 'video_prompt', $event.target.value)" />
+                </div>
                 <div class="prod-actions">
+                  <button class="btn btn-sm btn-ghost" @click="openVidPrompt = openVidPrompt === sb.id ? null : sb.id" :title="openVidPrompt === sb.id ? '收起提示词' : '编辑视频提示词'">
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+                    提示词
+                  </button>
                   <button class="btn btn-sm" :disabled="isPendingVideo(sb.id) || isQueuedVideo(sb.id)" @click="genVid(sb)">
                     <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
                     {{ isQueuedVideo(sb.id) ? '排队中' : (isPendingVideo(sb.id) ? '生成中' : (hasVid(sb) ? '重新生成视频' : '生成视频')) }}
@@ -2537,6 +2548,27 @@ function setCharGender(c, gender) {
   const v = voiceProfiles.value.find(p => (p.gender || '').includes(gender))
   if (v) updateCharVoice(c.id, v.id)
 }
+// 视频卡：内联编辑视频提示词的展开态（同时只展开一个）
+const openVidPrompt = ref(null)
+// 旁白配音音色（复用音色库）：角色独白存该角色 voiceStyle；纯旁白存「旁白音色」(本地持久)
+const voiceSelectOptions = computed(() => voiceProfiles.value.map(v => ({ label: `${v.label} · ${v.traits}`, value: v.id })))
+const narratorVoice = ref(typeof localStorage !== 'undefined' ? (localStorage.getItem('narratorVoice:' + epId.value) || '') : '')
+function narrationCharacter(sb) {
+  const speaker = getDialogueSpeakerRaw(sb)
+  if (!speaker) return null
+  return chars.value.find(c => c.name === speaker) || null
+}
+function shotVoice(sb) {
+  const ch = narrationCharacter(sb)
+  if (ch) return ch.voice_style || ch.voiceStyle || ''
+  return narratorVoice.value || ''
+}
+function setShotVoice(sb, voiceId) {
+  const ch = narrationCharacter(sb)
+  if (ch) { updateCharVoice(ch.id, voiceId); return }
+  narratorVoice.value = voiceId
+  try { localStorage.setItem('narratorVoice:' + epId.value, voiceId) } catch {}
+}
 const totalDuration = computed(() => sbs.value.reduce((s, sb) => s + (sb.duration || 10), 0))
 
 const selectedSb = ref(null)
@@ -2905,7 +2937,7 @@ function getDialogueSpeaker(sb) {
 }
 async function genShotTTS(sb) {
   try {
-    await storyboardAPI.generateTTS(sb.id)
+    await storyboardAPI.generateTTS(sb.id, shotVoice(sb))
     toast.success(`镜头 #${sb.storyboard_number || sb.storyboardNumber || sb.id} 配音已生成`)
     await refresh()
   } catch (e) { toast.error(e.message) }
@@ -2916,7 +2948,7 @@ async function batchShotTTS() {
     toast.info(ttsEligibleCount.value ? '所有镜头配音已生成' : '当前没有可生成的对白或旁白')
     return
   }
-  const results = await Promise.allSettled(pending.map(sb => storyboardAPI.generateTTS(sb.id)))
+  const results = await Promise.allSettled(pending.map(sb => storyboardAPI.generateTTS(sb.id, shotVoice(sb))))
   const okCount = results.filter(r => r.status === 'fulfilled').length
   const failCount = results.length - okCount
   if (okCount) toast.success(`已生成 ${okCount} 条镜头旁白配音`)
@@ -3815,6 +3847,8 @@ onMounted(() => { refresh(); loadConfigs(); loadVoices() })
 .gender-btn { flex: 1; height: 38px; border-radius: 10px; border: 1px solid rgba(19,51,121,0.18); background: rgba(255,255,255,0.7); color: var(--text-1); font-size: 14px; font-weight: 700; cursor: pointer; transition: all .15s ease; }
 .gender-btn:hover { border-color: rgba(19,51,121,0.5); }
 .gender-btn.active { background: var(--accent-dark); color: #fff; border-color: var(--accent-dark); }
+.dub-voice { display: flex; align-items: center; gap: 8px; margin: 8px 0; }
+.vid-prompt-edit { padding: 8px 10px 0; }
 .voice-profile-card { padding: 12px; border-radius: 16px; background: linear-gradient(135deg, rgba(19, 51, 121, 0.08), rgba(255,255,255,0.78)); border: 1px solid rgba(19, 51, 121, 0.1); display: flex; flex-direction: column; gap: 4px; }
 .voice-profile-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .voice-profile-name { font-size: 13px; font-weight: 700; color: var(--accent-text); }

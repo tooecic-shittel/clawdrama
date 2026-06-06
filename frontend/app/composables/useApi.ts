@@ -142,7 +142,7 @@ export const episodeAPI = {
 export const storyboardAPI = {
   create: (data: any) => api.post('/storyboards', data),
   update: (id: number, data: any) => api.put(`/storyboards/${id}`, data),
-  generateTTS: (id: number) => api.post(`/storyboards/${id}/generate-tts`),
+  generateTTS: (id: number, voiceId?: string) => api.post(`/storyboards/${id}/generate-tts`, voiceId ? { voice_id: voiceId } : {}),
   del: (id: number) => api.del(`/storyboards/${id}`),
 }
 

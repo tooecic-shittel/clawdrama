@@ -178,7 +178,9 @@ app.post('/:id/generate-tts', async (c) => {
 
   const speaker = parsedDialogue.speaker
   const [epForVoice] = db.select().from(schema.episodes).where(eq(schema.episodes.id, sb.episodeId)).all()
-  const voiceId = pickVoiceForCharacter({
+  const ttsBody = await c.req.json().catch(() => ({} as any))
+  const overrideVoice = typeof ttsBody?.voice_id === 'string' && ttsBody.voice_id.trim() ? ttsBody.voice_id.trim() : ''
+  const voiceId = overrideVoice || pickVoiceForCharacter({
     characterName: speaker,
     dramaId: epForVoice?.dramaId,
     fallback: 'sage',
