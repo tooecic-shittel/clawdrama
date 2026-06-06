@@ -238,7 +238,7 @@ app.post('/:id/generate-tts', async (c) => {
       path: audioPath,
       textLength: pureDialogue.length,
     })
-    return success(c, { tts_audio_url: audioPath, voice_id: voiceId, text: pureDialogue })
+    return success(c, { tts_audio_url: audioPath, voice_id: voiceId, text: pureDialogue, override_received: !!overrideVoice })
   } catch (err: any) {
     logTaskError('StoryboardAPI', 'generate-tts', { storyboardId: id, voiceId, error: err.message })
     if (err?.status === 402) return paymentRequired(c, err.message)

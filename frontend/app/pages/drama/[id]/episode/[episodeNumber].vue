@@ -3021,8 +3021,12 @@ function getDialogueSpeaker(sb) {
 }
 async function genShotTTS(sb) {
   try {
-    await storyboardAPI.generateTTS(sb.id, shotVoice(sb))
-    toast.success(`镜头 #${sb.storyboard_number || sb.storyboardNumber || sb.id} 配音已生成`)
+    const want = shotVoice(sb)
+    const r = await storyboardAPI.generateTTS(sb.id, want)
+    const used = r?.voice_id || r?.data?.voice_id || ''
+    const label = getVoiceProfile(used)?.label || used || '默认'
+    const ovr = (r?.override_received ?? r?.data?.override_received)
+    toast.success(`配音已生成 · 实际音色：${label}${want && !ovr ? '（⚠️覆盖未生效）' : ''}`)
     await refresh()
   } catch (e) { toast.error(e.message) }
 }
