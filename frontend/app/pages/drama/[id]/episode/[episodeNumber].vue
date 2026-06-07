@@ -43,6 +43,7 @@
           class="pipe-section"
         >
           <div class="pipe-section-label">{{ section.label }}</div>
+          <div v-if="section.desc" class="pipe-section-desc">{{ section.desc }}</div>
           <button
             v-for="item in section.items"
             :key="item.key"
@@ -727,6 +728,7 @@
               >
                 <component :is="t.icon" :size="11" />
                 {{ t.label }}
+                <span v-if="t.beta" class="prod-tab-beta">测试</span>
                 <span v-if="t.badge" class="prod-tab-badge">{{ t.badge }}</span>
               </button>
             </div>
@@ -1266,6 +1268,10 @@
                   <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
                   批量视频
                 </button>
+                <button v-if="shotVidCount" class="btn btn-sm btn-download" :disabled="downloadingAll" @click="downloadAllVideos" title="把所有已生成的镜头原片打包成 zip 下载（最适合拿去剪映精剪）">
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                  {{ downloadingAll ? '打包中…' : '一键下载全部' }}
+                </button>
                 <span v-if="pendingVideoIds.length || videoQueue.length" class="dim" style="font-size:11px;margin-left:6px" :title="videoEngine==='seedance' ? `Seedance 同时最多 ${videoConcurrency} 条，其余自动排队` : `每次最多并发 ${videoConcurrency} 条`">
                   生成中 {{ pendingVideoIds.length }}<template v-if="videoQueue.length"> · 排队 {{ videoQueue.length }}</template>
                 </span>
@@ -1314,8 +1320,16 @@
                     <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
                     {{ isQueuedVideo(sb.id) ? '排队中' : (isPendingVideo(sb.id) ? '生成中' : (hasVid(sb) ? '重新生成视频' : '生成视频')) }}
                   </button>
+                  <a v-if="hasVid(sb)" class="btn btn-sm btn-download" :href="'/' + getVideoUrl(sb)" :download="videoDownloadName(sb, i)" title="下载这条镜头原片（无水印，适合剪映精剪）">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                    下载
+                  </a>
                 </div>
               </div>
+            </div>
+            <div class="beta-note">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+              <span><b>专业短剧</b>建议下载视频后上传<b>剪映 / CapCut</b> 精剪；下面的「旁白配音 · 视频合成 · 一键剪辑」为<b>测试功能</b>，音画同步仍在优化。</span>
             </div>
           </div>
 
@@ -1432,11 +1446,11 @@
                 <div class="empty-visual">
                   <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
                 </div>
-                <div class="empty-title">拼接全集视频</div>
-                <div class="empty-desc">将 {{ composedCount }} 个已合成镜头拼接为完整视频</div>
+                <div class="empty-title">一键剪辑成片</div>
+                <div class="empty-desc">将 {{ composedCount }} 个已合成镜头一键拼成整片（测试功能，音画同步仍在优化；专业短剧建议用剪映精剪）</div>
                 <button class="btn btn-primary" :disabled="composedCount === 0" @click="doMerge" style="margin-top:12px">
                   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
-                  开始拼接
+                  一键剪辑成片
                 </button>
               </div>
             </template>
@@ -2343,8 +2357,8 @@ const prodTabDefs = computed(() => [
   { id: 'scenes', label: '场景图片', icon: MapPin, badge: sceneImgCount.value ? `${sceneImgCount.value}/${scenes.value.length}` : '' },
   { id: 'shots', label: '镜头图片', icon: ImageIcon, badge: shotImgCount.value ? `${shotImgCount.value}/${sbs.value.length}` : '' },
   { id: 'videos', label: '视频生成', icon: Video, badge: shotVidCount.value ? `${shotVidCount.value}/${sbs.value.length}` : '' },
-  { id: 'dubbing', label: '旁白配音', icon: Mic2, badge: '' },
-  { id: 'compose', label: '视频合成', icon: Layers, badge: composedCount.value ? `${composedCount.value}/${sbs.value.length}` : '' },
+  { id: 'dubbing', label: '旁白配音', icon: Mic2, badge: '', beta: true },
+  { id: 'compose', label: '视频合成', icon: Layers, badge: composedCount.value ? `${composedCount.value}/${sbs.value.length}` : '', beta: true },
 ])
 
 const mainStageDefs = [
@@ -2374,15 +2388,16 @@ const sidebarSections = computed(() => ([
       { key: 'prod:scenes', label: '场景图片', desc: '', icon: MapPin, done: prodStepDone('scenes') },
       { key: 'prod:shots', label: '镜头图片', desc: '', icon: ImageIcon, done: prodStepDone('shots') },
       { key: 'prod:videos', label: '视频生成', desc: '', icon: Video, done: prodStepDone('videos') },
-      { key: 'prod:dubbing', label: '旁白配音', desc: '', icon: Mic2, done: prodStepDone('dubbing') },
-      { key: 'prod:compose', label: '视频合成', desc: '', icon: Layers, done: prodStepDone('compose') },
     ],
   },
   {
-    id: 'export',
-    label: '导出',
+    id: 'beta',
+    label: '测试功能',
+    desc: '专业短剧建议下载视频上传剪映剪辑；以下为测试功能，音画同步仍在优化',
     items: [
-      { key: 'export:merge', label: '拼接导出', desc: '', icon: Download, done: !!mergeUrl.value },
+      { key: 'prod:dubbing', label: '旁白配音', desc: '', icon: Mic2, done: prodStepDone('dubbing') },
+      { key: 'prod:compose', label: '视频合成', desc: '', icon: Layers, done: prodStepDone('compose') },
+      { key: 'export:merge', label: '一键剪辑', desc: '', icon: Download, done: !!mergeUrl.value },
     ],
   },
 ]))
@@ -2473,7 +2488,7 @@ const activeSubSteps = computed(() => {
     ]
   }
   return [
-    { key: 'export:merge', label: '拼接导出', done: !!mergeUrl.value },
+    { key: 'export:merge', label: '一键剪辑', done: !!mergeUrl.value },
   ]
 })
 
@@ -3329,6 +3344,41 @@ async function exportPackage() {
 }
 function openOpenreel() { window.open('https://openreel.video', '_blank') }
 
+function videoDownloadName(sb, i) {
+  return `镜头${String(i + 1).padStart(2, '0')}.mp4`
+}
+const downloadingAll = ref(false)
+// 一键下载全部：把所有「已生成的镜头原片」(video_url，非合成片) 打 zip 下载。
+// 原片音画无问题、最适合拿去剪映精剪（合成/拼接片才有音画不同步问题）。
+async function downloadAllVideos() {
+  if (downloadingAll.value) return
+  downloadingAll.value = true
+  try {
+    const zip = new JSZip()
+    let n = 0
+    for (let i = 0; i < sbs.value.length; i++) {
+      const rel = sbs.value[i].video_url || sbs.value[i].videoUrl
+      if (!rel) continue
+      const url = String(rel).startsWith('http') ? rel : '/' + String(rel).replace(/^\/+/, '')
+      const blob = await (await fetch(url)).blob()
+      zip.file(`镜头${String(i + 1).padStart(2, '0')}.mp4`, blob)
+      n++
+    }
+    if (!n) { toast.error('还没有已生成的镜头视频'); return }
+    const content = await zip.generateAsync({ type: 'blob' })
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(content)
+    a.download = `episode-${epId.value}-镜头视频.zip`
+    document.body.appendChild(a); a.click(); a.remove()
+    URL.revokeObjectURL(a.href)
+    toast.success(`已打包下载 ${n} 个镜头视频`)
+  } catch (e) {
+    toast.error('下载失败：' + (e?.message || e))
+  } finally {
+    downloadingAll.value = false
+  }
+}
+
 async function pollComposeStatus() {
   for (let i = 0; i < 120; i++) {
     await sleep(3000)
@@ -3961,6 +4011,13 @@ onMounted(() => { refresh(); loadConfigs(); loadVoices() })
 .engine-tag { font-size: 9px; font-weight: 700; padding: 1px 5px; border-radius: 4px; background: rgba(50,74,114,0.1); opacity: .85; }
 .engine-tag.good { background: rgba(210,140,30,0.18); color: #c8841e; }
 .engine-opt.active .engine-tag { background: rgba(10,14,26,0.14); color: #0a0e1a; }
+.btn-download { background: #324a72; color: #fff; border-color: #324a72; }
+.btn-download:hover:not(:disabled) { background: #26395a; border-color: #26395a; }
+.prod-tab-beta { font-size: 9px; font-weight: 700; padding: 0 4px; border-radius: 4px; background: rgba(210,140,30,0.18); color: #c8841e; margin-left: 3px; }
+.pipe-section-desc { font-size: 10.5px; line-height: 1.5; color: #9aa7bd; padding: 1px 8px 7px; }
+.beta-note { display: flex; align-items: flex-start; gap: 8px; margin-top: 14px; padding: 10px 14px; background: rgba(210,140,30,0.08); border: 1px solid rgba(210,140,30,0.22); border-radius: 10px; color: #8a6a1e; font-size: 12.5px; line-height: 1.6; }
+.beta-note svg { flex-shrink: 0; margin-top: 2px; color: #c8841e; }
+.beta-note b { color: #6b4e12; font-weight: 700; }
 .vboard-hint { font-size: 12px; color: var(--text-2); line-height: 1.55; background: rgba(19,51,121,0.06); border-radius: 10px; padding: 8px 12px; }
 .vboard-frames { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .vboard-frame { display: flex; flex-direction: column; gap: 6px; }
