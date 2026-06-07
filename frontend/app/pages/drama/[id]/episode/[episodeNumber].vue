@@ -1247,23 +1247,29 @@
               <span class="dim" style="font-size:12px">{{ sbs.length }} 个镜头</span>
               <span class="tag mono">{{ shotVidCount }}/{{ sbs.length }} 已生成</span>
               <div class="ml-auto flex gap-1" style="align-items:center">
-                <label class="dim" style="font-size:11px;margin-right:4px">视频模型</label>
-                <select v-model="videoModelOverride" class="input" style="height:28px;font-size:12px;padding:0 8px;min-width:200px" :title="videoModelOverride ? `本次生成使用：${videoModelOverride}` : '使用配置中的默认模型'">
-                  <option v-for="opt in VIDEO_MODEL_PRESETS" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
-                </select>
+                <label class="dim" style="font-size:11px;margin-right:4px">引擎</label>
+                <div class="engine-seg">
+                  <button type="button" :class="['engine-opt', videoEngine==='seedance' && 'active']" @click="videoEngine='seedance'" title="火山 Seedance 2.0：画质更好、无水印；较贵；同时最多 4 条，其余自动排队">
+                    Seedance 2.0<span class="engine-tag good">贵·效果好</span>
+                  </button>
+                  <button type="button" :class="['engine-opt', videoEngine==='happyhorse' && 'active']" @click="videoEngine='happyhorse'" title="云雾 HappyHorse：更便宜更快；带水印">
+                    HappyHorse<span class="engine-tag">省·带水印</span>
+                  </button>
+                </div>
                 <label class="dim" style="font-size:11px;margin:0 4px 0 8px">画质</label>
                 <select v-model="videoResolution" class="input" style="height:28px;font-size:12px;padding:0 8px" title="720P 更快更省，1080P 更清晰">
                   <option value="720P">720P（快）</option>
                   <option value="1080P">1080P（清晰）</option>
                 </select>
-                <span class="dim" style="font-size:11px;margin:0 4px" :title="`视频按时长×画质扣费：${videoResolution} ≈${videoRatePerSec} 积分/秒。例 5 秒 ≈${videoRatePerSec * 5} 积分`">≈{{ videoRatePerSec }} 积分/秒</span>
+                <span class="dim" style="font-size:11px;margin:0 4px" :title="`${videoEngine==='seedance'?'Seedance':'HappyHorse'} · ${videoResolution} ≈${videoRatePerSec} 积分/秒。例 5 秒 ≈${videoRatePerSec * 5} 积分`">≈{{ videoRatePerSec }} 积分/秒</span>
                 <button class="btn btn-sm" @click="batchVideos">
                   <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
                   批量视频
                 </button>
-                <span v-if="pendingVideoIds.length || videoQueue.length" class="dim" style="font-size:11px;margin-left:6px" :title="`每次最多并发 ${VIDEO_CONCURRENCY} 条，自动排队`">
+                <span v-if="pendingVideoIds.length || videoQueue.length" class="dim" style="font-size:11px;margin-left:6px" :title="videoEngine==='seedance' ? `Seedance 同时最多 ${videoConcurrency} 条，其余自动排队` : `每次最多并发 ${videoConcurrency} 条`">
                   生成中 {{ pendingVideoIds.length }}<template v-if="videoQueue.length"> · 排队 {{ videoQueue.length }}</template>
                 </span>
+                <span v-else-if="videoEngine==='seedance'" class="dim" style="font-size:11px;margin-left:6px" title="火山 Seedance 并发上限，超出自动排队">同时最多 {{ videoConcurrency }} 条</span>
               </div>
             </div>
             <div class="prod-grid">
@@ -1670,17 +1676,11 @@ const TTS_MODEL_PRESETS = [
 // Video model quick-switch — overrides the active config's model per-generation.
 // 视频主力 = 火山 Seedance 2.0（官方）。模型与 provider 强绑定，下拉只列与主力 provider 兼容的，
 // 选默认即用配置中的 Seedance；失败时后端自动兜底到云雾 happyhorse（无需用户手动选）。
-const VIDEO_MODEL_PRESETS = [
-  { value: '', label: '火山 Seedance 2.0（默认·官方）' },
-]
-const videoModelOverride = ref(typeof window !== 'undefined' ? (localStorage.getItem('claw_video_model') || '') : '')
+// 视频引擎二选一：seedance（火山·贵·效果好·无水印·并发限 4）/ happyhorse（云雾·省·带水印）。
+const videoEngine = ref(typeof window !== 'undefined' ? (localStorage.getItem('claw_video_engine') || 'seedance') : 'seedance')
+watch(videoEngine, (v) => { if (typeof window !== 'undefined') localStorage.setItem('claw_video_engine', v) })
 const videoResolution = ref(typeof window !== 'undefined' ? (localStorage.getItem('claw_video_res') || '720P') : '720P')
 watch(videoResolution, (v) => { if (typeof window !== 'undefined') localStorage.setItem('claw_video_res', v) })
-watch(videoModelOverride, (v) => {
-  if (typeof window === 'undefined') return
-  if (v) localStorage.setItem('claw_video_model', v)
-  else localStorage.removeItem('claw_video_model')
-})
 
 const frameModeOptions = [{ label: '仅首帧', value: 'first' }, { label: '首尾帧', value: 'first_last' }]
 const gridLayoutOptions = [
@@ -1697,8 +1697,9 @@ const pendingCharViewKeys = ref([])  // "characterId:view" pairs (view = 'side'|
 const pendingSceneImageIds = ref([])
 const pendingShotFrameKeys = ref([])
 const pendingVideoIds = ref([])
-// 批量视频：限并发队列，避免一次性全发出去把上游（云雾）挤爆报错
-const VIDEO_CONCURRENCY = 3
+// 批量视频限并发：Seedance 并发上限约 4（与后端并发闸一致），happyhorse 吞吐更高可多发。
+// 后端并发闸是跨标签页/用户的最终防线；前端这层是单标签页的节流 + 排队展示。
+const videoConcurrency = computed(() => videoEngine.value === 'happyhorse' ? 6 : 4)
 const videoQueue = ref([]) // 等待中的 storyboard id（排队中，尚未发起）
 const pendingComposeIds = ref([])
 const failedVideoMessages = ref({})
@@ -1729,11 +1730,13 @@ function handleImageViewerKeydown(event) {
   if (event.key === 'Escape' && imageViewer.value.open) closeImageViewer()
 }
 
-const pricing = ref({ image: 1000, tts: 150, videoPerSec: { '720p': 3000, '1080p': 6000 } })
-// 视频按画质的每秒积分（动态计费）
+const pricing = ref({ image: 1000, tts: 150, videoPerSec: { seedance: { '720p': 3000, '1080p': 6000 }, happyhorse: { '720p': 2400, '1080p': 4800 } } })
+// 视频每秒积分（按引擎×画质动态计费）。兼容后端新结构(按引擎嵌套)与旧结构(扁平)。
 const videoRatePerSec = computed(() => {
   const k = String(videoResolution.value).toLowerCase().includes('1080') ? '1080p' : '720p'
-  return pricing.value.videoPerSec?.[k] ?? 3000
+  const vps = pricing.value.videoPerSec || {}
+  const table = vps[videoEngine.value] || vps
+  return table[k] ?? 3000
 })
 onMounted(() => {
   window.addEventListener('keydown', handleImageViewerKeydown)
@@ -3166,8 +3169,8 @@ async function genVid(sb) {
     duration: Number(sb.duration || 5),
     resolution: videoResolution.value,
   }
-  // Per-generation model override from the workbench dropdown (empty → use config default)
-  if (videoModelOverride.value) params.model = videoModelOverride.value
+  // 用户所选引擎（seedance / happyhorse）——后端据此选主配置 + 计价。
+  params.engine = videoEngine.value
   const first = getFirstFrame(sb)
   const last = getLastFrame(sb)
   const refs = getRefs(sb)
@@ -3190,9 +3193,9 @@ async function genVid(sb) {
   }
 }
 
-// 按并发上限从队列里取镜头发起生成；一条完成就补一条，始终最多 VIDEO_CONCURRENCY 条在跑
+// 按并发上限从队列里取镜头发起生成；一条完成就补一条，始终最多 videoConcurrency 条在跑
 function pumpVideoQueue() {
-  while (pendingVideoIds.value.length < VIDEO_CONCURRENCY && videoQueue.value.length) {
+  while (pendingVideoIds.value.length < videoConcurrency.value && videoQueue.value.length) {
     const id = videoQueue.value.shift()
     const sb = sbs.value.find(item => item.id === id)
     if (sb && !isPendingVideo(sb.id) && !hasVid(sb)) {
@@ -3210,7 +3213,9 @@ async function pollVideoGeneration(generationId, storyboardId) {
     }, 60, 4000)
     return
   }
-  for (let i = 0; i < 120; i++) {
+  // ~26 分钟耐心：Seedance 选了之后可能先在后端「排队等位」(最多 10min) 再生成(~6min)，
+  // status 为 queued/processing 时继续等，不要误判超时。
+  for (let i = 0; i < 390; i++) {
     await sleep(4000)
     try {
       const res = await videoAPI.get(generationId)
@@ -3267,7 +3272,7 @@ function batchVideos() {
   }
   // 入队 → 按并发上限分批跑，避免一次性全发出去把上游挤爆
   videoQueue.value.push(...newIds)
-  toast.success(`已加入队列 ${newIds.length} 条，每次并发 ${VIDEO_CONCURRENCY} 条，自动排队生成`)
+  toast.success(`已加入队列 ${newIds.length} 条，每次并发 ${videoConcurrency.value} 条，自动排队生成`)
   pumpVideoQueue()
 }
 async function batchCompose() {
@@ -3948,6 +3953,14 @@ onMounted(() => { refresh(); loadConfigs(); loadVoices() })
 .vboard-title { font-size: 16px; font-weight: 700; color: var(--text-0); }
 .model-tag { display: inline-block; font-size: 9px; font-weight: 700; padding: 1px 6px; border-radius: 5px; background: rgba(46,160,67,0.15); color: #2ea043; vertical-align: middle; }
 .model-tag.warn { background: rgba(210,140,30,0.18); color: #c8841e; }
+.engine-seg { display: inline-flex; border: 1px solid #dce3ee; border-radius: 8px; overflow: hidden; height: 28px; }
+.engine-opt { display: inline-flex; align-items: center; gap: 5px; padding: 0 10px; font-size: 12px; font-weight: 600; color: #60718a; background: #fff; border: none; cursor: pointer; transition: all .15s; height: 100%; font-family: inherit; }
+.engine-opt + .engine-opt { border-left: 1px solid #dce3ee; }
+.engine-opt:hover { background: #f4f7fb; }
+.engine-opt.active { background: linear-gradient(135deg, #C2F84E 0%, #8FEF26 100%); color: #0a0e1a; }
+.engine-tag { font-size: 9px; font-weight: 700; padding: 1px 5px; border-radius: 4px; background: rgba(50,74,114,0.1); opacity: .85; }
+.engine-tag.good { background: rgba(210,140,30,0.18); color: #c8841e; }
+.engine-opt.active .engine-tag { background: rgba(10,14,26,0.14); color: #0a0e1a; }
 .vboard-hint { font-size: 12px; color: var(--text-2); line-height: 1.55; background: rgba(19,51,121,0.06); border-radius: 10px; padding: 8px 12px; }
 .vboard-frames { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .vboard-frame { display: flex; flex-direction: column; gap: 6px; }

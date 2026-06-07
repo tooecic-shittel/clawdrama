@@ -56,6 +56,7 @@ app.post('/', async (c) => {
       dramaId: body.drama_id,
       prompt: body.prompt,
       model: body.model,
+      engine: body.engine,
       referenceMode,
       imageUrl,
       firstFrameUrl,

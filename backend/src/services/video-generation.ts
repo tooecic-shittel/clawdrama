@@ -7,7 +7,8 @@ import { getVideoAdapter } from './adapters/registry'
 import type { AIConfig } from './adapters/types'
 import { logTaskError, logTaskPayload, logTaskProgress, logTaskStart, logTaskSuccess, logTaskWarn, redactUrl } from '../utils/task-logger.js'
 import { enhanceVideoPrompt, isNativeDialogueShot } from './prompt-enhance.js'
-import { assertBalance, chargeForAction, videoCost } from './credits.js'
+import { assertBalance, chargeForAction, videoCost, providerToEngine, type VideoEngine } from './credits.js'
+import { acquireSeedanceSlot, releaseSeedanceSlot, seedanceStats, SEEDANCE_WAIT_MIN } from './seedance-gate.js'
 
 interface GenerateVideoParams {
   storyboardId?: number
@@ -22,6 +23,8 @@ interface GenerateVideoParams {
   duration?: number
   aspectRatio?: string
   resolution?: string   // 用户选的画质档 '720P'/'1080P'
+  /** 用户所选引擎：'seedance'（火山·贵·好）/ 'happyhorse'（云雾·省·带水印）。默认 seedance。 */
+  engine?: VideoEngine
   configId?: number
   /** Owner of this generation — used to meter credits (undefined = unmetered/system). */
   userId?: number
@@ -29,25 +32,39 @@ interface GenerateVideoParams {
 
 export async function generateVideo(params: GenerateVideoParams): Promise<number> {
   const ts = now()
+  // 用户所选引擎（默认 seedance）。预检按所选引擎计价；最终扣费在完成时按「实际产出 provider」算（见 handleVideoComplete）。
+  const engine: VideoEngine = params.engine === 'happyhorse' ? 'happyhorse' : 'seedance'
   // Gate on credits before doing any work (throws InsufficientCreditsError → 402 at route).
-  // 视频按「时长 × 画质」动态计费。
-  await assertBalance(params.userId, 'video', videoCost(params.duration, params.resolution))
-  const primary = params.configId
-    ? getConfigById(params.configId)
-    : getActiveConfig('video')
-  if (!primary) throw new Error('No active video AI config')
+  // 视频按「时长 × 画质 × 引擎」动态计费。
+  await assertBalance(params.userId, 'video', videoCost(params.duration, params.resolution, engine))
 
-  // 候选配置：主配置（指定的 configId 或最高优先级）排第一，其余「启用中」视频配置按优先级跟上（去重）。
-  // 主配置失败（如官方 Veo 配额耗尽 429 / 轮询失败）时，自动落到下一个 provider 兜底（如云雾 happyhorse）。
+  // 候选链（按 provider 去重）：
+  //   seedance → [火山, 云雾happyhorse, Veo]：火山受并发闸限制，排队超时才回退后面的兜底。
+  //   happyhorse → [云雾happyhorse, Veo]：明确不升级到更贵的火山。
+  const allVideo = getActiveVideoConfigs() // 按优先级降序
   const seen = new Set<string>()
   const candidates: AIConfig[] = []
-  for (const c of [primary, ...getActiveVideoConfigs()]) {
+  const pushUniq = (c: AIConfig | null) => {
+    if (!c) return
     const key = `${c.provider}|${c.baseUrl}|${c.model}`
-    if (seen.has(key)) continue
+    if (seen.has(key)) return
     seen.add(key)
     candidates.push(c)
   }
-  const config = primary
+  if (engine === 'happyhorse') {
+    const hh = allVideo.find(c => c.provider === 'openai')
+    if (!hh) throw new Error('HappyHorse 视频配置未启用')
+    pushUniq(hh)
+    for (const c of allVideo) if (c.provider !== 'volcengine') pushUniq(c) // 兜底排除火山
+  } else {
+    // seedance：明确以火山为主（用户的引擎选择优先于历史的 episode 配置绑定）。
+    const seed = allVideo.find(c => c.provider === 'volcengine')
+      || (params.configId ? getConfigById(params.configId) : getActiveConfig('video'))
+    pushUniq(seed)
+    for (const c of allVideo) pushUniq(c)
+  }
+  if (!candidates.length) throw new Error('No active video AI config')
+  const config = candidates[0]
 
   // Inject drama visual style + storyboard sound effect into video prompt.
   // Veo 3 generates audio from text — describing the soundscape gets baked in.
@@ -147,7 +164,30 @@ async function processVideoGeneration(id: number, candidates: AIConfig[], userMo
         .run()
     }
 
-    const outcome = await attemptVideoWithConfig(id, config, record, model, refs)
+    let outcome: AttemptOutcome
+    if (config.provider === 'volcengine') {
+      // Seedance 并发闸：占位前标 queued（前端显示「排队中」），排队超时则回退到下一候选（happyhorse）。
+      db.update(schema.videoGenerations)
+        .set({ status: 'queued', updatedAt: now() })
+        .where(eq(schema.videoGenerations.id, id)).run()
+      logTaskProgress('VideoTask', 'seedance-queue', { id, ...seedanceStats() })
+      const got = await acquireSeedanceSlot()
+      if (!got) {
+        lastErr = `Seedance 排队超过 ${SEEDANCE_WAIT_MIN} 分钟未轮到，自动回退兜底`
+        logTaskWarn('VideoTask', 'seedance-queue-giveup', { id, ...seedanceStats() })
+        continue
+      }
+      db.update(schema.videoGenerations)
+        .set({ status: 'processing', updatedAt: now() })
+        .where(eq(schema.videoGenerations.id, id)).run()
+      try {
+        outcome = await attemptVideoWithConfig(id, config, record, model, refs)
+      } finally {
+        releaseSeedanceSlot()
+      }
+    } else {
+      outcome = await attemptVideoWithConfig(id, config, record, model, refs)
+    }
     if (outcome.ok) {
       await handleVideoComplete(id, outcome.videoUrl, record.duration, record.storyboardId, outcome.downloadAuth)
       return
@@ -373,12 +413,15 @@ async function handleVideoComplete(id: number, videoUrl: string, duration: numbe
     userId: schema.videoGenerations.userId,
     duration: schema.videoGenerations.duration,
     resolution: schema.videoGenerations.resolution,
+    provider: schema.videoGenerations.provider,
   }).from(schema.videoGenerations).where(eq(schema.videoGenerations.id, id)).all()
-  const cost = videoCost(vrec?.duration, vrec?.resolution)
+  // 按「实际产出的 provider」计价：选了 Seedance 但回退到 happyhorse → 按便宜的 happyhorse 档扣。
+  const engine = providerToEngine(vrec?.provider)
+  const cost = videoCost(vrec?.duration, vrec?.resolution, engine)
   await chargeForAction(vrec?.userId, 'video', {
     referenceId: id,
     cost,
-    meta: { duration: vrec?.duration ?? duration, resolution: vrec?.resolution ?? null },
+    meta: { duration: vrec?.duration ?? duration, resolution: vrec?.resolution ?? null, provider: vrec?.provider ?? null, engine },
   })
 
   if (storyboardId) {

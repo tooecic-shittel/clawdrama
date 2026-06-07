@@ -85,17 +85,29 @@ export const ACTION_COST: Record<ChargeableAction, number> = {
   tts: 150,
 }
 
-// 视频每秒积分（按画质档），3x 毛利
-export const VIDEO_CREDIT_PER_SEC: Record<string, number> = {
-  '720p': 3000,
-  '1080p': 6000,
+// 视频引擎：seedance（火山·高质量·较贵）/ happyhorse（云雾·经济·带水印·兜底）。
+export type VideoEngine = 'seedance' | 'happyhorse'
+
+// 视频每秒积分（按引擎 × 画质档）。
+//   seedance：成本 720P≈¥1/秒、1080P≈¥2/秒 × 3 毛利 → 3000 / 6000。
+//   happyhorse：更便宜的兜底引擎，按 seedance 的 8 折计（720P 2400 / 1080P 4800）。
+// 改价时同步更新前端 pricing 默认值与 PACKAGES 文案。
+export const VIDEO_CREDIT_PER_SEC: Record<VideoEngine, Record<string, number>> = {
+  seedance: { '720p': 3000, '1080p': 6000 },
+  happyhorse: { '720p': 2400, '1080p': 4800 },
 }
 
-/** 视频动态积分：时长(秒) × 画质费率。缺省按 5秒 / 720P。 */
-export function videoCost(durationSec?: number | null, resolution?: string | null): number {
+/** provider → 计费引擎档：火山=seedance，其余（云雾 happyhorse / Veo 兜底）=happyhorse 档。 */
+export function providerToEngine(provider?: string | null): VideoEngine {
+  return provider === 'volcengine' ? 'seedance' : 'happyhorse'
+}
+
+/** 视频动态积分：时长(秒) × 引擎档 × 画质费率。缺省 seedance / 5秒 / 720P。 */
+export function videoCost(durationSec?: number | null, resolution?: string | null, engine: VideoEngine = 'seedance'): number {
   const sec = Math.min(15, Math.max(1, Math.round(Number(durationSec) || 5)))
   const r = String(resolution || '').toLowerCase().includes('1080') ? '1080p' : '720p'
-  return sec * (VIDEO_CREDIT_PER_SEC[r] ?? VIDEO_CREDIT_PER_SEC['720p'])
+  const table = VIDEO_CREDIT_PER_SEC[engine] ?? VIDEO_CREDIT_PER_SEC.seedance
+  return sec * (table[r] ?? table['720p'])
 }
 
 /**
