@@ -189,7 +189,7 @@ export interface CreditPackage {
   description?: string
 }
 
-// 订阅制：连续包周 / 连续包月 / 连续包年。积分按周期发放、当期有效（用不完清零 → 沉淀）。
+// 订阅制：包周 / 包月 / 包年。积分按周期发放、当期有效（用不完清零 → 沉淀）。
 // 定价锚点：充值 ¥1 ≈ 750 积分；订阅按下方价格。★数字按实际运营调整★。
 // 注意：「按周期发放 / 到期清零 / 自动续订」需「积分有效期 + 支付网关 + 定时任务」，当前未实现——
 //      前端「立即订阅」仍走占位提示（管理员手动充值）。
@@ -204,7 +204,7 @@ const SUB_FEATURES = [
 export const PACKAGES: CreditPackage[] = [
   {
     id: 'weekly',
-    name: '连续包周',
+    name: '包周',
     period: '周',
     periodNote: '每周有效',
     credits: 60000,
@@ -215,7 +215,7 @@ export const PACKAGES: CreditPackage[] = [
   },
   {
     id: 'monthly',
-    name: '连续包月',
+    name: '包月',
     period: '月',
     periodNote: '每月有效',
     credits: 150000,
@@ -226,7 +226,7 @@ export const PACKAGES: CreditPackage[] = [
   },
   {
     id: 'yearly',
-    name: '连续包年',
+    name: '包年',
     period: '年',
     periodNote: '每月有效',
     subNote: '全年 12 期 · 共 1,800,000 积分',
