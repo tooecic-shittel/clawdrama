@@ -1259,8 +1259,9 @@
                   </button>
                 </div>
                 <label class="dim" style="font-size:11px;margin:0 4px 0 8px">画质</label>
-                <select v-model="videoResolution" class="input" style="height:28px;font-size:12px;padding:0 8px" title="720P 更快更省，1080P 更清晰">
-                  <option value="720P">720P（快）</option>
+                <select v-model="videoResolution" class="input" style="height:28px;font-size:12px;padding:0 8px" title="480P 最省最快，720P 均衡，1080P 最清晰（480P 仅 Seedance 原生支持，HappyHorse 会按 720P 出片）">
+                  <option v-if="videoEngine === 'seedance'" value="480P">480P（最省·最快）</option>
+                  <option value="720P">720P（均衡）</option>
                   <option value="1080P">1080P（清晰）</option>
                 </select>
                 <span class="dim" style="font-size:11px;margin:0 4px" :title="`${videoEngine==='seedance'?'Seedance':'HappyHorse'} · ${videoResolution} ≈${videoRatePerSec} 积分/秒。例 5 秒 ≈${videoRatePerSec * 5} 积分`">≈{{ videoRatePerSec }} 积分/秒</span>
@@ -1692,8 +1693,13 @@ const TTS_MODEL_PRESETS = [
 // 选默认即用配置中的 Seedance；失败时后端自动兜底到云雾 happyhorse（无需用户手动选）。
 // 视频引擎二选一：seedance（火山·贵·效果好·无水印·并发限 4）/ happyhorse（云雾·省·带水印）。
 const videoEngine = ref(typeof window !== 'undefined' ? (localStorage.getItem('claw_video_engine') || 'seedance') : 'seedance')
-watch(videoEngine, (v) => { if (typeof window !== 'undefined') localStorage.setItem('claw_video_engine', v) })
 const videoResolution = ref(typeof window !== 'undefined' ? (localStorage.getItem('claw_video_res') || '720P') : '720P')
+// HappyHorse 不支持 480P：初始加载 & 切换到它时，把残留的 480P 纠正为 720P
+if (videoEngine.value === 'happyhorse' && videoResolution.value === '480P') videoResolution.value = '720P'
+watch(videoEngine, (v) => {
+  if (typeof window !== 'undefined') localStorage.setItem('claw_video_engine', v)
+  if (v === 'happyhorse' && videoResolution.value === '480P') videoResolution.value = '720P'
+})
 watch(videoResolution, (v) => { if (typeof window !== 'undefined') localStorage.setItem('claw_video_res', v) })
 
 const frameModeOptions = [{ label: '仅首帧', value: 'first' }, { label: '首尾帧', value: 'first_last' }]
@@ -1744,13 +1750,15 @@ function handleImageViewerKeydown(event) {
   if (event.key === 'Escape' && imageViewer.value.open) closeImageViewer()
 }
 
-const pricing = ref({ image: 1000, tts: 150, videoPerSec: { seedance: { '720p': 3000, '1080p': 6000 }, happyhorse: { '720p': 2400, '1080p': 4800 } } })
+const pricing = ref({ image: 1000, tts: 150, videoPerSec: { seedance: { '480p': 1500, '720p': 3000, '1080p': 6000 }, happyhorse: { '720p': 2400, '1080p': 4800 } } })
 // 视频每秒积分（按引擎×画质动态计费）。兼容后端新结构(按引擎嵌套)与旧结构(扁平)。
 const videoRatePerSec = computed(() => {
-  const k = String(videoResolution.value).toLowerCase().includes('1080') ? '1080p' : '720p'
+  const rs = String(videoResolution.value).toLowerCase()
+  const k = rs.includes('1080') ? '1080p' : rs.includes('480') ? '480p' : '720p'
   const vps = pricing.value.videoPerSec || {}
   const table = vps[videoEngine.value] || vps
-  return table[k] ?? 3000
+  // happyhorse 没有 480p 档（实际出 720P）→ 用 720p 价兜底，与后端 videoCost 一致
+  return table[k] ?? table['720p'] ?? 3000
 })
 onMounted(() => {
   window.addEventListener('keydown', handleImageViewerKeydown)

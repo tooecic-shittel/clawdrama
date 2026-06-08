@@ -91,9 +91,11 @@ export type VideoEngine = 'seedance' | 'happyhorse'
 // 视频每秒积分（按引擎 × 画质档）。
 //   seedance：成本 720P≈¥1/秒、1080P≈¥2/秒 × 3 毛利 → 3000 / 6000。
 //   happyhorse：更便宜的兜底引擎，按 seedance 的 8 折计（720P 2400 / 1080P 4800）。
+//   480P：最省档，仅 seedance 原生支持；happyhorse 会回退到 720P 出片，故不设 480P 价，
+//        由 videoCost 的 ?? table['720p'] 兜底按其实际产出的 720P 计费。
 // 改价时同步更新前端 pricing 默认值与 PACKAGES 文案。
 export const VIDEO_CREDIT_PER_SEC: Record<VideoEngine, Record<string, number>> = {
-  seedance: { '720p': 3000, '1080p': 6000 },
+  seedance: { '480p': 1500, '720p': 3000, '1080p': 6000 },
   happyhorse: { '720p': 2400, '1080p': 4800 },
 }
 
@@ -105,7 +107,8 @@ export function providerToEngine(provider?: string | null): VideoEngine {
 /** 视频动态积分：时长(秒) × 引擎档 × 画质费率。缺省 seedance / 5秒 / 720P。 */
 export function videoCost(durationSec?: number | null, resolution?: string | null, engine: VideoEngine = 'seedance'): number {
   const sec = Math.min(15, Math.max(1, Math.round(Number(durationSec) || 5)))
-  const r = String(resolution || '').toLowerCase().includes('1080') ? '1080p' : '720p'
+  const rs = String(resolution || '').toLowerCase()
+  const r = rs.includes('1080') ? '1080p' : rs.includes('480') ? '480p' : '720p'
   const table = VIDEO_CREDIT_PER_SEC[engine] ?? VIDEO_CREDIT_PER_SEC.seedance
   return sec * (table[r] ?? table['720p'])
 }
