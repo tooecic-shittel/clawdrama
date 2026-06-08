@@ -58,12 +58,22 @@
             <span class="package-price-num">{{ priceYuan(p) }}</span>
             <span v-if="p.period" class="package-price-period">/ {{ p.period }}</span>
           </div>
-          <div class="package-credits">
-            含 <span class="package-credits-num">{{ p.credits.toLocaleString() }}</span>
-            <span class="package-credits-unit">积分</span>
-            <span v-if="p.bonus" class="package-bonus">+{{ p.bonus.toLocaleString() }} 赠</span>
+          <div class="pkg-credit-box">
+            <div class="pkg-credit-head">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.4 6.9L21 11l-6.6 2.1L12 20l-2.4-6.9L3 11l6.6-2.1z"/></svg>
+              <span class="pkg-credit-num">{{ p.credits.toLocaleString() }}</span>
+              <span class="pkg-credit-unit">积分</span>
+              <span v-if="p.periodNote" class="pkg-credit-period">（{{ p.periodNote }}）</span>
+            </div>
+            <div class="pkg-credit-sub">最多生成 {{ maxImages(p) }} 张图片 · {{ maxVideos(p) }} 个视频</div>
+            <div v-if="p.subNote" class="pkg-credit-sub">{{ p.subNote }}</div>
           </div>
-          <p v-if="p.description" class="package-desc">{{ p.description }}</p>
+          <ul class="pkg-features">
+            <li v-for="(f, idx) in (p.features || [])" :key="idx">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+              <span>{{ f }}</span>
+            </li>
+          </ul>
           <button class="package-btn">{{ isAdmin ? '管理员充值' : '立即订阅' }}</button>
         </article>
       </div>
@@ -220,6 +230,9 @@ function priceYuan(p) {
   const y = (p.priceCents || 0) / 100
   return Number.isInteger(y) ? String(y) : y.toFixed(2).replace(/\.?0+$/, '')
 }
+// 估算：1 张图 = 1000 积分；1 个视频 = 5 秒 720P = 15000 积分
+function maxImages(p) { return Math.floor((p.credits || 0) / 1000).toLocaleString() }
+function maxVideos(p) { return Math.floor((p.credits || 0) / 15000) }
 function selectPackage(pkg) {
   if (isAdmin.value) {
     grantForm.amount = pkg.credits + pkg.bonus
@@ -438,28 +451,22 @@ onMounted(async () => {
   color: var(--text-0);
   margin-bottom: 12px;
 }
-.package-credits {
-  font-size: 12.5px;
-  color: var(--text-3);
-  margin-bottom: 14px;
+.pkg-credit-box {
+  background: var(--bg-2);
+  border-radius: 12px;
+  padding: 12px 14px;
+  margin-bottom: 16px;
 }
-.package-credits-num {
-  font-family: var(--font-mono);
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--text-1);
-}
-.package-credits-unit { font-size: 12px; color: var(--text-3); }
-.package-bonus {
-  font-family: var(--font-mono);
-  font-size: 10.5px;
-  font-weight: 700;
-  padding: 2px 8px;
-  background: var(--accent-bg);
-  color: var(--accent-text);
-  border-radius: 99px;
-  border: 1px solid rgba(143,239,38,0.32);
-}
+.pkg-credit-head { display: flex; align-items: baseline; gap: 4px; color: var(--text-0); }
+.pkg-credit-head svg { color: #5da817; align-self: center; }
+.pkg-credit-num { font-family: var(--font-display); font-size: 20px; font-weight: 800; letter-spacing: -0.01em; }
+.pkg-credit-unit { font-size: 12.5px; color: var(--text-1); font-weight: 600; }
+.pkg-credit-period { font-size: 11px; color: var(--text-3); font-weight: 500; }
+.pkg-credit-sub { font-size: 11.5px; color: var(--text-3); margin-top: 6px; line-height: 1.5; }
+.recommended .pkg-credit-box { background: rgba(143,239,38,0.12); }
+.pkg-features { list-style: none; padding: 0; margin: 0 0 18px; display: flex; flex-direction: column; gap: 9px; }
+.pkg-features li { display: flex; align-items: flex-start; gap: 8px; font-size: 12.5px; color: var(--text-1); line-height: 1.45; }
+.pkg-features li svg { flex-shrink: 0; color: #5da817; margin-top: 1px; }
 .package-price {
   display: flex; align-items: baseline; gap: 3px;
   font-family: var(--font-display);
@@ -482,12 +489,6 @@ onMounted(async () => {
   color: var(--text-3);
   font-weight: 600;
   margin-left: 2px;
-}
-.package-desc {
-  font-size: 12px;
-  color: var(--text-3);
-  line-height: 1.55;
-  margin-bottom: 16px;
 }
 .package-btn {
   width: 100%;

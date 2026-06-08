@@ -177,49 +177,64 @@ export async function listHistory(userId: number, limit = 50, offset = 0) {
 export interface CreditPackage {
   id: string
   name: string
-  period?: string            // 订阅周期，用于「¥X / period」展示：'7 天' | '月' | '年'
-  credits: number
+  period?: string            // 计价周期，用于「¥X / period」展示：'周' | '月' | '年'
+  periodNote?: string        // 积分有效期说明：'每周有效' | '每月有效'
+  subNote?: string           // 补充说明，如「全年 12 期 · 共 1,800,000 积分」
+  credits: number            // 该周期发放/展示的积分数
   bonus: number              // bonus credits on top of base
   priceCents: number         // CNY cents
   badge?: string
-  highlight?: boolean        // 主推档（年度）—— 前端高亮放大
+  highlight?: boolean        // 主推档（年卡）—— 前端高亮放大
+  features?: string[]        // 卡片功能勾选列表
   description?: string
 }
 
-// 订阅制：七日体验 / 月度 / 年度。每档授予对应积分（积分仍是计费单位，用户拿积分去生成）。
-// ★价格与积分均为初始建议值，按实际运营调整★。
-// 注意：真正的「周期性扣费 / 到期 / 自动续订」需接入支付网关，当前未实现——
-//      前端「立即订阅」仍走占位提示（管理员手动充值），与改造前一致。
+// 订阅制：连续包周 / 连续包月 / 连续包年。积分按周期发放、当期有效（用不完清零 → 沉淀）。
+// 定价锚点：充值 ¥1 ≈ 750 积分；订阅按下方价格。★数字按实际运营调整★。
+// 注意：「按周期发放 / 到期清零 / 自动续订」需「积分有效期 + 支付网关 + 定时任务」，当前未实现——
+//      前端「立即订阅」仍走占位提示（管理员手动充值）。
+const SUB_FEATURES = [
+  'Seedance 2.0 高清出片 · 去除水印',
+  '视频对口型（原生人声对白）',
+  '首尾帧控制 + 提示词 AI 改写',
+  '480P / 720P / 1080P 任选',
+  '同时生成最多 4 条',
+  '一键下载全部 · 一键导出剪映',
+]
 export const PACKAGES: CreditPackage[] = [
   {
-    id: 'trial7',
-    name: '七日体验',
-    period: '7 天',
-    credits: 30000,
+    id: 'weekly',
+    name: '连续包周',
+    period: '周',
+    periodNote: '每周有效',
+    credits: 60000,
     bonus: 0,
-    priceCents: 1990,
-    badge: '新手尝鲜',
-    description: '7 天体验全部功能，含 3 万积分尝鲜',
+    priceCents: 10900,
+    badge: '尝鲜',
+    features: [...SUB_FEATURES, '每周 6 万积分，灵活尝鲜'],
   },
   {
     id: 'monthly',
-    name: '月度会员',
+    name: '连续包月',
     period: '月',
-    credits: 100000,
+    periodNote: '每月有效',
+    credits: 150000,
     bonus: 0,
-    priceCents: 6800,
+    priceCents: 19900,
     badge: '最受欢迎',
-    description: '每月 10 万积分，畅享图片 / 视频 / 配音生成',
+    features: [...SUB_FEATURES, '每月 15 万积分，畅快创作'],
   },
   {
     id: 'yearly',
-    name: '年度会员',
+    name: '连续包年',
     period: '年',
-    credits: 1500000,
+    periodNote: '每月有效',
+    subNote: '全年 12 期 · 共 1,800,000 积分',
+    credits: 150000,
     bonus: 0,
-    priceCents: 59800,
+    priceCents: 219900,
     badge: '最划算',
     highlight: true,
-    description: '相当于 ¥49.8/月（立省约 27%），每年 150 万积分',
+    features: [...SUB_FEATURES, '年付低至 ≈¥183/月（立省 ¥189/年）'],
   },
 ]
