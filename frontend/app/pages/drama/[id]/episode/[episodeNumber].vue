@@ -1248,7 +1248,7 @@
             <div class="prod-section-bar">
               <span class="dim" style="font-size:12px">{{ sbs.length }} 个镜头</span>
               <span class="tag mono">{{ shotVidCount }}/{{ sbs.length }} 已生成</span>
-              <div class="ml-auto flex gap-1" style="align-items:center">
+              <div class="ml-auto flex gap-1" style="align-items:center;flex-wrap:wrap;row-gap:6px;justify-content:flex-end">
                 <label class="dim" style="font-size:11px;margin-right:4px">引擎</label>
                 <div class="engine-seg">
                   <button type="button" :class="['engine-opt', videoEngine==='seedance' && 'active']" @click="videoEngine='seedance'" title="火山 Seedance 2.0：画质更好、无水印；较贵；同时最多 4 条，其余自动排队">
@@ -4003,12 +4003,12 @@ onMounted(() => { refresh(); loadConfigs(); loadVoices() })
 .vboard-title { font-size: 16px; font-weight: 700; color: var(--text-0); }
 .model-tag { display: inline-block; font-size: 9px; font-weight: 700; padding: 1px 6px; border-radius: 5px; background: rgba(46,160,67,0.15); color: #2ea043; vertical-align: middle; }
 .model-tag.warn { background: rgba(210,140,30,0.18); color: #c8841e; }
-.engine-seg { display: inline-flex; border: 1px solid #dce3ee; border-radius: 8px; overflow: hidden; height: 28px; }
-.engine-opt { display: inline-flex; align-items: center; gap: 5px; padding: 0 10px; font-size: 12px; font-weight: 600; color: #60718a; background: #fff; border: none; cursor: pointer; transition: all .15s; height: 100%; font-family: inherit; }
+.engine-seg { display: inline-flex; flex-shrink: 0; border: 1px solid #dce3ee; border-radius: 8px; overflow: hidden; height: 28px; }
+.engine-opt { display: inline-flex; align-items: center; gap: 5px; padding: 0 10px; font-size: 12px; font-weight: 600; color: #60718a; background: #fff; border: none; cursor: pointer; transition: all .15s; height: 100%; font-family: inherit; white-space: nowrap; }
 .engine-opt + .engine-opt { border-left: 1px solid #dce3ee; }
 .engine-opt:hover { background: #f4f7fb; }
 .engine-opt.active { background: linear-gradient(135deg, #C2F84E 0%, #8FEF26 100%); color: #0a0e1a; }
-.engine-tag { font-size: 9px; font-weight: 700; padding: 1px 5px; border-radius: 4px; background: rgba(50,74,114,0.1); opacity: .85; }
+.engine-tag { font-size: 9px; font-weight: 700; padding: 1px 5px; border-radius: 4px; background: rgba(50,74,114,0.1); opacity: .85; white-space: nowrap; }
 .engine-tag.good { background: rgba(210,140,30,0.18); color: #c8841e; }
 .engine-opt.active .engine-tag { background: rgba(10,14,26,0.14); color: #0a0e1a; }
 .btn-download { background: #324a72; color: #fff; border-color: #324a72; }
