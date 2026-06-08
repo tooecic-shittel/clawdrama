@@ -1,0 +1,26 @@
+# 生产部署（阿里云 2C2G）——只「拉镜像运行」，不在本机构建（构建放 GitHub Actions，见 .github/workflows/deploy.yml）。
+# 用法：在服务器上把本文件放到 /opt/clawdrama/ 下，配好同目录的 .env，然后：
+#   docker compose -f docker-compose.prod.yml pull
+#   docker compose -f docker-compose.prod.yml up -d
+services:
+  clawdrama:
+    # 镜像地址来自 .env 的 IMAGE（与 ACR 对齐）
+    image: ${IMAGE}
+    # 只绑 127.0.0.1：对外由 nginx 反代 + TLS（见 deploy/nginx.conf.example）
+    ports:
+      - "127.0.0.1:5679:5679"
+    volumes:
+      # /data/clawdrama 是你挂载的数据云盘目录 → 容器内 /app/data（SQLite + 媒体）
+      - /data/clawdrama:/app/data
+    env_file:
+      - .env
+    environment:
+      - NODE_ENV=production
+      - PORT=5679
+    restart: unless-stopped
+    # 2C2G 上给点保护：限制容器内存，超了只杀容器自己（配合 swap 缓冲）
+    mem_limit: 1700m
+    memswap_limit: 5700m   # 1700m 内存 + 4G swap
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }

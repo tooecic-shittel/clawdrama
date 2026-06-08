@@ -1,0 +1,57 @@
+# 在 GitHub 服务器上构建镜像（内存充足，nuxt generate 不会 OOM）→ 推到阿里云 ACR →
+# 可选：SSH 登服务器自动 pull 拉起。2C2G 小机器只负责运行，不构建。
+#
+# 需要在仓库 Settings → Secrets and variables → Actions 配好这些 secrets：
+#   ACR_REGISTRY   如 registry.cn-shanghai.aliyuncs.com
+#   ACR_NAMESPACE  你的命名空间
+#   ACR_USERNAME   ACR 用户名
+#   ACR_PASSWORD   ACR 密码（容器镜像服务里设置的访问凭证）
+#   （可选，自动部署用）
+#   SSH_HOST       服务器公网 IP
+#   SSH_USER       如 root
+#   SSH_KEY        服务器的 SSH 私钥
+name: deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+jobs:
+  build-push:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 登录阿里云 ACR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ secrets.ACR_REGISTRY }}
+          username: ${{ secrets.ACR_USERNAME }}
+          password: ${{ secrets.ACR_PASSWORD }}
+
+      - name: 构建并推送镜像（amd64，对齐阿里云 x86 ECS）
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64
+          push: true
+          tags: ${{ secrets.ACR_REGISTRY }}/${{ secrets.ACR_NAMESPACE }}/clawdrama:latest
+
+  # 可选：构建完自动登服务器拉新镜像并重启。不想自动部署就删掉这个 job，手动在服务器上 pull。
+  deploy-ssh:
+    needs: build-push
+    runs-on: ubuntu-latest
+    if: ${{ secrets.SSH_HOST != '' }}
+    steps:
+      - name: SSH 到服务器拉新镜像并重启
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          script: |
+            cd /opt/clawdrama
+            docker compose -f docker-compose.prod.yml pull
+            docker compose -f docker-compose.prod.yml up -d
+            docker image prune -f
