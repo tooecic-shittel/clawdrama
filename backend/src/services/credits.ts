@@ -182,6 +182,7 @@ export interface CreditPackage {
   bonus: number              // bonus credits on top of base
   priceCents: number         // CNY cents
   badge?: string
+  highlight?: boolean        // 主推档（年度）—— 前端高亮放大
   description?: string
 }
 
@@ -218,6 +219,7 @@ export const PACKAGES: CreditPackage[] = [
     bonus: 0,
     priceCents: 59800,
     badge: '最划算',
+    highlight: true,
     description: '相当于 ¥49.8/月（立省约 27%），每年 150 万积分',
   },
 ]

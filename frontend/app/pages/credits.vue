@@ -48,7 +48,7 @@
           v-for="p in packages"
           :key="p.id"
           class="package-card"
-          :class="{ recommended: !!p.badge }"
+          :class="{ recommended: p.highlight }"
           @click="selectPackage(p)"
         >
           <div v-if="p.badge" class="package-badge">{{ p.badge }}</div>
@@ -386,7 +386,8 @@ onMounted(async () => {
 .packages-section { margin-bottom: 36px; }
 .package-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  grid-template-columns: repeat(3, 1fr);
+  align-items: stretch;
   gap: 16px;
 }
 .package-card {
@@ -405,10 +406,17 @@ onMounted(async () => {
   box-shadow: 0 16px 36px rgba(143,239,38,0.16);
 }
 .package-card.recommended {
-  border-color: rgba(143,239,38,0.5);
+  border: 2px solid #8FEF26;
   background:
-    radial-gradient(circle at 100% 0%, rgba(143,239,38,0.08), transparent 50%),
+    radial-gradient(circle at 50% 0%, rgba(143,239,38,0.14), transparent 60%),
     #ffffff;
+  box-shadow: 0 18px 44px rgba(143,239,38,0.24);
+}
+.package-card.recommended .package-name { color: #5da817; }
+.package-card.recommended .package-btn {
+  background: linear-gradient(135deg, #C2F84E, #8FEF26);
+  color: #0a0e1a;
+  border-color: transparent;
 }
 .package-badge {
   position: absolute;
@@ -592,6 +600,9 @@ onMounted(async () => {
   white-space: nowrap;
 }
 
+@media (max-width: 860px) {
+  .package-grid { grid-template-columns: 1fr; }
+}
 @media (max-width: 720px) {
   .credits-page { padding: 18px 18px 40px; }
   .balance-card { padding: 24px 20px; }
