@@ -136,10 +136,16 @@ async function doMerge(mergeId: number, episodeId: number, videos: string[]) {
   }
 
   // 全局串行 + 限线程，避免与合成的 ffmpeg 并发把容器资源打满（pthread_create/OOM）。
-  const runMergeFfmpeg = (useBgm: boolean) => runFfmpegExclusive(() => new Promise<void>((resolve, reject) => {
+  // copyVideo=true：视频流拷贝（镜头已是统一 24fps CFR，整集拼接零重编码，2C2G 极省 CPU/内存）；
+  //              失败(镜头参数不一致等)由上层兜底重编码。
+  const runMergeFfmpeg = (useBgm: boolean, copyVideo: boolean) => runFfmpegExclusive(() => new Promise<void>((resolve, reject) => {
     const cmd = ffmpeg()
       .input(listPath)
       .inputOptions(['-f', 'concat', '-safe', '0'])
+
+    const vCodec = copyVideo
+      ? ['-c:v', 'copy']
+      : ['-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '23', '-r', '24', '-pix_fmt', 'yuv420p']
 
     if (useBgm && bgmAbs && videoSec > 0) {
       const fadeOutStart = Math.max(0, videoSec - 2)
@@ -156,30 +162,20 @@ async function doMerge(mergeId: number, episodeId: number, videos: string[]) {
           `[1:a]volume=0.16,afade=t=in:d=2,afade=t=out:st=${fadeOutStart.toFixed(2)}:d=2[bg]`,
           `[dia][bg]amix=inputs=2:duration=first:dropout_transition=3:normalize=0[aout]`,
         ])
+        // 混 BGM 必须重编码音频；视频仍可流拷贝（只动音轨）。
         .outputOptions([
-          '-threads', '2',
-          '-fflags', '+genpts',
-          '-map', '0:v',
-          '-map', '[aout]',
-          '-c:v', 'libx264',
-          '-preset', 'ultrafast',
-          '-crf', '23',
-          '-c:a', 'aac',
-          '-ar', '48000',
-          '-b:a', '192k',
+          '-threads', '2', '-fflags', '+genpts',
+          '-map', '0:v', ...vCodec,
+          '-map', '[aout]', '-c:a', 'aac', '-ar', '48000', '-b:a', '192k',
           '-movflags', '+faststart',
           '-shortest',
         ])
     } else {
+      // 无 BGM：视频拷贝时音频也直接拷贝（合成片音轨已是 aac/48k）→ 整集拼接近乎零成本。
+      const aCodec = copyVideo ? ['-c:a', 'copy'] : ['-c:a', 'aac', '-ar', '48000', '-b:a', '192k']
       cmd.outputOptions([
-        '-threads', '2',
-        '-fflags', '+genpts',
-        '-c:v', 'libx264',
-        '-preset', 'ultrafast',
-        '-crf', '23',
-        '-c:a', 'aac',
-        '-ar', '48000',
-        '-b:a', '192k',
+        '-threads', '2', '-fflags', '+genpts',
+        ...vCodec, ...aCodec,
         '-movflags', '+faststart',
       ])
     }
@@ -191,15 +187,23 @@ async function doMerge(mergeId: number, episodeId: number, videos: string[]) {
       .run()
   }))
 
+  const useBgm = !!(bgmAbs && videoSec > 0)
   try {
-    await runMergeFfmpeg(!!(bgmAbs && videoSec > 0))
-  } catch (mergeErr: any) {
-    if (bgmAbs && videoSec > 0) {
-      // BGM 混音失败（多半是容器 ffmpeg 版本问题）→ 退回无 BGM 的纯拼接，绝不因 BGM 阻断成片。
-      logTaskProgress('MergeTask', 'bgm-mix-failed-retry-plain', { episodeId, error: String(mergeErr?.message || mergeErr).slice(0, 200) })
-      await runMergeFfmpeg(false)
-    } else {
-      throw mergeErr
+    // 1) 最省：视频流拷贝（无 BGM 时音频也拷贝）
+    await runMergeFfmpeg(useBgm, true)
+  } catch (copyErr: any) {
+    logTaskProgress('MergeTask', 'copy-concat-failed-reencode', { episodeId, error: String(copyErr?.message || copyErr).slice(0, 200) })
+    try {
+      // 2) 兜底：重编码视频（镜头参数不一致时流拷贝会失败，这里稳妥重编）
+      await runMergeFfmpeg(useBgm, false)
+    } catch (mergeErr: any) {
+      if (useBgm) {
+        // 3) 再兜底：连 BGM 混音都失败 → 纯拼接(无 BGM)重编码，绝不因 BGM 阻断成片。
+        logTaskProgress('MergeTask', 'bgm-mix-failed-retry-plain', { episodeId, error: String(mergeErr?.message || mergeErr).slice(0, 200) })
+        await runMergeFfmpeg(false, false)
+      } else {
+        throw mergeErr
+      }
     }
   }
 

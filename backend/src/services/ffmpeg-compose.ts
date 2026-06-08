@@ -265,6 +265,10 @@ export async function composeStoryboard(storyboardId: number, userId?: number, o
       const outputOptions = [
         '-threads', '2', '-filter_complex_threads', '1',
         '-map', videoOutLabel, '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '23',
+        // 强制 24fps 固定帧率(CFR) + 标准像素格式：让每个合成镜头参数完全一致 →
+        // 拼接时可流拷贝(-c:v copy)且不再累积音画漂移（治音画不同步）。Seedance 原生即 24fps。
+        // 只用 -r（最通用，等价 CFR）；不用 -fps_mode/-video_track_timescale 以免旧版 ffmpeg 不识别而回退原片。
+        '-r', '24', '-pix_fmt', 'yuv420p',
         '-map', '[aout]', '-c:a', 'aac', '-ar', '48000', '-ac', '2', '-b:a', '192k',
         '-shortest',
       ]
