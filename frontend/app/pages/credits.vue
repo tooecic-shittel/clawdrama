@@ -52,7 +52,6 @@
           @click="selectPackage(p)"
         >
           <div v-if="p.badge" class="package-badge">{{ p.badge }}</div>
-          <div class="package-name">{{ p.name }}</div>
           <div class="package-price">
             <span class="package-price-currency">¥</span>
             <span class="package-price-num">{{ priceYuan(p) }}</span>
@@ -450,7 +449,6 @@ onMounted(async () => {
     #ffffff;
   box-shadow: 0 18px 44px rgba(143,239,38,0.24);
 }
-.package-card.recommended .package-name { color: #5da817; }
 .package-card.recommended .package-btn {
   background: linear-gradient(135deg, #C2F84E, #8FEF26);
   color: #0a0e1a;
@@ -468,13 +466,6 @@ onMounted(async () => {
   font-weight: 700;
   letter-spacing: 0.04em;
   box-shadow: 0 4px 10px rgba(143,239,38,0.3);
-}
-.package-name {
-  font-family: var(--font-display);
-  font-size: 15px;
-  font-weight: 700;
-  color: var(--text-0);
-  margin-bottom: 12px;
 }
 .pkg-credit-box {
   background: var(--bg-2);
