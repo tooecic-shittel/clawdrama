@@ -2,7 +2,7 @@ import { Hono } from 'hono'
 import { desc, eq, like, or } from 'drizzle-orm'
 import { db, schema } from '../db/index.js'
 import { requireAuth } from '../middleware/auth.js'
-import { applyCreditOp, getBalance, listHistory, PACKAGES, ACTION_COST, VIDEO_CREDIT_PER_SEC } from '../services/credits.js'
+import { applyCreditOp, getBalance, listHistory, PACKAGES, TOPUP_PACKS, ACTION_COST, VIDEO_CREDIT_PER_SEC } from '../services/credits.js'
 
 const credits = new Hono()
 
@@ -24,9 +24,9 @@ credits.get('/history', async (c) => {
   return c.json({ data: { items: items.map(t => ({ ...t, meta: t.meta ? JSON.parse(t.meta) : null })) } })
 })
 
-// GET /credits/packages — public catalog
+// GET /credits/packages — public catalog（订阅套餐 + 积分加油包）
 credits.get('/packages', (c) => {
-  return c.json({ data: { items: PACKAGES } })
+  return c.json({ data: { items: PACKAGES, topups: TOPUP_PACKS } })
 })
 
 // GET /credits/pricing — 各操作扣费（前端显示成本用）

@@ -242,7 +242,7 @@ export const creditsAPI = {
     if (params?.offset) q.set('offset', String(params.offset))
     return api.get<{ items: any[] }>(`/credits/history${q.size ? `?${q.toString()}` : ''}`)
   },
-  packages: () => api.get<{ items: any[] }>('/credits/packages'),
+  packages: () => api.get<{ items: any[]; topups: any[] }>('/credits/packages'),
   pricing: () => api.get<{ image: number; tts: number; videoPerSec: Record<string, Record<string, number>> }>('/credits/pricing'),
   grant: (d: { user_id: number; amount: number; description?: string }) =>
     api.post<{ balance: number; transaction: any }>('/credits/grant', d),

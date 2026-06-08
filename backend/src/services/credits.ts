@@ -238,3 +238,11 @@ export const PACKAGES: CreditPackage[] = [
     features: [...SUB_FEATURES, '年付低至 ≈¥183/月（立省 ¥189/年）'],
   },
 ]
+
+// 积分加油包（一次性加购，类似流量包）：订阅额度用完时补充，不订阅也可单买。
+// 按锚点 ¥1 = 750 积分定价；与订阅不同，加油包积分长期有效（不随月清零）。
+export const TOPUP_PACKS: CreditPackage[] = [
+  { id: 'topup-s', name: '小加油包', credits: 22500, bonus: 0, priceCents: 3000 },
+  { id: 'topup-m', name: '中加油包', credits: 75000, bonus: 0, priceCents: 10000, badge: '推荐' },
+  { id: 'topup-l', name: '大加油包', credits: 225000, bonus: 0, priceCents: 30000 },
+]

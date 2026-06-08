@@ -79,6 +79,29 @@
       </div>
     </section>
 
+    <!-- Credit Top-up Packs -->
+    <section v-if="topups.length" class="topup-section">
+      <div class="section-head">
+        <h2 class="section-title">积分加油包</h2>
+        <p class="section-desc">订阅额度用完？随时加购，积分长期有效（一次性购买，不随月清零）</p>
+      </div>
+      <div class="topup-grid">
+        <article
+          v-for="t in topups"
+          :key="t.id"
+          class="topup-card"
+          :class="{ recommended: !!t.badge }"
+          @click="selectPackage(t)"
+        >
+          <div v-if="t.badge" class="topup-badge">{{ t.badge }}</div>
+          <div class="topup-credits"><span class="topup-credits-num">{{ t.credits.toLocaleString() }}</span> 积分</div>
+          <div class="topup-meta">≈ {{ maxImages(t) }} 图 / {{ maxVideos(t) }} 视频</div>
+          <div class="topup-price"><span class="topup-price-cur">¥</span><span class="topup-price-num">{{ priceYuan(t) }}</span></div>
+          <button class="package-btn">{{ isAdmin ? '管理员充值' : '立即购买' }}</button>
+        </article>
+      </div>
+    </section>
+
     <!-- Admin Panel -->
     <section v-if="isAdmin" class="admin-section">
       <div class="section-head">
@@ -162,6 +185,7 @@ const { isAdmin, setCredits } = useAuth()
 
 const balance = ref(0)
 const packages = ref([])
+const topups = ref([])
 const history = ref([])
 const loadingHistory = ref(false)
 
@@ -176,6 +200,7 @@ async function loadAll() {
     const [bal, pkgs] = await Promise.all([creditsAPI.balance(), creditsAPI.packages()])
     balance.value = bal.balance
     packages.value = pkgs.items
+    topups.value = pkgs.topups || []
     setCredits(bal.balance)
   } catch (e) {
     toast.error(e.message)
@@ -507,6 +532,21 @@ onMounted(async () => {
   color: #0a0e1a;
   border-color: transparent;
 }
+
+/* Top-up packs */
+.topup-section { margin-bottom: 36px; }
+.topup-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+.topup-card { position: relative; padding: 18px 18px 16px; background: #fff; border: 1px solid var(--border); border-radius: 14px; cursor: pointer; transition: all 0.2s var(--ease-out); box-shadow: var(--shadow-card); text-align: center; }
+.topup-card:hover { transform: translateY(-2px); border-color: rgba(143,239,38,0.5); box-shadow: 0 12px 28px rgba(143,239,38,0.14); }
+.topup-card.recommended { border-color: rgba(143,239,38,0.6); }
+.topup-badge { position: absolute; top: -9px; left: 50%; transform: translateX(-50%); padding: 2px 10px; background: linear-gradient(135deg,#C2F84E,#8FEF26); color: #0a0e1a; border-radius: 99px; font-size: 10px; font-weight: 700; white-space: nowrap; }
+.topup-credits { font-size: 13px; color: var(--text-2); margin-bottom: 3px; }
+.topup-credits-num { font-family: var(--font-display); font-size: 24px; font-weight: 800; color: var(--text-0); }
+.topup-meta { font-size: 11px; color: var(--text-3); margin-bottom: 12px; }
+.topup-price { display: flex; align-items: baseline; justify-content: center; gap: 2px; margin-bottom: 12px; font-family: var(--font-display); }
+.topup-price-cur { font-size: 14px; color: var(--text-2); font-weight: 700; }
+.topup-price-num { font-size: 26px; font-weight: 800; color: var(--text-0); }
+@media (max-width: 860px) { .topup-grid { grid-template-columns: 1fr; } }
 
 /* Admin */
 .admin-section {
