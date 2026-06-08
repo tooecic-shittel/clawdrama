@@ -190,7 +190,7 @@ export interface CreditPackage {
 }
 
 // 订阅制：包周 / 包月 / 包年。积分按周期发放、当期有效（用不完清零 → 沉淀）。
-// 定价锚点：充值 ¥1 ≈ 750 积分；订阅按下方价格。★数字按实际运营调整★。
+// 定价锚点：充值 ¥1 ≈ 1500 积分；订阅按下方价格。★数字按实际运营调整★。
 // 注意：「按周期发放 / 到期清零 / 自动续订」需「积分有效期 + 支付网关 + 定时任务」，当前未实现——
 //      前端「立即订阅」仍走占位提示（管理员手动充值）。
 const SUB_FEATURES = [
@@ -207,30 +207,30 @@ export const PACKAGES: CreditPackage[] = [
     name: '包周',
     period: '周',
     periodNote: '每周有效',
-    credits: 60000,
+    credits: 120000,
     bonus: 0,
     priceCents: 10900,
     badge: '尝鲜',
-    features: [...SUB_FEATURES, '每周 6 万积分，灵活尝鲜'],
+    features: [...SUB_FEATURES, '每周 12 万积分，灵活尝鲜'],
   },
   {
     id: 'monthly',
     name: '包月',
     period: '月',
     periodNote: '每月有效',
-    credits: 150000,
+    credits: 300000,
     bonus: 0,
     priceCents: 19900,
     badge: '最受欢迎',
-    features: [...SUB_FEATURES, '每月 15 万积分，畅快创作'],
+    features: [...SUB_FEATURES, '每月 30 万积分，畅快创作'],
   },
   {
     id: 'yearly',
     name: '包年',
     period: '年',
     periodNote: '每月有效',
-    subNote: '全年 12 期 · 共 1,800,000 积分',
-    credits: 150000,
+    subNote: '全年 12 期 · 共 3,600,000 积分',
+    credits: 300000,
     bonus: 0,
     priceCents: 219900,
     badge: '最划算',
@@ -240,9 +240,9 @@ export const PACKAGES: CreditPackage[] = [
 ]
 
 // 积分加油包（一次性加购，类似流量包）：订阅额度用完时补充，不订阅也可单买。
-// 按锚点 ¥1 = 750 积分定价；与订阅不同，加油包积分长期有效（不随月清零）。
+// 按锚点 ¥1 = 1500 积分定价；与订阅不同，加油包积分长期有效（不随月清零）。
 export const TOPUP_PACKS: CreditPackage[] = [
-  { id: 'topup-s', name: '小加油包', credits: 22500, bonus: 0, priceCents: 3000 },
-  { id: 'topup-m', name: '中加油包', credits: 75000, bonus: 0, priceCents: 10000, badge: '推荐' },
-  { id: 'topup-l', name: '大加油包', credits: 225000, bonus: 0, priceCents: 30000 },
+  { id: 'topup-s', name: '小加油包', credits: 45000, bonus: 0, priceCents: 3000 },
+  { id: 'topup-m', name: '中加油包', credits: 150000, bonus: 0, priceCents: 10000, badge: '推荐' },
+  { id: 'topup-l', name: '大加油包', credits: 450000, bonus: 0, priceCents: 30000 },
 ]
