@@ -177,6 +177,7 @@ export async function listHistory(userId: number, limit = 50, offset = 0) {
 export interface CreditPackage {
   id: string
   name: string
+  period?: string            // 订阅周期，用于「¥X / period」展示：'7 天' | '月' | '年'
   credits: number
   bonus: number              // bonus credits on top of base
   priceCents: number         // CNY cents
@@ -184,31 +185,39 @@ export interface CreditPackage {
   description?: string
 }
 
+// 订阅制：七日体验 / 月度 / 年度。每档授予对应积分（积分仍是计费单位，用户拿积分去生成）。
+// ★价格与积分均为初始建议值，按实际运营调整★。
+// 注意：真正的「周期性扣费 / 到期 / 自动续订」需接入支付网关，当前未实现——
+//      前端「立即订阅」仍走占位提示（管理员手动充值），与改造前一致。
 export const PACKAGES: CreditPackage[] = [
   {
-    id: 'starter',
-    name: '入门包',
-    credits: 50000,
+    id: 'trial7',
+    name: '七日体验',
+    period: '7 天',
+    credits: 30000,
     bonus: 0,
-    priceCents: 5000,
-    description: '尝鲜体验，约可生成 6 个分镜视频或 50 张图',
+    priceCents: 1990,
+    badge: '新手尝鲜',
+    description: '7 天体验全部功能，含 3 万积分尝鲜',
   },
   {
-    id: 'standard',
-    name: '标准包',
-    credits: 120000,
-    bonus: 24000,
-    priceCents: 12000,
+    id: 'monthly',
+    name: '月度会员',
+    period: '月',
+    credits: 100000,
+    bonus: 0,
+    priceCents: 6800,
     badge: '最受欢迎',
-    description: '送 24000 积分（+20%），约可生成 19 个分镜视频',
+    description: '每月 10 万积分，畅享图片 / 视频 / 配音生成',
   },
   {
-    id: 'pro',
-    name: '专业包',
-    credits: 350000,
-    bonus: 105000,
-    priceCents: 35000,
-    badge: '高性价比',
-    description: '送 105000 积分（+30%），约可生成 60 个分镜视频',
+    id: 'yearly',
+    name: '年度会员',
+    period: '年',
+    credits: 1500000,
+    bonus: 0,
+    priceCents: 59800,
+    badge: '最划算',
+    description: '相当于 ¥49.8/月（立省约 27%），每年 150 万积分',
   },
 ]

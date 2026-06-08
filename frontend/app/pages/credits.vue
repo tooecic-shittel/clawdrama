@@ -3,8 +3,8 @@
     <!-- Page Head -->
     <div class="page-head">
       <div>
-        <h1 class="page-title">充值中心</h1>
-        <p class="page-desc">积分用于消耗 AI 模型生成图片、视频和配音</p>
+        <h1 class="page-title">会员订阅</h1>
+        <p class="page-desc">订阅获得积分，用于生成图片、视频与配音</p>
       </div>
     </div>
 
@@ -40,8 +40,8 @@
     <!-- Packages -->
     <section class="packages-section">
       <div class="section-head">
-        <h2 class="section-title">充值套餐</h2>
-        <p class="section-desc">单次充值越多，赠送积分越多</p>
+        <h2 class="section-title">订阅套餐</h2>
+        <p class="section-desc">按周期订阅，到账积分用于生成图片 / 视频 / 配音</p>
       </div>
       <div class="package-grid">
         <article
@@ -53,17 +53,18 @@
         >
           <div v-if="p.badge" class="package-badge">{{ p.badge }}</div>
           <div class="package-name">{{ p.name }}</div>
-          <div class="package-credits">
-            <span class="package-credits-num">{{ p.credits.toLocaleString() }}</span>
-            <span class="package-credits-unit">积分</span>
-            <span v-if="p.bonus" class="package-bonus">+{{ p.bonus }} 赠送</span>
-          </div>
           <div class="package-price">
             <span class="package-price-currency">¥</span>
-            <span class="package-price-num">{{ (p.priceCents / 100).toFixed(0) }}</span>
+            <span class="package-price-num">{{ priceYuan(p) }}</span>
+            <span v-if="p.period" class="package-price-period">/ {{ p.period }}</span>
+          </div>
+          <div class="package-credits">
+            含 <span class="package-credits-num">{{ p.credits.toLocaleString() }}</span>
+            <span class="package-credits-unit">积分</span>
+            <span v-if="p.bonus" class="package-bonus">+{{ p.bonus.toLocaleString() }} 赠</span>
           </div>
           <p v-if="p.description" class="package-desc">{{ p.description }}</p>
-          <button class="package-btn">{{ isAdmin ? '管理员充值' : '联系管理员充值' }}</button>
+          <button class="package-btn">{{ isAdmin ? '管理员充值' : '立即订阅' }}</button>
         </article>
       </div>
     </section>
@@ -215,13 +216,17 @@ async function grant() {
   }
 }
 
+function priceYuan(p) {
+  const y = (p.priceCents || 0) / 100
+  return Number.isInteger(y) ? String(y) : y.toFixed(2).replace(/\.?0+$/, '')
+}
 function selectPackage(pkg) {
   if (isAdmin.value) {
     grantForm.amount = pkg.credits + pkg.bonus
-    grantForm.description = `购买 ${pkg.name}（¥${pkg.priceCents / 100}）`
+    grantForm.description = `开通 ${pkg.name}（¥${priceYuan(pkg)}${pkg.period ? '/' + pkg.period : ''}）`
     toast.info(`已填入：${pkg.name} · 选择目标用户后点击执行`)
   } else {
-    toast.info('支付功能开发中，请联系管理员手动充值')
+    toast.info('订阅支付开发中，请联系管理员开通')
   }
 }
 
@@ -426,18 +431,17 @@ onMounted(async () => {
   margin-bottom: 12px;
 }
 .package-credits {
-  display: flex; align-items: baseline; gap: 6px;
-  flex-wrap: wrap;
-  margin-bottom: 12px;
+  font-size: 12.5px;
+  color: var(--text-3);
+  margin-bottom: 14px;
 }
 .package-credits-num {
-  font-family: var(--font-display);
-  font-size: 28px;
+  font-family: var(--font-mono);
+  font-size: 14px;
   font-weight: 700;
-  letter-spacing: -0.02em;
-  color: var(--text-0);
+  color: var(--text-1);
 }
-.package-credits-unit { font-size: 13px; color: var(--text-3); }
+.package-credits-unit { font-size: 12px; color: var(--text-3); }
 .package-bonus {
   font-family: var(--font-mono);
   font-size: 10.5px;
@@ -449,19 +453,27 @@ onMounted(async () => {
   border: 1px solid rgba(143,239,38,0.32);
 }
 .package-price {
-  display: flex; align-items: baseline; gap: 2px;
+  display: flex; align-items: baseline; gap: 3px;
   font-family: var(--font-display);
-  margin-bottom: 14px;
+  margin-bottom: 10px;
 }
 .package-price-currency {
+  font-size: 20px;
+  color: var(--text-1);
+  font-weight: 700;
+}
+.package-price-num {
+  font-size: 44px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--text-0);
+  line-height: 1;
+}
+.package-price-period {
   font-size: 14px;
   color: var(--text-3);
   font-weight: 600;
-}
-.package-price-num {
-  font-size: 22px;
-  font-weight: 700;
-  color: var(--text-1);
+  margin-left: 2px;
 }
 .package-desc {
   font-size: 12px;
