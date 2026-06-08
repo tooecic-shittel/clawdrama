@@ -3338,11 +3338,12 @@ async function exportPackage() {
     if (!n) { toast.error('没有可导出的镜头'); return }
     zip.file('镜头清单.txt', lines.join('\n'))
     const content = await zip.generateAsync({ type: 'blob' })
+    const href = URL.createObjectURL(content)
     const a = document.createElement('a')
-    a.href = URL.createObjectURL(content)
+    a.href = href
     a.download = `episode-${epId.value}-素材包.zip`
     document.body.appendChild(a); a.click(); a.remove()
-    URL.revokeObjectURL(a.href)
+    setTimeout(() => URL.revokeObjectURL(href), 4000) // 延迟回收：立即 revoke 会让大文件下载被中止
     toast.success(`已导出 ${n} 个镜头素材包，可导入 OpenReel / 剪映 剪辑`)
   } catch (e) {
     toast.error('导出失败：' + (e?.message || e))
@@ -3360,7 +3361,10 @@ const downloadingAll = ref(false)
 // 原片音画无问题、最适合拿去剪映精剪（合成/拼接片才有音画不同步问题）。
 async function downloadAllVideos() {
   if (downloadingAll.value) return
+  const targets = sbs.value.filter(s => s.video_url || s.videoUrl)
+  if (!targets.length) { toast.error('还没有已生成的镜头视频'); return }
   downloadingAll.value = true
+  toast.info(`正在打包 ${targets.length} 个镜头视频，请稍候…`)
   try {
     const zip = new JSZip()
     let n = 0
@@ -3368,19 +3372,21 @@ async function downloadAllVideos() {
       const rel = sbs.value[i].video_url || sbs.value[i].videoUrl
       if (!rel) continue
       const url = String(rel).startsWith('http') ? rel : '/' + String(rel).replace(/^\/+/, '')
-      const blob = await (await fetch(url)).blob()
-      zip.file(`镜头${String(i + 1).padStart(2, '0')}.mp4`, blob)
+      const res = await fetch(url)
+      if (!res.ok) throw new Error(`镜头${i + 1} 下载失败（${res.status}）`)
+      zip.file(`镜头${String(i + 1).padStart(2, '0')}.mp4`, await res.blob())
       n++
     }
-    if (!n) { toast.error('还没有已生成的镜头视频'); return }
     const content = await zip.generateAsync({ type: 'blob' })
+    const href = URL.createObjectURL(content)
     const a = document.createElement('a')
-    a.href = URL.createObjectURL(content)
+    a.href = href
     a.download = `episode-${epId.value}-镜头视频.zip`
     document.body.appendChild(a); a.click(); a.remove()
-    URL.revokeObjectURL(a.href)
+    setTimeout(() => URL.revokeObjectURL(href), 4000) // 延迟回收：立即 revoke 会让大文件下载被中止
     toast.success(`已打包下载 ${n} 个镜头视频`)
   } catch (e) {
+    console.error('[downloadAllVideos]', e)
     toast.error('下载失败：' + (e?.message || e))
   } finally {
     downloadingAll.value = false
