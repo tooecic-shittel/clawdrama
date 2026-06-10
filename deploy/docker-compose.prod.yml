@@ -9,6 +9,7 @@ services:
       context: ..
       args:
         NPM_REGISTRY: ${NPM_REGISTRY:-https://registry.npmmirror.com}
+        APT_MIRROR: ${APT_MIRROR:-mirrors.aliyun.com}
     # 只绑 127.0.0.1：对外由 nginx 反代 + TLS（见 nginx.conf.example）
     ports:
       - "127.0.0.1:5679:5679"

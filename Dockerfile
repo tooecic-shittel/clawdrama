@@ -13,8 +13,10 @@ RUN npm run generate
 # ── Stage 2: Build backend native modules ────────────────────
 FROM node:20-slim AS backend-build
 ARG NPM_REGISTRY=https://registry.npmjs.org
+ARG APT_MIRROR=
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN if [ -n "$APT_MIRROR" ]; then sed -i "s/deb.debian.org/$APT_MIRROR/g" /etc/apt/sources.list.d/debian.sources; fi \
+    && apt-get update && apt-get install -y --no-install-recommends \
     python3 make g++ \
     && rm -rf /var/lib/apt/lists/*
 
@@ -27,9 +29,11 @@ RUN npm config set registry "$NPM_REGISTRY" && npm ci --omit=dev
 # ── Stage 3: Production image (lean) ────────────────────────
 FROM node:20-slim
 ARG NPM_REGISTRY=https://registry.npmjs.org
+ARG APT_MIRROR=
 
 # ffmpeg (runtime) + tsx (runs TS directly)
-RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg \
+RUN if [ -n "$APT_MIRROR" ]; then sed -i "s/deb.debian.org/$APT_MIRROR/g" /etc/apt/sources.list.d/debian.sources; fi \
+    && apt-get update && apt-get install -y --no-install-recommends ffmpeg \
     && rm -rf /var/lib/apt/lists/* \
     && npm config set registry "$NPM_REGISTRY" && npm i -g tsx
 
