@@ -24,6 +24,7 @@ import webhooks from './routes/webhooks.js'
 import aiVoices from './routes/aiVoices.js'
 import auth from './routes/auth.js'
 import credits from './routes/credits.js'
+import backup from './routes/backup.js'
 import { requestLogger, errorHandler } from './middleware/logger.js'
 import { requireAuth } from './middleware/auth.js'
 import { seedAiConfigs, seedMinimaxVoices } from './db/seed-ai-configs.js'
@@ -76,6 +77,7 @@ api.route('/grid', grid)
 api.route('/skills', skills)
 api.route('/ai-voices', aiVoices)
 api.route('/credits', credits)
+api.route('/backup', backup) // 临时：迁移用，迁完删除
 
 app.route('/api/v1', api)
 
