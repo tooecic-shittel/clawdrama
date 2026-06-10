@@ -1,14 +1,18 @@
 # ── Stage 1: Build frontend ──────────────────────────────────
 FROM node:20-slim AS frontend-build
+# 国内构建提速：--build-arg NPM_REGISTRY=https://registry.npmmirror.com
+# 默认官方源，海外构建（Railway 等）不受影响。
+ARG NPM_REGISTRY=https://registry.npmjs.org
 
 WORKDIR /app/frontend
 COPY frontend/package.json frontend/package-lock.json ./
-RUN npm ci
+RUN npm config set registry "$NPM_REGISTRY" && npm ci
 COPY frontend/ ./
 RUN npm run generate
 
 # ── Stage 2: Build backend native modules ────────────────────
 FROM node:20-slim AS backend-build
+ARG NPM_REGISTRY=https://registry.npmjs.org
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 make g++ \
@@ -18,15 +22,16 @@ WORKDIR /app/backend
 COPY backend/package.json backend/package-lock.json ./
 
 # Production deps only (native modules compiled here)
-RUN npm ci --omit=dev
+RUN npm config set registry "$NPM_REGISTRY" && npm ci --omit=dev
 
 # ── Stage 3: Production image (lean) ────────────────────────
 FROM node:20-slim
+ARG NPM_REGISTRY=https://registry.npmjs.org
 
 # ffmpeg (runtime) + tsx (runs TS directly)
 RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg \
     && rm -rf /var/lib/apt/lists/* \
-    && npm i -g tsx
+    && npm config set registry "$NPM_REGISTRY" && npm i -g tsx
 
 WORKDIR /app
 

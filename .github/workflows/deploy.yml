@@ -1,11 +1,12 @@
-# 在 GitHub 服务器上构建镜像（内存充足，nuxt generate 不会 OOM）→ 推到阿里云 ACR →
-# 可选：SSH 登服务器自动 pull 拉起。2C2G 小机器只负责运行，不构建。
+# 【可选】自动部署：GitHub 构建镜像 → 推镜像仓库 → SSH 服务器 pull 拉起。
+# 注意：8G 服务器可直接本机构建（见 deploy/README.md 主流程），不一定需要这套 CI。
+# 适用火山云 CR / 阿里云 ACR 等任意仓库——登录机制通用，填对应 registry 即可。
 #
-# 需要在仓库 Settings → Secrets and variables → Actions 配好这些 secrets：
-#   ACR_REGISTRY   如 registry.cn-shanghai.aliyuncs.com
-#   ACR_NAMESPACE  你的命名空间
-#   ACR_USERNAME   ACR 用户名
-#   ACR_PASSWORD   ACR 密码（容器镜像服务里设置的访问凭证）
+# 在仓库 Settings → Secrets and variables → Actions 配好（火山云 CR 也用这几个，名字随意）：
+#   ACR_REGISTRY   仓库地址（火山云 CR 形如 cr.volces.com；阿里云形如 registry.cn-shanghai.aliyuncs.com）
+#   ACR_NAMESPACE  命名空间
+#   ACR_USERNAME   仓库用户名
+#   ACR_PASSWORD   仓库访问凭证/密码
 #   （可选，自动部署用）
 #   SSH_HOST       服务器公网 IP
 #   SSH_USER       如 root
