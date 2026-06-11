@@ -1014,17 +1014,17 @@
                           <Loader2 v-if="isPendingShotFrame(sb.id, 'first_frame')" :size="14" class="animate-spin" />
                           <svg v-else width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
                         </div>
-                        <div v-if="getFirstFrame(sb) && !isPendingShotFrame(sb.id, 'first_frame')" class="frame-actions">
-                          <button class="frame-action-btn" title="重新生成（同 prompt）" @click.stop="genShotFrame(sb, 'first_frame')">
-                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
-                          </button>
-                          <button class="frame-action-btn frame-action-btn-edit" title="自定义编辑提示词后重新生成" @click.stop="openShotCustomDialog(sb, 'first_frame')">
-                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
-                            自定义
-                          </button>
-                        </div>
                       </div>
                       <span class="frame-thumb-label">{{ isPendingShotFrame(sb.id, 'first_frame') ? '首帧生成中' : '首帧' }}</span>
+                      <div v-if="getFirstFrame(sb) && !isPendingShotFrame(sb.id, 'first_frame')" class="frame-btns">
+                        <button class="frame-btn frame-btn-icon" title="重新生成（同 prompt）" @click.stop="genShotFrame(sb, 'first_frame')">
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+                        </button>
+                        <button class="frame-btn frame-btn-edit" title="自定义编辑提示词后重新生成" @click.stop="openShotCustomDialog(sb, 'first_frame')">
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+                          自定义
+                        </button>
+                      </div>
                     </div>
                     <div v-if="frameMode === 'first_last'" class="frame-thumb-wrap">
                       <div class="frame-thumb" @click.stop="!isPendingShotFrame(sb.id, 'last_frame') && !getLastFrame(sb) && genShotFrame(sb, 'last_frame')">
@@ -1038,17 +1038,17 @@
                           <Loader2 v-if="isPendingShotFrame(sb.id, 'last_frame')" :size="14" class="animate-spin" />
                           <svg v-else width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
                         </div>
-                        <div v-if="getLastFrame(sb) && !isPendingShotFrame(sb.id, 'last_frame')" class="frame-actions">
-                          <button class="frame-action-btn" title="重新生成（同 prompt）" @click.stop="genShotFrame(sb, 'last_frame')">
-                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
-                          </button>
-                          <button class="frame-action-btn frame-action-btn-edit" title="自定义编辑提示词后重新生成" @click.stop="openShotCustomDialog(sb, 'last_frame')">
-                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
-                            自定义
-                          </button>
-                        </div>
                       </div>
                       <span class="frame-thumb-label">{{ isPendingShotFrame(sb.id, 'last_frame') ? '尾帧生成中' : '尾帧' }}</span>
+                      <div v-if="getLastFrame(sb) && !isPendingShotFrame(sb.id, 'last_frame')" class="frame-btns">
+                        <button class="frame-btn frame-btn-icon" title="重新生成（同 prompt）" @click.stop="genShotFrame(sb, 'last_frame')">
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+                        </button>
+                        <button class="frame-btn frame-btn-edit" title="自定义编辑提示词后重新生成" @click.stop="openShotCustomDialog(sb, 'last_frame')">
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+                          自定义
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -4412,35 +4412,23 @@ onMounted(() => { refresh(); loadConfigs(); loadVoices() })
 }
 .frame-thumb:hover .frame-re { display: flex; }
 
-/* Frame action buttons (regen + custom) overlay on hover */
-.frame-actions {
-  position: absolute; top: 4px; right: 4px;
-  display: flex; gap: 4px;
-  z-index: 2;
+/* Frame action buttons (regen + custom) — 放在缩略图下方，文字清晰不挤 */
+.frame-btns { display: flex; gap: 4px; width: 130px; margin-top: 2px; }
+.frame-btn {
+  height: 26px; border-radius: 6px;
+  font-size: 11px; font-weight: 600;
+  display: flex; align-items: center; justify-content: center; gap: 4px;
+  cursor: pointer; white-space: nowrap; padding: 0;
+  background: var(--bg-2); border: 1px solid var(--border); color: var(--text-2);
+  transition: all 0.15s;
 }
-.frame-action-btn-edit {
-  width: auto; padding: 0 7px; gap: 3px;
-  font-size: 10px; font-weight: 700;
+.frame-btn:hover { border-color: var(--accent); color: var(--accent); }
+.frame-btn-icon { width: 32px; flex: 0 0 32px; }
+.frame-btn-edit {
+  flex: 1;
   background: var(--accent); color: #0a0e1a; border-color: var(--accent);
 }
-.frame-action-btn {
-  width: 22px; height: 22px;
-  border-radius: 6px;
-  background: rgba(0,0,0,0.65);
-  border: 1px solid rgba(255,255,255,0.15);
-  color: #fff;
-  display: flex; align-items: center; justify-content: center;
-  cursor: pointer;
-  padding: 0;
-  transition: background 0.15s, transform 0.15s;
-  backdrop-filter: blur(4px);
-}
-.frame-action-btn:hover {
-  background: var(--accent);
-  color: #0a0e1a;
-  border-color: transparent;
-  transform: scale(1.08);
-}
+.frame-btn-edit:hover { filter: brightness(1.08); color: #0a0e1a; border-color: var(--accent); }
 .frame-scroll { flex: 1; overflow-y: auto; padding: 10px 12px; }
 .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--bg-3); flex-shrink: 0; }
 .dot.ok { background: var(--success); }
@@ -5020,6 +5008,10 @@ onMounted(() => { refresh(); loadConfigs(); loadVoices() })
   }
 
   .frame-thumb {
+    width: 100%;
+  }
+
+  .frame-btns {
     width: 100%;
   }
 
