@@ -2855,12 +2855,17 @@ function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms))
 }
 
-function watchAsyncResult(check, attempts = 24, delay = 2500) {
+function watchAsyncResult(check, attempts = 36, delay = 2500, onSettle) {
   void (async () => {
-    for (let i = 0; i < attempts; i++) {
-      await sleep(delay)
-      await refresh()
-      if (check()) return
+    try {
+      for (let i = 0; i < attempts; i++) {
+        await sleep(delay)
+        await refresh()
+        if (check()) return
+      }
+    } finally {
+      // 无论命中结果还是轮询超时，都复位 pending，避免按钮永久卡在「生成中」
+      if (onSettle) onSettle()
     }
   })()
 }
@@ -2877,10 +2882,8 @@ async function genCharImg(id, opts = {}) {
     watchAsyncResult(() => {
       const char = chars.value.find(c => c.id === id)
       const cur = char?.image_url || char?.imageUrl || ''
-      const done = !!cur && cur !== before
-      if (done) pendingCharImageIds.value = pendingCharImageIds.value.filter(item => item !== id)
-      return done
-    }, 36)
+      return !!cur && cur !== before
+    }, 36, 2500, () => { pendingCharImageIds.value = pendingCharImageIds.value.filter(item => item !== id) })
   } catch (e) {
     pendingCharImageIds.value = pendingCharImageIds.value.filter(item => item !== id)
     toast.error(e.message)
@@ -2903,10 +2906,8 @@ async function genCharView(id, view) {
     watchAsyncResult(() => {
       const char = chars.value.find(c => c.id === id)
       const field = (view === 'side' ? (char?.view_side || char?.viewSide) : (char?.view_back || char?.viewBack)) || ''
-      const done = !!field && field !== before
-      if (done) pendingCharViewKeys.value = pendingCharViewKeys.value.filter(k => k !== key)
-      return done
-    }, 36)
+      return !!field && field !== before
+    }, 36, 2500, () => { pendingCharViewKeys.value = pendingCharViewKeys.value.filter(k => k !== key) })
   } catch (e) {
     pendingCharViewKeys.value = pendingCharViewKeys.value.filter(k => k !== key)
     toast.error(e.message)
@@ -2921,16 +2922,17 @@ function batchCharImages() {
     await refresh()
     watchAsyncResult(() => ids.every(id => {
       const char = chars.value.find(c => c.id === id)
-      const done = !!(char?.image_url || char?.imageUrl)
-      if (done) pendingCharImageIds.value = pendingCharImageIds.value.filter(item => item !== id)
-      return done
-    }), 36)
+      return !!(char?.image_url || char?.imageUrl)
+    }), 36, 2500, () => { pendingCharImageIds.value = pendingCharImageIds.value.filter(item => !ids.includes(item)) })
   }).catch(e => {
     pendingCharImageIds.value = pendingCharImageIds.value.filter(item => !ids.includes(item))
     toast.error(e.message)
   })
 }
 async function genSceneImg(id, opts = {}) {
+  // 重新生成时旧图还在，必须等地址「变了」才算完成，否则会秒判完成、新图不刷新
+  const s0 = scenes.value.find(s => s.id === id)
+  const before = s0?.image_url || s0?.imageUrl || ''
   try {
     if (!isPendingSceneImage(id)) pendingSceneImageIds.value.push(id)
     await sceneAPI.generateImage(id, epId.value, opts)
@@ -2938,10 +2940,9 @@ async function genSceneImg(id, opts = {}) {
     await refresh()
     watchAsyncResult(() => {
       const scene = scenes.value.find(s => s.id === id)
-      const done = !!(scene?.image_url || scene?.imageUrl)
-      if (done) pendingSceneImageIds.value = pendingSceneImageIds.value.filter(item => item !== id)
-      return done
-    })
+      const cur = scene?.image_url || scene?.imageUrl || ''
+      return !!cur && cur !== before
+    }, 36, 2500, () => { pendingSceneImageIds.value = pendingSceneImageIds.value.filter(item => item !== id) })
   } catch (e) {
     pendingSceneImageIds.value = pendingSceneImageIds.value.filter(item => item !== id)
     toast.error(e.message)
@@ -3003,10 +3004,8 @@ function batchSceneImages() {
   toast.success('场景图片批量生成中')
   watchAsyncResult(() => ids.every(id => {
     const scene = scenes.value.find(s => s.id === id)
-    const done = !!(scene?.image_url || scene?.imageUrl)
-    if (done) pendingSceneImageIds.value = pendingSceneImageIds.value.filter(item => item !== id)
-    return done
-  }), 36)
+    return !!(scene?.image_url || scene?.imageUrl)
+  }), 36, 2500, () => { pendingSceneImageIds.value = pendingSceneImageIds.value.filter(item => !ids.includes(item)) })
 }
 
 const IGNORE_TTS_SPEAKERS = /^(环境音|环境声|音效|效果音|sfx|sound ?effect|bgm|背景音|背景音乐|ambient)$/i
@@ -3141,6 +3140,8 @@ async function genShotFrame(sb, frameType, opts = {}) {
   const prompt = opts.prompt || buildShotImagePrompt(sb, frameType)
   const referenceImages = getShotReferenceImages(sb)
   const key = framePendingKey(sb.id, frameType)
+  // 重新生成时旧帧还在，等地址「变了」才算完成
+  const before = (frameType === 'first_frame' ? getFirstFrame(sb) : getLastFrame(sb)) || ''
   try {
     if (!pendingShotFrameKeys.value.includes(key)) pendingShotFrameKeys.value.push(key)
     const body = {
@@ -3159,10 +3160,9 @@ async function genShotFrame(sb, frameType, opts = {}) {
     await refresh()
     watchAsyncResult(() => {
       const target = sbs.value.find(s => s.id === sb.id)
-      const done = frameType === 'first_frame' ? !!getFirstFrame(target) : !!getLastFrame(target)
-      if (done) pendingShotFrameKeys.value = pendingShotFrameKeys.value.filter(item => item !== key)
-      return done
-    })
+      const cur = (frameType === 'first_frame' ? getFirstFrame(target) : getLastFrame(target)) || ''
+      return !!cur && cur !== before
+    }, 36, 2500, () => { pendingShotFrameKeys.value = pendingShotFrameKeys.value.filter(item => item !== key) })
   } catch (e) {
     pendingShotFrameKeys.value = pendingShotFrameKeys.value.filter(item => item !== key)
     toast.error(e.message)
@@ -3230,10 +3230,8 @@ async function pollVideoGeneration(generationId, storyboardId) {
   if (!generationId) {
     watchAsyncResult(() => {
       const target = sbs.value.find(s => s.id === storyboardId)
-      const done = !!(target?.video_url || target?.videoUrl)
-      if (done) pendingVideoIds.value = pendingVideoIds.value.filter(item => item !== storyboardId)
-      return done
-    }, 60, 4000)
+      return !!(target?.video_url || target?.videoUrl)
+    }, 60, 4000, () => { pendingVideoIds.value = pendingVideoIds.value.filter(item => item !== storyboardId) })
     return
   }
   // ~26 分钟耐心：Seedance 选了之后可能先在后端「排队等位」(最多 10min) 再生成(~6min)，
