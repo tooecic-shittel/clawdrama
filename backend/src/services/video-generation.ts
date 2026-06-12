@@ -33,7 +33,7 @@ interface GenerateVideoParams {
 export async function generateVideo(params: GenerateVideoParams): Promise<number> {
   const ts = now()
   // 用户所选引擎（默认 seedance）。预检按所选引擎计价；最终扣费在完成时按「实际产出 provider」算（见 handleVideoComplete）。
-  const engine: VideoEngine = params.engine === 'happyhorse' ? 'happyhorse' : 'seedance'
+  const engine: VideoEngine = params.engine === 'happyhorse' ? 'happyhorse' : params.engine === 'hailuo' ? 'hailuo' : 'seedance'
   // Gate on credits before doing any work (throws InsufficientCreditsError → 402 at route).
   // 视频按「时长 × 画质 × 引擎」动态计费。
   await assertBalance(params.userId, 'video', videoCost(params.duration, params.resolution, engine))
@@ -56,6 +56,12 @@ export async function generateVideo(params: GenerateVideoParams): Promise<number
     if (!hh) throw new Error('HappyHorse 视频配置未启用')
     pushUniq(hh)
     for (const c of allVideo) if (c.provider !== 'volcengine') pushUniq(c) // 兜底排除火山
+  } else if (engine === 'hailuo') {
+    // 海螺：以 MiniMax 为主，失败兜底到 happyhorse（不升级到更贵的火山）
+    const hl = allVideo.find(c => c.provider === 'minimax')
+    if (!hl) throw new Error('海螺 Hailuo 视频配置未启用')
+    pushUniq(hl)
+    for (const c of allVideo) if (c.provider !== 'volcengine') pushUniq(c)
   } else {
     // seedance：明确以火山为主（用户的引擎选择优先于历史的 episode 配置绑定）。
     const seed = allVideo.find(c => c.provider === 'volcengine')
@@ -378,9 +384,25 @@ async function pollVideoUntilDone(
 
       const pollResp = adapter.parsePollResponse(result)
 
-      if (pollResp.status === 'completed' && pollResp.videoUrl) {
-        logTaskSuccess('VideoTask', 'poll-complete', { id, taskId, videoUrl: pollResp.videoUrl })
-        return { status: 'completed', videoUrl: pollResp.videoUrl }
+      if (pollResp.status === 'completed') {
+        let videoUrl = pollResp.videoUrl
+        // MiniMax/海螺：query 完成只给 file_id，需再调 /files/retrieve 换真实下载地址
+        if (!videoUrl && config.provider === 'minimax') {
+          const fileId = result.file_id || result.data?.file_id
+          if (fileId) {
+            try {
+              const rResp = await fetch(`${config.baseUrl}/v1/files/retrieve?file_id=${encodeURIComponent(fileId)}`, { headers: { Authorization: `Bearer ${config.apiKey}` } })
+              const rJson = await rResp.json() as any
+              videoUrl = rJson?.file?.download_url || rJson?.download_url
+            } catch (e: any) {
+              logTaskWarn('VideoTask', 'minimax-retrieve-fail', { id, taskId, error: e.message })
+            }
+          }
+        }
+        if (videoUrl) {
+          logTaskSuccess('VideoTask', 'poll-complete', { id, taskId, videoUrl })
+          return { status: 'completed', videoUrl }
+        }
       }
       if (pollResp.status === 'failed') {
         logTaskError('VideoTask', 'poll-failed', { id, taskId, error: pollResp.error || 'Video generation failed' })

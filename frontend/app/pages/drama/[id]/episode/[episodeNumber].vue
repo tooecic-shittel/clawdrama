@@ -1255,8 +1255,11 @@
                   <button type="button" :class="['engine-opt', videoEngine==='seedance' && 'active']" @click="videoEngine='seedance'" title="火山 Seedance 2.0：画质更好、无水印；较贵；同时最多 4 条，其余自动排队">
                     Seedance 2.0<span class="engine-tag good">贵·效果好</span>
                   </button>
-                  <button type="button" :class="['engine-opt', videoEngine==='happyhorse' && 'active']" @click="videoEngine='happyhorse'" title="云雾 HappyHorse：更便宜更快；带水印">
+                  <button type="button" :class="['engine-opt', videoEngine==='happyhorse' && 'active']" @click="videoEngine='happyhorse'" title="云雾 HappyHorse：更便宜更快；带水印；固定 5 秒">
                     HappyHorse<span class="engine-tag">省·带水印</span>
+                  </button>
+                  <button type="button" :class="['engine-opt', videoEngine==='hailuo' && 'active']" @click="videoEngine='hailuo'" title="海螺 Hailuo（MiniMax）：写实真人可用、支持更长时长（6/10秒）；较贵">
+                    海螺 Hailuo<span class="engine-tag good">贵·真人可用</span>
                   </button>
                 </div>
                 <label class="dim" style="font-size:11px;margin:0 4px 0 8px">画质</label>
@@ -1265,7 +1268,7 @@
                   <option value="720P">720P（均衡）</option>
                   <option value="1080P">1080P（清晰）</option>
                 </select>
-                <span class="dim" style="font-size:11px;margin:0 4px" :title="`${videoEngine==='seedance'?'Seedance':'HappyHorse'} · ${videoResolution} ≈${videoRatePerSec} 积分/秒。例 5 秒 ≈${videoRatePerSec * 5} 积分`">≈{{ videoRatePerSec }} 积分/秒</span>
+                <span class="dim" style="font-size:11px;margin:0 4px" :title="`${videoEngine==='seedance'?'Seedance':videoEngine==='hailuo'?'海螺 Hailuo':'HappyHorse'} · ${videoResolution} ≈${videoRatePerSec} 积分/秒。例 5 秒 ≈${videoRatePerSec * 5} 积分`">≈{{ videoRatePerSec }} 积分/秒</span>
                 <button class="btn btn-sm" @click="batchVideos">
                   <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
                   批量视频
@@ -1277,7 +1280,7 @@
                 <span v-if="pendingVideoIds.length || videoQueue.length" class="dim" style="font-size:11px;margin-left:6px" :title="videoEngine==='seedance' ? `Seedance 同时最多 ${videoConcurrency} 条，其余自动排队` : `每次最多并发 ${videoConcurrency} 条`">
                   生成中 {{ pendingVideoIds.length }}<template v-if="videoQueue.length"> · 排队 {{ videoQueue.length }}</template>
                 </span>
-                <span v-else-if="videoEngine==='seedance'" class="dim" style="font-size:11px;margin-left:6px" title="火山 Seedance 并发上限，超出自动排队">同时最多 {{ videoConcurrency }} 条</span>
+                <span v-else-if="videoEngine!=='happyhorse'" class="dim" style="font-size:11px;margin-left:6px" title="并发上限，超出自动排队">同时最多 {{ videoConcurrency }} 条</span>
               </div>
             </div>
             <div class="prod-grid">
@@ -1695,11 +1698,11 @@ const TTS_MODEL_PRESETS = [
 // 视频引擎二选一：seedance（火山·贵·效果好·无水印·并发限 4）/ happyhorse（云雾·省·带水印）。
 const videoEngine = ref(typeof window !== 'undefined' ? (localStorage.getItem('claw_video_engine') || 'seedance') : 'seedance')
 const videoResolution = ref(typeof window !== 'undefined' ? (localStorage.getItem('claw_video_res') || '720P') : '720P')
-// HappyHorse 不支持 480P：初始加载 & 切换到它时，把残留的 480P 纠正为 720P
-if (videoEngine.value === 'happyhorse' && videoResolution.value === '480P') videoResolution.value = '720P'
+// 480P 仅 Seedance 原生支持：HappyHorse / 海螺 选中时把残留的 480P 纠正为 720P
+if (videoEngine.value !== 'seedance' && videoResolution.value === '480P') videoResolution.value = '720P'
 watch(videoEngine, (v) => {
   if (typeof window !== 'undefined') localStorage.setItem('claw_video_engine', v)
-  if (v === 'happyhorse' && videoResolution.value === '480P') videoResolution.value = '720P'
+  if (v !== 'seedance' && videoResolution.value === '480P') videoResolution.value = '720P'
 })
 watch(videoResolution, (v) => { if (typeof window !== 'undefined') localStorage.setItem('claw_video_res', v) })
 
@@ -1720,7 +1723,7 @@ const pendingShotFrameKeys = ref([])
 const pendingVideoIds = ref([])
 // 批量视频限并发：Seedance 并发上限约 4（与后端并发闸一致），happyhorse 吞吐更高可多发。
 // 后端并发闸是跨标签页/用户的最终防线；前端这层是单标签页的节流 + 排队展示。
-const videoConcurrency = computed(() => videoEngine.value === 'happyhorse' ? 6 : 4)
+const videoConcurrency = computed(() => videoEngine.value === 'happyhorse' ? 6 : videoEngine.value === 'hailuo' ? 3 : 4)
 const videoQueue = ref([]) // 等待中的 storyboard id（排队中，尚未发起）
 const pendingComposeIds = ref([])
 const failedVideoMessages = ref({})
@@ -1751,7 +1754,7 @@ function handleImageViewerKeydown(event) {
   if (event.key === 'Escape' && imageViewer.value.open) closeImageViewer()
 }
 
-const pricing = ref({ image: 1000, tts: 150, videoPerSec: { seedance: { '480p': 1500, '720p': 3000, '1080p': 6000 }, happyhorse: { '720p': 2400, '1080p': 4800 } } })
+const pricing = ref({ image: 1000, tts: 150, videoPerSec: { seedance: { '480p': 1500, '720p': 3000, '1080p': 6000 }, happyhorse: { '720p': 2400, '1080p': 4800 }, hailuo: { '720p': 3000, '1080p': 6000 } } })
 // 视频每秒积分（按引擎×画质动态计费）。兼容后端新结构(按引擎嵌套)与旧结构(扁平)。
 const videoRatePerSec = computed(() => {
   const rs = String(videoResolution.value).toLowerCase()

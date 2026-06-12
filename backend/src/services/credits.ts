@@ -85,8 +85,8 @@ export const ACTION_COST: Record<ChargeableAction, number> = {
   tts: 150,
 }
 
-// 视频引擎：seedance（火山·高质量·较贵）/ happyhorse（云雾·经济·带水印·兜底）。
-export type VideoEngine = 'seedance' | 'happyhorse'
+// 视频引擎：seedance（火山·高质量·较贵·拒真人图）/ happyhorse（云雾·经济·带水印·固定5s·兜底）/ hailuo（海螺·写实真人可用·支持长时长·较贵）。
+export type VideoEngine = 'seedance' | 'happyhorse' | 'hailuo'
 
 // 视频每秒积分（按引擎 × 画质档）。
 //   seedance：成本 720P≈¥1/秒、1080P≈¥2/秒 × 3 毛利 → 3000 / 6000。
@@ -97,11 +97,14 @@ export type VideoEngine = 'seedance' | 'happyhorse'
 export const VIDEO_CREDIT_PER_SEC: Record<VideoEngine, Record<string, number>> = {
   seedance: { '480p': 1500, '720p': 3000, '1080p': 6000 },
   happyhorse: { '720p': 2400, '1080p': 4800 },
+  hailuo: { '720p': 3000, '1080p': 6000 },  // 海螺·与 seedance 同档（写实真人可用；成本算下来此档有 margin，后续按真实成本精调）
 }
 
-/** provider → 计费引擎档：火山=seedance，其余（云雾 happyhorse / Veo 兜底）=happyhorse 档。 */
+/** provider → 计费引擎档：火山=seedance，minimax=hailuo（海螺），其余（云雾 happyhorse / Veo 兜底）=happyhorse 档。 */
 export function providerToEngine(provider?: string | null): VideoEngine {
-  return provider === 'volcengine' ? 'seedance' : 'happyhorse'
+  if (provider === 'volcengine') return 'seedance'
+  if (provider === 'minimax') return 'hailuo'
+  return 'happyhorse'
 }
 
 /** 视频动态积分：时长(秒) × 引擎档 × 画质费率。缺省 seedance / 5秒 / 720P。 */
