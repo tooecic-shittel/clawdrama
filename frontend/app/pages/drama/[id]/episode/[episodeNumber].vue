@@ -677,7 +677,8 @@
 
           <div v-else-if="rn && rt === 'storyboard_breaker'" class="step-loading">
             <Loader2 :size="24" class="animate-spin" style="color:var(--accent-dark)" />
-            <div class="loading-text">正在拆解分镜并生成提示词...</div>
+            <div class="loading-text">正在拆解分镜并生成提示词…</div>
+            <div class="loading-text" style="font-size:12px;opacity:0.7;margin-top:4px">约需 1–2 分钟,AI 正在逐个镜头生成,请耐心等待、不要关闭或刷新页面</div>
           </div>
 
           <div v-else class="step-empty">
