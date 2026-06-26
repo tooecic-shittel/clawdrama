@@ -3122,7 +3122,13 @@ function compactPromptText(value) {
 }
 
 function pickVideoPromptBeat(videoPrompt, frameType) {
-  const text = compactPromptText(videoPrompt)
+  const normalized = String(videoPrompt || '').replace(/<n\s*\/?>/gi, '\n')
+  const taggedSegments = normalized
+    .split(/\n+/)
+    .map(compactPromptText)
+    .filter(Boolean)
+  if (taggedSegments.length > 1) return frameType === 'first_frame' ? taggedSegments[0] : taggedSegments[taggedSegments.length - 1]
+  const text = compactPromptText(normalized)
   if (!text) return ''
   const parts = text
     .split(/(?=(?:^|[；;。.\n\s])(?:\d+(?:\.\d+)?\s*[-~—到至]\s*\d+(?:\.\d+)?\s*秒|第\s*\d+\s*秒))/)
