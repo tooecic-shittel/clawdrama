@@ -3091,7 +3091,7 @@ function hasImg(s) { return !!getStoryboardCover(s) }
 function hasVid(s) { return !!getVideoUrl(s) }
 function hasComposed(s) { return !!getComposedVideoUrl(s) }
 
-function getShotReferenceImages(sb) {
+function getShotReferenceImages(sb, frameType) {
   const refs = []
   const pushRef = (value) => {
     if (!value || refs.includes(value) || refs.length >= 6) return
@@ -3107,16 +3107,37 @@ function getShotReferenceImages(sb) {
   for (const ref of getRefs(sb)) {
     pushRef(ref)
   }
-  const first = getFirstFrame(sb)
-  const last = getLastFrame(sb)
-  pushRef(first)
-  pushRef(last)
+  if (frameType === 'last_frame') {
+    pushRef(getFirstFrame(sb))
+  } else if (frameType === 'first_frame') {
+    const idx = sbs.value.findIndex(item => item.id === sb.id)
+    const prev = idx > 0 ? sbs.value[idx - 1] : null
+    pushRef(getLastFrame(prev) || getFirstFrame(prev))
+  }
   return refs.filter(Boolean).slice(0, 6)
+}
+
+function compactPromptText(value) {
+  return String(value || '').replace(/\s+/g, ' ').trim()
+}
+
+function pickVideoPromptBeat(videoPrompt, frameType) {
+  const text = compactPromptText(videoPrompt)
+  if (!text) return ''
+  const parts = text
+    .split(/(?=(?:^|[；;。.\n\s])(?:\d+(?:\.\d+)?\s*[-~—到至]\s*\d+(?:\.\d+)?\s*秒|第\s*\d+\s*秒))/)
+    .map(item => compactPromptText(item).replace(/^[；;。.\s]+/, ''))
+    .filter(Boolean)
+  if (parts.length > 1) return frameType === 'first_frame' ? parts[0] : parts[parts.length - 1]
+  const sentences = text.split(/[。！？!?；;\n]+/).map(compactPromptText).filter(Boolean)
+  if (sentences.length > 1) return frameType === 'first_frame' ? sentences[0] : sentences[sentences.length - 1]
+  return text
 }
 
 function buildShotImagePrompt(sb, frameType) {
   const title = sb.title || ''
   const description = sb.image_prompt || sb.imagePrompt || sb.description || ''
+  const videoBeat = pickVideoPromptBeat(sb.video_prompt || sb.videoPrompt || '', frameType)
   const shotType = sb.shot_type || sb.shotType || ''
   const angle = sb.angle || ''
   const movement = sb.movement || ''
@@ -3124,21 +3145,26 @@ function buildShotImagePrompt(sb, frameType) {
   const time = sb.time || ''
   const charactersText = getStoryboardCharacterNames(sb).join('、')
   const action = sb.action || ''
+  const result = sb.result || ''
+  const dialogue = sb.dialogue || ''
   const atmosphere = sb.atmosphere || ''
   const frameHint = frameType === 'first_frame'
-    ? '生成这个镜头的起始关键帧，突出建立关系和动作开始瞬间'
-    : '生成这个镜头的结束关键帧，突出动作结束、情绪落点或结果状态'
+    ? '只生成这个镜头的首帧：剧情刚开始的状态，动作尚未完成，突出人物初始站位、冲突关系和动作起点。不要画出结局状态。'
+    : '只生成这个镜头的尾帧：剧情推进后的结果状态，突出动作完成、情绪落点、位置变化或冲突后果。不要重复首帧构图。'
 
   return [
     title ? `镜头标题：${title}` : '',
-    description ? `画面描述：${description}` : '',
+    description ? `整镜剧情：${description}` : '',
+    videoBeat ? `${frameType === 'first_frame' ? '首帧剧情点' : '尾帧剧情点'}：${videoBeat}` : '',
     shotType ? `景别：${shotType}` : '',
     angle ? `机位：${angle}` : '',
     movement ? `运镜：${movement}` : '',
     charactersText ? `角色：${charactersText}` : '',
     location ? `地点：${location}` : '',
     time ? `时间：${time}` : '',
-    action ? `动作：${action}` : '',
+    action ? `动作起点：${action}` : '',
+    result ? `动作结果：${result}` : '',
+    dialogue ? `对白/情绪依据：${dialogue}` : '',
     atmosphere ? `氛围：${atmosphere}` : '',
     frameHint,
   ].filter(Boolean).join('；')
@@ -3146,7 +3172,7 @@ function buildShotImagePrompt(sb, frameType) {
 
 async function genShotFrame(sb, frameType, opts = {}) {
   const prompt = opts.prompt || buildShotImagePrompt(sb, frameType)
-  const referenceImages = getShotReferenceImages(sb)
+  const referenceImages = getShotReferenceImages(sb, frameType)
   const key = framePendingKey(sb.id, frameType)
   // 重新生成时旧帧还在，等地址「变了」才算完成
   const before = (frameType === 'first_frame' ? getFirstFrame(sb) : getLastFrame(sb)) || ''
