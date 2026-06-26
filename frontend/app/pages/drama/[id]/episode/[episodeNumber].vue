@@ -1639,6 +1639,7 @@ const composedCount = computed(() => sbs.value.filter(s => s.composed_video_url 
 const mergeUrl = computed(() => mergeData.value?.merged_url || mergeData.value?.mergedUrl || null)
 
 const scriptStep = ref(0)
+const hasAutoPlacedInitialStep = ref(false)
 const prodTab = ref('chars')
 const prodTabIdx = computed({
   get: () => prodTabDefs.value.findIndex(t => t.id === prodTab.value),
@@ -2798,11 +2799,14 @@ async function refresh() {
       const epHasScript = !!(episode.value?.script_content || episode.value?.scriptContent)
       const epHasSbs = sbs.value.length > 0
 
-      if (epHasSbs) scriptStep.value = 4
-      else if (epHasScript && chars.value.some(c => c.voice_style || c.voiceStyle)) scriptStep.value = 3
-      else if (epHasScript && chars.value.length) scriptStep.value = 2
-      else if (epHasScript || epHasContent) scriptStep.value = 1
-      else scriptStep.value = 0
+      if (!hasAutoPlacedInitialStep.value) {
+        if (epHasSbs) scriptStep.value = 4
+        else if (epHasScript && chars.value.some(c => c.voice_style || c.voiceStyle)) scriptStep.value = 3
+        else if (epHasScript && chars.value.length) scriptStep.value = 2
+        else if (epHasScript || epHasContent) scriptStep.value = 1
+        else scriptStep.value = 0
+        hasAutoPlacedInitialStep.value = true
+      }
       await loadLatestGridImage()
     }
   } catch (e) {
