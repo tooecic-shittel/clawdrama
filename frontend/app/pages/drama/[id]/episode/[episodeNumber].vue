@@ -3121,26 +3121,41 @@ function compactPromptText(value) {
   return String(value || '').replace(/\s+/g, ' ').trim()
 }
 
+function clipPromptText(value, maxLength = 180) {
+  const text = compactPromptText(value)
+  return text.length > maxLength ? `${text.slice(0, maxLength)}...` : text
+}
+
 function pickVideoPromptBeat(videoPrompt, frameType) {
   const normalized = String(videoPrompt || '').replace(/<n\s*\/?>/gi, '\n')
   const taggedSegments = normalized
     .split(/\n+/)
     .map(compactPromptText)
     .filter(Boolean)
-  if (taggedSegments.length > 1) return frameType === 'first_frame' ? taggedSegments[0] : taggedSegments[taggedSegments.length - 1]
+  if (taggedSegments.length > 1) {
+    return frameType === 'first_frame'
+      ? taggedSegments.slice(0, Math.min(2, taggedSegments.length)).join('；')
+      : taggedSegments[taggedSegments.length - 1]
+  }
   const text = compactPromptText(normalized)
   if (!text) return ''
   const parts = text
     .split(/(?=(?:^|[；;。.\n\s])(?:\d+(?:\.\d+)?\s*[-~—到至]\s*\d+(?:\.\d+)?\s*秒|第\s*\d+\s*秒))/)
     .map(item => compactPromptText(item).replace(/^[；;。.\s]+/, ''))
     .filter(Boolean)
-  if (parts.length > 1) return frameType === 'first_frame' ? parts[0] : parts[parts.length - 1]
+  if (parts.length > 1) {
+    return frameType === 'first_frame'
+      ? parts.slice(0, Math.min(2, parts.length)).join('；')
+      : parts[parts.length - 1]
+  }
   const sentences = text.split(/[。！？!?；;\n]+/).map(compactPromptText).filter(Boolean)
   if (sentences.length > 1) return frameType === 'first_frame' ? sentences[0] : sentences[sentences.length - 1]
   return text
 }
 
 function buildShotImagePrompt(sb, frameType) {
+  const isFirstFrame = frameType === 'first_frame'
+  const frameLabel = isFirstFrame ? '首帧' : '尾帧'
   const title = sb.title || ''
   const description = sb.image_prompt || sb.imagePrompt || sb.description || ''
   const videoBeat = pickVideoPromptBeat(sb.video_prompt || sb.videoPrompt || '', frameType)
@@ -3154,25 +3169,33 @@ function buildShotImagePrompt(sb, frameType) {
   const result = sb.result || ''
   const dialogue = sb.dialogue || ''
   const atmosphere = sb.atmosphere || ''
-  const frameHint = frameType === 'first_frame'
+  const frameHint = isFirstFrame
     ? '只生成这个镜头的首帧：剧情刚开始的状态，动作尚未完成，突出人物初始站位、冲突关系和动作起点。不要画出结局状态。'
     : '只生成这个镜头的尾帧：剧情推进后的结果状态，突出动作完成、情绪落点、位置变化或冲突后果。不要重复首帧构图。'
+  const frameAction = isFirstFrame
+    ? (action || videoBeat || description)
+    : (result || videoBeat || action || description)
+  const contrastHint = isFirstFrame
+    ? '明确区分：这是起始关键帧，不要提前表现尾帧的动作完成、结果状态或情绪落点。'
+    : '明确区分：这是结束关键帧，需要体现相对首帧发生后的变化，不要复刻首帧站位和动作起点。'
 
   return [
+    `${frameLabel}生成目标：${frameHint}`,
+    videoBeat ? `${frameLabel}剧情点：${videoBeat}` : '',
+    frameAction ? `${isFirstFrame ? '动作起点' : '动作结果'}：${frameAction}` : '',
+    contrastHint,
     title ? `镜头标题：${title}` : '',
-    description ? `整镜剧情：${description}` : '',
-    videoBeat ? `${frameType === 'first_frame' ? '首帧剧情点' : '尾帧剧情点'}：${videoBeat}` : '',
+    description ? `环境与视觉背景：${clipPromptText(description)}` : '',
     shotType ? `景别：${shotType}` : '',
     angle ? `机位：${angle}` : '',
     movement ? `运镜：${movement}` : '',
     charactersText ? `角色：${charactersText}` : '',
     location ? `地点：${location}` : '',
     time ? `时间：${time}` : '',
-    action ? `动作起点：${action}` : '',
-    result ? `动作结果：${result}` : '',
+    action && !isFirstFrame ? `原始动作：${action}` : '',
+    result && isFirstFrame ? `后续结果参考：${result}` : '',
     dialogue ? `对白/情绪依据：${dialogue}` : '',
     atmosphere ? `氛围：${atmosphere}` : '',
-    frameHint,
   ].filter(Boolean).join('；')
 }
 
