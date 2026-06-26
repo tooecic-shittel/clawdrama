@@ -87,6 +87,18 @@ app.route('/webhooks', webhooks)
 // Serve static files (storage)
 app.use('/static/*', serveStatic({ root: path.join(projectRoot, 'data') }))
 
+// The SPA entry must not be cached, otherwise users can keep running an old
+// hashed JS bundle after deploy. Hashed /_nuxt assets may still be cached.
+app.use('*', async (c, next) => {
+  await next()
+  const contentType = c.res.headers.get('content-type') || ''
+  if (contentType.includes('text/html')) {
+    c.res.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate')
+    c.res.headers.set('Pragma', 'no-cache')
+    c.res.headers.set('Expires', '0')
+  }
+})
+
 // Serve frontend (production build)
 const distPath = path.join(projectRoot, 'frontend', 'dist')
 app.use('*', serveStatic({ root: distPath }))
