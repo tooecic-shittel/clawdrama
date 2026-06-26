@@ -3097,19 +3097,26 @@ function getShotReferenceImages(sb, frameType) {
     if (!value || refs.includes(value) || refs.length >= 6) return
     refs.push(value)
   }
+  const pushCharacterRefs = () => {
+    for (const charId of getStoryboardCharacterIds(sb)) {
+      const char = chars.value.find(item => item.id === charId)
+      pushRef(char?.image_url || char?.imageUrl)
+    }
+  }
   const sceneId = sb?.scene_id || sb?.sceneId
   const scene = scenes.value.find(item => item.id === sceneId)
-  pushRef(scene?.image_url || scene?.imageUrl)
-  for (const charId of getStoryboardCharacterIds(sb)) {
-    const char = chars.value.find(item => item.id === charId)
-    pushRef(char?.image_url || char?.imageUrl)
+
+  if (frameType === 'last_frame') {
+    pushRef(getFirstFrame(sb))
+    pushCharacterRefs()
+  } else {
+    pushCharacterRefs()
   }
+  pushRef(scene?.image_url || scene?.imageUrl)
   for (const ref of getRefs(sb)) {
     pushRef(ref)
   }
-  if (frameType === 'last_frame') {
-    pushRef(getFirstFrame(sb))
-  } else if (frameType === 'first_frame') {
+  if (frameType === 'first_frame') {
     const idx = sbs.value.findIndex(item => item.id === sb.id)
     const prev = idx > 0 ? sbs.value[idx - 1] : null
     pushRef(getLastFrame(prev) || getFirstFrame(prev))

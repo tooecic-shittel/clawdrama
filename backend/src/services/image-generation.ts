@@ -342,17 +342,18 @@ function buildStoryboardIdentityClause(storyboardId: number): string {
     for (const l of links) {
       const [ch] = db.select().from(schema.characters).where(eq(schema.characters.id, l.characterId)).all()
       if (!ch || ch.deletedAt) continue
-      const gender = extractGender(`${ch.appearance || ''} ${ch.description || ''}`)
-      const appr = String(ch.appearance || '')
+      const identitySource = [ch.appearance, ch.description, ch.imagePrompt].filter(Boolean).join('，')
+      const gender = extractGender(identitySource)
+      const appr = String(identitySource)
         .replace(/性别[：:]\s*/g, '')
         .replace(/^(男性|女性|男人|女人|男|女)[，。,.、\s]*/, '')  // 去掉开头重复的性别词
         .replace(/^[，。,.\s]+/, '')
-        .slice(0, 36)
+        .slice(0, 140)
       const tag = [gender, appr].filter(Boolean).join('，')
       parts.push(tag ? `${ch.name}（${tag}）` : ch.name)
     }
     if (!parts.length) return ''
-    return `本画面出现的角色及其身份（必须与参考图严格对应，不得混淆性别、外貌或张冠李戴）：${parts.join('；')}。`
+    return `本画面出现的角色及其身份（必须与参考图严格对应，不得混淆性别、外貌或张冠李戴；必须保持参考图中的发型、发色、服装款式、服装配色、身材比例和标志性道具，除非剧情动作要求，只改变姿势、表情、光照和环境湿度）：${parts.join('；')}。`
   } catch {
     return ''
   }
