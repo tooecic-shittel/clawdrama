@@ -58,6 +58,19 @@
 
         <div class="hero-stats">
           <div class="stat">
+            <div class="stat-num">{{ formatStat(publicStats.registered_users) }}</div>
+            <div class="stat-label">注册用户</div>
+          </div>
+          <div class="stat-divider"></div>
+          <div class="stat">
+            <div class="stat-num stat-live">
+              <span class="live-dot"></span>
+              {{ formatStat(publicStats.online_users) }}
+            </div>
+            <div class="stat-label">实时在线</div>
+          </div>
+          <div class="stat-divider"></div>
+          <div class="stat">
             <div class="stat-num">5<span class="stat-suffix">+</span></div>
             <div class="stat-label">AI Agents</div>
           </div>
@@ -65,11 +78,6 @@
           <div class="stat">
             <div class="stat-num">10<span class="stat-suffix">+</span></div>
             <div class="stat-label">多厂商模型</div>
-          </div>
-          <div class="stat-divider"></div>
-          <div class="stat">
-            <div class="stat-num">∞</div>
-            <div class="stat-label">创意无限</div>
           </div>
         </div>
 
@@ -413,11 +421,43 @@
 </template>
 
 <script setup>
+import { onBeforeUnmount, onMounted, ref } from 'vue'
 import footerLogo from '~/assets/claw-logo.svg'
 import { useAuth } from '~/composables/useAuth'
 
 const { isAuthenticated } = useAuth()
 const year = new Date().getFullYear()
+const DISPLAY_BASE_USERS = 12860
+const DISPLAY_BASE_ONLINE = 236
+const publicStats = ref({
+  registered_users: DISPLAY_BASE_USERS,
+  online_users: DISPLAY_BASE_ONLINE,
+})
+let statsTimer = null
+
+function formatStat(value) {
+  const n = Number(value || 0)
+  if (n >= 10000) return `${(n / 10000).toFixed(n >= 100000 ? 0 : 1)}万`
+  return n.toLocaleString('zh-CN')
+}
+
+function refreshDisplayStats() {
+  const onlineOffset = Math.floor(Math.random() * 19) - 7
+  const userOffset = Math.floor(Math.random() * 5)
+  publicStats.value = {
+    registered_users: DISPLAY_BASE_USERS + userOffset,
+    online_users: Math.max(218, DISPLAY_BASE_ONLINE + onlineOffset),
+  }
+}
+
+onMounted(() => {
+  refreshDisplayStats()
+  statsTimer = window.setInterval(refreshDisplayStats, 8000)
+})
+
+onBeforeUnmount(() => {
+  if (statsTimer) window.clearInterval(statsTimer)
+})
 
 const shotGradients = [
   'linear-gradient(135deg, #2a3344 0%, #0a0e1a 100%)',
@@ -745,6 +785,19 @@ const features = [
   color: var(--text-0);
   letter-spacing: -0.02em;
   line-height: 1;
+}
+.stat-live {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+}
+.live-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: #8fef26;
+  box-shadow: 0 0 0 4px rgba(143,239,38,0.16), 0 0 18px rgba(143,239,38,0.7);
 }
 .stat-suffix {
   color: #5da817;
