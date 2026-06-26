@@ -10,7 +10,7 @@
  * 需要的环境变量：
  *   GOOGLE_API_KEY        —— Google Gemini（文本）
  *   GOOGLE_VIDEO_API_KEY  —— Google Veo 官方视频。与 GOOGLE_API_KEY 是不同的 key；缺失则跳过视频播种。
- *   YUNWU_API_KEY         —— 云雾（图片 + 视频 happyhorse 兜底）
+ *   YUNWU_API_KEY         —— 云雾（图片 + HappyHorse R2V 视频兜底）
  *   MINIMAX_API_KEY       —— MiniMax 官方语音（TTS，直连 api.minimaxi.com）
  *   ARK_API_KEY           —— 火山方舟 Seedance 官方视频（主力，直连 ark.cn-beijing.volces.com）
  */
@@ -34,7 +34,7 @@ const MANAGED_CONFIGS: ManagedConfig[] = [
   { serviceType: 'text',  provider: 'google', name: 'Google Gemini 文本',    baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai', model: 'gemini-2.5-flash',             priority: 100, envKey: 'GOOGLE_API_KEY' },
   { serviceType: 'image', provider: 'openai', name: '云雾图片服务',           baseUrl: 'https://yunwu.ai/v1',                                     model: 'doubao-seedream-4-5-251128',  priority: 99,  envKey: 'YUNWU_API_KEY' },
   { serviceType: 'video', provider: 'volcengine', name: '火山 Seedance 视频（官方）', baseUrl: 'https://ark.cn-beijing.volces.com',                  model: 'doubao-seedance-2-0-260128',  priority: 100, envKey: 'ARK_API_KEY' },
-  { serviceType: 'video', provider: 'openai', name: '云雾 HappyHorse 视频（兜底）', baseUrl: 'https://yunwu.ai/v1',                                 model: 'happyhorse-1.0-t2v',          priority: 95,  envKey: 'YUNWU_API_KEY' },
+  { serviceType: 'video', provider: 'ali', name: '云雾 HappyHorse R2V 视频（兜底）', baseUrl: 'https://yunwu.ai',                                  model: 'happyhorse-1.0-r2v',          priority: 95,  envKey: 'YUNWU_API_KEY' },
   { serviceType: 'video', provider: 'google-veo', name: 'Google Veo 视频（官方·兜底）', baseUrl: 'https://generativelanguage.googleapis.com/v1beta', model: 'veo-3.0-fast-generate-001',   priority: 90,  envKey: 'GOOGLE_VIDEO_API_KEY' },
   { serviceType: 'audio', provider: 'minimax', name: 'MiniMax 语音（官方）',  baseUrl: 'https://api.minimaxi.com',                                model: 'speech-2.8-hd',               priority: 100, envKey: 'MINIMAX_API_KEY' },
 ]
@@ -87,7 +87,54 @@ export function seedAiConfigs(): void {
     console.log(`🔑 AI 配置播种完成：新增 ${inserted}，更新 ${updated}，跳过 ${skipped}（缺环境变量）`)
   }
 
+  migrateLegacyHappyHorseToR2V(ts)
   migrateAudioToMinimax(ts)
+}
+
+/**
+ * 旧版云雾 HappyHorse 走 OpenAI-compatible /v1/videos，接口收 duration 但实际常固定约 5s。
+ * 新版改走云雾百炼 happyhorse-1.0-r2v，保留原云雾 key，停用旧 t2v/i2v 配置。
+ */
+function migrateLegacyHappyHorseToR2V(ts: string): void {
+  const legacyRows = db.select().from(schema.aiServiceConfigs)
+    .where(and(
+      eq(schema.aiServiceConfigs.serviceType, 'video'),
+      eq(schema.aiServiceConfigs.provider, 'openai'),
+    )).all()
+    .filter(r => /happyhorse-1\.0-[ti]2v/i.test(r.model || ''))
+
+  const legacy = legacyRows.find(r => r.apiKey) || legacyRows[0]
+  if (!legacy) return
+
+  const values = {
+    serviceType: 'video',
+    provider: 'ali',
+    name: '云雾 HappyHorse R2V 视频（兜底）',
+    baseUrl: 'https://yunwu.ai',
+    apiKey: legacy.apiKey,
+    model: JSON.stringify(['happyhorse-1.0-r2v']),
+    priority: legacy.priority || 95,
+    isActive: Boolean(legacy.isActive),
+    updatedAt: ts,
+  }
+
+  const [existing] = db.select().from(schema.aiServiceConfigs)
+    .where(and(
+      eq(schema.aiServiceConfigs.serviceType, 'video'),
+      eq(schema.aiServiceConfigs.provider, 'ali'),
+    )).all()
+    .filter(r => /happyhorse/i.test(r.model || '') || /HappyHorse/i.test(r.name || ''))
+
+  if (existing) {
+    db.update(schema.aiServiceConfigs).set(values).where(eq(schema.aiServiceConfigs.id, existing.id)).run()
+  } else {
+    db.insert(schema.aiServiceConfigs).values({ ...values, createdAt: ts }).run()
+  }
+
+  for (const row of legacyRows) {
+    db.update(schema.aiServiceConfigs).set({ isActive: false, updatedAt: ts }).where(eq(schema.aiServiceConfigs.id, row.id)).run()
+  }
+  console.log(`🎞️ HappyHorse：已从旧 t2v/i2v 配置迁移到 R2V，停用旧配置 ${legacyRows.length} 个`)
 }
 
 /**

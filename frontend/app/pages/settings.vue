@@ -458,7 +458,7 @@ const providerPresets = {
   video: {
     volcengine: { label: '视频服务', baseUrl: 'https://api.chatfire.site/volcengine', models: ['doubao-seedance-1-5-pro-251215'] },
     vidu: { label: 'Vidu 推荐', baseUrl: 'https://api.vidu.com', models: ['viduq3-turbo'] },
-    ali: { label: '阿里推荐', baseUrl: 'https://dashscope.aliyuncs.com', models: ['wan2.6-i2v-flash'] },
+    ali: { label: '云雾百炼推荐', baseUrl: 'https://yunwu.ai', models: ['happyhorse-1.0-r2v', 'wan2.6-i2v-flash'] },
   },
   audio: {
     minimax: { label: '音频服务', baseUrl: 'https://api.chatfire.site/minimax', models: ['speech-2.8-hd'] },

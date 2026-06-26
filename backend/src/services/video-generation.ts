@@ -38,21 +38,22 @@ export async function generateVideo(params: GenerateVideoParams): Promise<number
   // 视频按「时长 × 画质 × 引擎」动态计费。
   await assertBalance(params.userId, 'video', videoCost(params.duration, params.resolution, engine))
 
-  // 候选链（按 provider 去重）：
-  //   seedance → [火山, 云雾happyhorse, Veo]：火山受并发闸限制，排队超时才回退后面的兜底。
-  //   happyhorse → [云雾happyhorse, Veo]：明确不升级到更贵的火山。
+  // 候选链（按 provider/baseUrl/model 去重）：
+  //   seedance → [火山, 云雾 HappyHorse R2V, Veo]：火山受并发闸限制，排队超时才回退后面的兜底。
+  //   happyhorse → [云雾 HappyHorse R2V, Veo]：明确不升级到更贵的火山。
   const allVideo = getActiveVideoConfigs() // 按优先级降序
   const seen = new Set<string>()
   const candidates: AIConfig[] = []
   const pushUniq = (c: AIConfig | null) => {
     if (!c) return
+    if (isLegacyHappyHorseConfig(c)) return
     const key = `${c.provider}|${c.baseUrl}|${c.model}`
     if (seen.has(key)) return
     seen.add(key)
     candidates.push(c)
   }
   if (engine === 'happyhorse') {
-    const hh = allVideo.find(c => c.provider === 'openai')
+    const hh = findHappyHorseConfig(allVideo)
     if (!hh) throw new Error('HappyHorse 视频配置未启用')
     pushUniq(hh)
     for (const c of allVideo) if (c.provider !== 'volcengine') pushUniq(c) // 兜底排除火山
@@ -67,6 +68,7 @@ export async function generateVideo(params: GenerateVideoParams): Promise<number
     const seed = allVideo.find(c => c.provider === 'volcengine')
       || (params.configId ? getConfigById(params.configId) : getActiveConfig('video'))
     pushUniq(seed)
+    pushUniq(findHappyHorseConfig(allVideo))
     for (const c of allVideo) pushUniq(c)
   }
   if (!candidates.length) throw new Error('No active video AI config')
@@ -123,6 +125,17 @@ export async function generateVideo(params: GenerateVideoParams): Promise<number
     console.error(`Video generation ${lastId} failed:`, err)
   })
   return lastId
+}
+
+function findHappyHorseConfig(configs: AIConfig[]): AIConfig | null {
+  return configs.find(c => !isLegacyHappyHorseConfig(c) && /happyhorse-1\.0-r2v/i.test(c.model || ''))
+    || configs.find(c => !isLegacyHappyHorseConfig(c) && c.provider === 'ali' && /happyhorse/i.test(c.model || ''))
+    || configs.find(c => !isLegacyHappyHorseConfig(c) && /happyhorse/i.test(c.model || ''))
+    || null
+}
+
+function isLegacyHappyHorseConfig(config: AIConfig): boolean {
+  return /happyhorse-1\.0-[ti]2v/i.test(config.model || '')
 }
 
 interface NormalizedRefs {

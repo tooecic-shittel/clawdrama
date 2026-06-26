@@ -1255,8 +1255,8 @@
                   <button type="button" :class="['engine-opt', videoEngine==='seedance' && 'active']" @click="videoEngine='seedance'" title="火山 Seedance 2.0：画质更好、无水印；较贵；同时最多 4 条，其余自动排队">
                     Seedance 2.0<span class="engine-tag good">贵·效果好</span>
                   </button>
-                  <button type="button" :class="['engine-opt', videoEngine==='happyhorse' && 'active']" @click="videoEngine='happyhorse'" title="云雾 HappyHorse：更便宜更快；带水印；固定 5 秒">
-                    HappyHorse<span class="engine-tag">省·带水印</span>
+                  <button type="button" :class="['engine-opt', videoEngine==='happyhorse' && 'active']" @click="videoEngine='happyhorse'" title="云雾 HappyHorse R2V：参考图生视频；支持更长时长；带水印">
+                    HappyHorse<span class="engine-tag">R2V·带水印</span>
                   </button>
                   <button type="button" :class="['engine-opt', videoEngine==='hailuo' && 'active']" @click="videoEngine='hailuo'" title="海螺 Hailuo（MiniMax）：写实真人可用、支持更长时长（6/10秒）；较贵">
                     海螺 Hailuo<span class="engine-tag good">贵·真人可用</span>
@@ -1694,8 +1694,8 @@ const TTS_MODEL_PRESETS = [
 
 // Video model quick-switch — overrides the active config's model per-generation.
 // 视频主力 = 火山 Seedance 2.0（官方）。模型与 provider 强绑定，下拉只列与主力 provider 兼容的，
-// 选默认即用配置中的 Seedance；失败时后端自动兜底到云雾 happyhorse（无需用户手动选）。
-// 视频引擎二选一：seedance（火山·贵·效果好·无水印·并发限 4）/ happyhorse（云雾·省·带水印）。
+// 选默认即用配置中的 Seedance；失败时后端自动兜底到云雾 HappyHorse R2V（无需用户手动选）。
+// 视频引擎：seedance（火山·贵·效果好·无水印·并发限 4）/ happyhorse（云雾 R2V·带水印）/ hailuo（海螺·真人可用）。
 const videoEngine = ref(typeof window !== 'undefined' ? (localStorage.getItem('claw_video_engine') || 'seedance') : 'seedance')
 const videoResolution = ref(typeof window !== 'undefined' ? (localStorage.getItem('claw_video_res') || '720P') : '720P')
 // 480P 仅 Seedance 原生支持：HappyHorse / 海螺 选中时把残留的 480P 纠正为 720P

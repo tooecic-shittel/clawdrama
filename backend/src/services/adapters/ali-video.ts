@@ -14,16 +14,37 @@ export class AliVideoAdapter implements VideoProviderAdapter {
     headers: Record<string, string>
     body: any
   } {
+    const model = record.model || config.model || 'wan2.6-i2v-flash'
     const baseUrl = config.baseUrl || 'https://dashscope.aliyuncs.com'
-    const url = joinProviderUrl(baseUrl, '/api/v1', '/services/aigc/video-generation/video-synthesis')
+    const url = /happyhorse/i.test(model)
+      ? joinProviderUrl(baseUrl, '/alibailian/api/v1', '/services/aigc/video-generation/video-synthesis')
+      : joinProviderUrl(baseUrl, '/api/v1', '/services/aigc/video-generation/video-synthesis')
 
     const headers: Record<string, string> = {
       'Authorization': `Bearer ${config.apiKey}`,
       'Content-Type': 'application/json',
     }
 
+    const referenceUrls = this.collectReferenceUrls(record)
+    if (/happyhorse/i.test(model)) {
+      const body: any = {
+        model,
+        input: {
+          prompt: record.prompt || '',
+          media: referenceUrls.map((url) => ({ type: 'reference_image', url })).slice(0, 9),
+        },
+        parameters: {
+          resolution: this.normalizeResolution(record.resolution ?? record.aspectRatio ?? '9:16'),
+          duration: this.normalizeDuration(record.duration),
+          watermark: false,
+          seed: Math.floor(Math.random() * 2147483647),
+        },
+      }
+      return { url, method: 'POST', headers, body }
+    }
+
     const body: any = {
-      model: record.model || 'wan2.6-i2v-flash',
+      model,
       input: {
         prompt: record.prompt,
         img_url: record.imageUrl ?? record.firstFrameUrl ?? '',
@@ -67,8 +88,9 @@ export class AliVideoAdapter implements VideoProviderAdapter {
     body: any
   } {
     const baseUrl = config.baseUrl || 'https://dashscope.aliyuncs.com'
+    const isYunwuBailian = /yunwu\.ai/i.test(baseUrl)
     return {
-      url: joinProviderUrl(baseUrl, '/api/v1', `/tasks/${taskId}`),
+      url: joinProviderUrl(baseUrl, isYunwuBailian ? '/alibailian/api/v1' : '/api/v1', `/tasks/${taskId}`),
       method: 'GET',
       headers: {
         'Authorization': `Bearer ${config.apiKey}`,
@@ -104,8 +126,36 @@ export class AliVideoAdapter implements VideoProviderAdapter {
     return result.output?.video_url || null
   }
 
-  private normalizeResolution(aspectRatio?: string): string {
-    const ratio = aspectRatio || '16:9'
+  private collectReferenceUrls(record: VideoGenerationRecord): string[] {
+    const urls = [
+      record.imageUrl,
+      record.firstFrameUrl,
+      ...this.parseReferenceImageUrls(record.referenceImageUrls),
+      record.lastFrameUrl,
+    ]
+      .map((url) => String(url || '').trim())
+      .filter(Boolean)
+    return Array.from(new Set(urls))
+  }
+
+  private parseReferenceImageUrls(value?: string | null): string[] {
+    if (!value) return []
+    try {
+      const parsed = JSON.parse(value)
+      return Array.isArray(parsed) ? parsed : []
+    } catch {
+      return []
+    }
+  }
+
+  private normalizeDuration(duration?: number | null): number {
+    const d = Math.round(Number(duration) || 5)
+    return Math.min(15, Math.max(3, d))
+  }
+
+  private normalizeResolution(value?: string): string {
+    const ratio = value || '16:9'
+    if (ratio === '720P' || ratio === '1080P') return ratio
     if (ratio === '9:16') return '720P'
     if (ratio === '1:1') return '720P'
     return '1080P'

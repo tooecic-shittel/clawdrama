@@ -85,7 +85,7 @@ export const ACTION_COST: Record<ChargeableAction, number> = {
   tts: 150,
 }
 
-// 视频引擎：seedance（火山·高质量·较贵·拒真人图）/ happyhorse（云雾·经济·带水印·固定5s·兜底）/ hailuo（海螺·写实真人可用·支持长时长·较贵）。
+// 视频引擎：seedance（火山·高质量·较贵·拒真人图）/ happyhorse（云雾 R2V·带水印·按秒计费）/ hailuo（海螺·写实真人可用·支持长时长·较贵）。
 export type VideoEngine = 'seedance' | 'happyhorse' | 'hailuo'
 
 // 视频每秒积分（按引擎 × 画质档）。
