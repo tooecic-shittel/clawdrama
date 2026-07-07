@@ -35,6 +35,15 @@ function linkSceneToEpisode(episodeId: number, sceneId: number) {
   }
 }
 
+function normalizeCharacterName(name: string) {
+  return String(name || '').trim().replace(/\s+/g, '')
+}
+
+function isGenericCharacterName(name: string) {
+  const normalized = normalizeCharacterName(name)
+  return /^(他|她|它|他们|她们|男主|女主|主角|少年|少女|男人|女人|男子|女子|老人|老者|路人|群众|众人|旁人|下人|侍卫|手下|弟子|村民|店主|老板|司机|医生|护士|警察|老师|同学|同事|配角|反派)$/.test(normalized)
+}
+
 export function createExtractTools(episodeId: number, dramaId: number) {
 
   // 1. 读取剧本内容
@@ -114,10 +123,11 @@ export function createExtractTools(episodeId: number, dramaId: number) {
   // 4. 智能保存角色（按名字去重，与现有数据合并）
   const saveDedupCharacters = createTool({
     id: 'save_dedup_characters',
-    description: 'Save extracted characters with deduplication. Existing characters (same name) are merged/updated; new ones are created. All are linked to the current episode.',
+    description: 'Save extracted characters with conservative deduplication. Existing characters are reused only by exact name or explicit existing_character_id; new named characters are created. All are linked to the current episode.',
     inputSchema: z.object({
       characters: z.array(z.object({
         name: z.string(),
+        existing_character_id: z.number().optional(),
         role: z.string().optional(),
         description: z.string().optional(),
         appearance: z.string().optional(),
@@ -126,7 +136,10 @@ export function createExtractTools(episodeId: number, dramaId: number) {
     }),
     execute: async ({ characters }) => {
       const ts = now()
-      const results = { created: 0, merged: 0 }
+      const projectChars = db.select().from(schema.characters)
+        .where(eq(schema.characters.dramaId, dramaId)).all()
+        .filter(c => !c.deletedAt)
+      const results = { created: 0, merged: 0, skipped_generic: 0 }
       logTaskProgress('ExtractTool', 'save-characters-begin', {
         episodeId,
         dramaId,
@@ -134,18 +147,25 @@ export function createExtractTools(episodeId: number, dramaId: number) {
       })
 
       for (const char of characters) {
-        const existing = db.select().from(schema.characters)
-          .where(eq(schema.characters.dramaId, dramaId)).all()
-          .filter(c => !c.deletedAt)
-          .find(c => c.name === char.name)
+        const name = normalizeCharacterName(char.name)
+        if (!name || isGenericCharacterName(name)) {
+          results.skipped_generic++
+          continue
+        }
+
+        const existing = char.existing_character_id
+          ? projectChars.find(c => c.id === char.existing_character_id)
+          : projectChars.find(c => normalizeCharacterName(c.name) === name)
 
         if (existing) {
           // 已存在：合并信息，保留 ID
+          const hasLockedVisual = !!(existing.imageUrl || existing.localPath || existing.viewSide || existing.viewBack || existing.referenceImages)
           db.update(schema.characters).set({
             role: char.role || existing.role,
             description: char.description || existing.description,
-            appearance: char.appearance || existing.appearance,
-            personality: char.personality || existing.personality,
+            // 角色一旦已有定妆资产，appearance/personality 就是锁定锚点，不用第二集重新描述覆盖。
+            appearance: hasLockedVisual ? existing.appearance : (char.appearance || existing.appearance),
+            personality: hasLockedVisual ? existing.personality : (char.personality || existing.personality),
             updatedAt: ts,
           }).where(eq(schema.characters.id, existing.id)).run()
           linkCharToEpisode(episodeId, existing.id)
@@ -169,7 +189,7 @@ export function createExtractTools(episodeId: number, dramaId: number) {
       }
 
       const payload = {
-        message: `角色保存完成：新增 ${results.created}，合并更新 ${results.merged}`,
+        message: `角色保存完成：新增 ${results.created}，合并更新 ${results.merged}，跳过泛称 ${results.skipped_generic}`,
         ...results,
       }
       logTaskSuccess('ExtractTool', 'save-characters-complete', { episodeId, ...results })

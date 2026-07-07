@@ -25,6 +25,19 @@ export class VolcEngineImageAdapter implements ImageProviderAdapter {
       prompt: record.prompt,
     }
 
+    // Seedream/火山兼容接口支持 image 参考图；没有它，侧面/背面会退化成纯文生图，
+    // 导入的真人正面图就无法约束身份和服装。
+    if (record.referenceImages) {
+      try {
+        const refs = typeof record.referenceImages === 'string'
+          ? JSON.parse(record.referenceImages)
+          : record.referenceImages
+        if (Array.isArray(refs) && refs.length > 0) {
+          body.image = refs
+        }
+      } catch {}
+    }
+
     // 尺寸参数
     if (record.size) {
       const [w, h] = record.size.split('x')

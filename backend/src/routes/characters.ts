@@ -6,6 +6,7 @@ import { canAccess, characterOwnerId, dramaOwnerId, episodeOwnerId } from '../mi
 import { enhanceCharacterImagePrompt } from '../services/prompt-rewrite.js'
 import { generateVoiceSample } from '../services/tts-generation.js'
 import { generateImage } from '../services/image-generation.js'
+import { saveUploadedFile } from '../utils/storage.js'
 import { logTaskError, logTaskStart, logTaskSuccess } from '../utils/task-logger.js'
 
 const app = new Hono()
@@ -125,6 +126,75 @@ app.post('/:id/generate-image', async (c) => {
   }
 })
 
+// POST /characters/:id/upload-image — 上传用户参考图，并按项目画风生成角色正面形象
+app.post('/:id/upload-image', async (c) => {
+  const id = Number(c.req.param('id'))
+  const [char] = db.select().from(schema.characters).where(eq(schema.characters.id, id)).all()
+  if (!char) return badRequest(c, 'Character not found')
+  if (!canAccess(c, dramaOwnerId(char.dramaId))) return notFound(c, '角色不存在')
+
+  const body = await c.req.parseBody()
+  const file = body.file
+  if (!file || !(file instanceof File)) return badRequest(c, 'file is required')
+  if (!file.type.startsWith('image/')) return badRequest(c, '请上传图片文件')
+  if (file.size > 12 * 1024 * 1024) return badRequest(c, '图片不能超过 12MB')
+
+  const buffer = await file.arrayBuffer()
+  const referencePath = await saveUploadedFile(buffer, 'images', file.name || 'character-reference.png')
+  db.update(schema.characters)
+    .set({
+      referenceImages: JSON.stringify([referencePath]),
+      viewSide: null,
+      viewBack: null,
+      updatedAt: now(),
+    })
+    .where(eq(schema.characters.id, id))
+    .run()
+
+  const episodeId = Number((body as any).episode_id || (body as any).episodeId || 0)
+  if (!episodeId) {
+    logTaskSuccess('CharacterImage', 'upload-reference', { characterId: id, path: referencePath })
+    return success(c, { reference_image_url: referencePath, referenceImageUrl: referencePath })
+  }
+
+  const [ep] = db.select().from(schema.episodes).where(eq(schema.episodes.id, episodeId)).all()
+  if (!ep) return badRequest(c, 'Episode not found')
+  if (!canAccess(c, episodeOwnerId(episodeId))) return notFound(c, '剧集不存在')
+
+  const prompt = [
+    `根据用户上传的人物参考图，为短剧角色「${char.name}」生成一张项目统一画风的正面角色定妆图。`,
+    `角色定位：${char.role || '角色'}。`,
+    `角色设定：${char.appearance || char.description || '以参考图人物特征为核心'}。`,
+    char.personality ? `人物气质：${char.personality}。` : '',
+    '必须保留参考图人物的核心身份特征：脸型比例、五官关系、年龄感、体型、发型轮廓、发际线、肤色、神态气质和主要服装识别点。',
+    '允许把现实照片转译成当前项目画风、服装质感和短剧角色设定，但不能换成另一个人，不能改变性别、年龄段、脸型骨相和发型大轮廓。',
+    '正面半身或三分之二身角色定妆图，单人居中，干净背景，适合后续生成侧面和背面三视图。',
+  ].filter(Boolean).join('\n')
+
+  try {
+    logTaskStart('CharacterImage', 'upload-reference-generate', { characterId: id, episodeId, dramaId: char.dramaId })
+    const genId = await generateImage({
+      userId: (c.get('user') as any)?.id,
+      characterId: id,
+      dramaId: char.dramaId,
+      prompt,
+      configId: ep.imageConfigId ?? undefined,
+      referenceImages: [referencePath],
+      frameType: 'character_from_reference',
+    })
+    logTaskSuccess('CharacterImage', 'upload-reference-generate', { characterId: id, generationId: genId, referencePath })
+    return success(c, {
+      image_generation_id: genId,
+      reference_image_url: referencePath,
+      referenceImageUrl: referencePath,
+    })
+  } catch (err: any) {
+    logTaskError('CharacterImage', 'upload-reference-generate', { characterId: id, error: err.message })
+    if (err?.status === 402) return paymentRequired(c, err.message)
+    return badRequest(c, err.message)
+  }
+})
+
 // POST /characters/:id/generate-view  body: { view: 'side' | 'back', episode_id }
 // Generate side / back view using existing front avatar as image-to-image reference.
 app.post('/:id/generate-view', async (c) => {
@@ -145,9 +215,16 @@ app.post('/:id/generate-view', async (c) => {
 
   const viewLabel = view === 'side' ? '侧面（profile view）' : '背面（back view）'
   const angleHint = view === 'side'
-    ? '从正侧方拍摄，能看到完整的发型轮廓和服装侧面，保持同一人物的身材比例'
-    : '从背后拍摄，能看到后脑勺发型和服装背面，保持同一人物的身高与体型'
-  const prompt = `${char.name}的${viewLabel}立绘，${char.appearance || char.description || ''}。\n${angleHint}。与参考图为同一角色，**严格保留参考图中的发型、发色、服装款式与配色、肤色、身材**。白色简洁背景，全身或半身，高质量人物立绘。`
+    ? '把正面角色图中的同一角色转到正侧方视角，保留头身比例、脸型轮廓、发型高度、发际线、肤色、体型、服装款式、服装配色、材质纹理和标志性细节'
+    : '把正面角色图中的同一角色转到背后视角，保留头身比例、后脑勺发型轮廓、发量、脖颈肩宽、体型、服装背面结构、服装配色、材质纹理和标志性细节'
+  const prompt = [
+    `基于唯一参考图生成${viewLabel}。`,
+    angleHint,
+    '必须是参考图里的同一角色，不要重新设计角色，不要改变性别、年龄段、脸型骨相、发型大轮廓、服装系统或人物气质。',
+    '严格沿用参考图已经确定的项目画风、角色设定、线条/渲染方式、光影质感和服装设计。',
+    '只改变观察角度，不改变身份和画风；不要添加参考图没有的长发、双马尾、披风、夸张装饰物或新背景。',
+    '画面保持干净，单人半身或三分之二身角色三视图素材。',
+  ].join('\n')
 
   try {
     logTaskStart('CharacterView', 'generate', { characterId: id, view, episodeId: ep.id })
@@ -180,17 +257,22 @@ app.post('/batch-generate-images', async (c) => {
   const [ep] = db.select().from(schema.episodes).where(eq(schema.episodes.id, Number(body.episode_id))).all()
   if (!ep) return badRequest(c, 'Episode not found')
   const results: number[] = []
+  let skippedLocked = 0
   for (const cid of ids) {
     const [char] = db.select().from(schema.characters).where(eq(schema.characters.id, cid)).all()
     if (!char || !canAccess(c, dramaOwnerId(char.dramaId))) continue
+    if (!body.force && (char.imageUrl || char.localPath)) {
+      skippedLocked++
+      continue
+    }
     const prompt = `${char.name}, ${char.appearance || char.description || '人物立绘'}, 高质量, 正面, 白色背景`
     try {
       const genId = await generateImage({ userId: (c.get('user') as any)?.id, characterId: cid, dramaId: char.dramaId, prompt, configId: ep.imageConfigId ?? undefined })
       results.push(genId)
     } catch {}
   }
-  logTaskSuccess('CharacterImage', 'batch-generate', { episodeId: ep.id, requested: ids.length, started: results.length })
-  return success(c, { count: results.length, ids: results })
+  logTaskSuccess('CharacterImage', 'batch-generate', { episodeId: ep.id, requested: ids.length, started: results.length, skippedLocked })
+  return success(c, { count: results.length, ids: results, skipped_locked: skippedLocked })
 })
 
 export default app

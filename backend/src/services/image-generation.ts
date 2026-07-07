@@ -77,14 +77,17 @@ export async function generateImage(params: GenerateImageParams): Promise<number
     }
   }
 
-  // Inject drama visual style into prompt
+  // Inject drama visual style into prompt.
+  // 三视图是“同一参考图换角度”，画风必须跟随参考图本身；
+  // 如果再注入项目画风，真人导入图会被拉成二次元/古风角色。
   const dramaId = resolveDramaId({
     dramaId: params.dramaId,
     storyboardId: params.storyboardId,
     sceneId: params.sceneId,
     characterId: params.characterId,
   })
-  const enhancedPrompt = enhanceImagePrompt(params.prompt, dramaId)
+  const isCharacterView = String(params.frameType || '').startsWith('view_')
+  const enhancedPrompt = isCharacterView ? params.prompt : enhanceImagePrompt(params.prompt, dramaId)
 
   // referenceImages handling: undefined means "auto"; array (even empty) means "explicit".
   // Store explicit choice as JSON; auto stays null so processImageGeneration can detect.
