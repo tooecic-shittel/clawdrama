@@ -85,25 +85,31 @@ export const ACTION_COST: Record<ChargeableAction, number> = {
   tts: 150,
 }
 
-// 视频引擎：seedance（火山·高质量·较贵·拒真人图）/ happyhorse（云雾 R2V·带水印·按秒计费）/ hailuo（海螺·写实真人可用·支持长时长·较贵）。
-export type VideoEngine = 'seedance' | 'happyhorse' | 'hailuo'
+// 视频引擎：seedance（火山·高质量·较贵·拒真人图）/ vidu（当前试验入口：云雾 PixVerse）/ happyhorse（历史/暂时下架）/ happyhorse_full（阿里百炼官方 1.1）/ hailuo（海螺·写实真人可用·支持长时长·较贵）。
+export type VideoEngine = 'seedance' | 'vidu' | 'happyhorse' | 'happyhorse_full' | 'hailuo'
 
 // 视频每秒积分（按引擎 × 画质档）。
 //   seedance：成本 720P≈¥1/秒、1080P≈¥2/秒 × 3 毛利 → 3000 / 6000。
-//   happyhorse：更便宜的兜底引擎，按 seedance 的 8 折计（720P 2400 / 1080P 4800）。
-//   480P：最省档，仅 seedance 原生支持；happyhorse 会回退到 720P 出片，故不设 480P 价，
+//   vidu：云雾 PixVerse，按模型广场 360P 不带声约 0.246/s 做测试档，后续按真实消耗调价。
+//   happyhorse：历史档位，暂时下架但保留兼容历史记录。
+//   happyhorse_full：阿里云百炼官方 HappyHorse 1.1，按官方 720P≈¥0.9/s、1080P≈¥1.2/s 估算。
+//   480P：最省档，仅 seedance 原生支持；其它引擎会回退到 720P/540P 出片，故不设 480P 价，
 //        由 videoCost 的 ?? table['720p'] 兜底按其实际产出的 720P 计费。
 // 改价时同步更新前端 pricing 默认值与 PACKAGES 文案。
 export const VIDEO_CREDIT_PER_SEC: Record<VideoEngine, Record<string, number>> = {
   seedance: { '480p': 1500, '720p': 3000, '1080p': 6000 },
+  vidu: { '360p': 1000, '540p': 1600, '720p': 2400, '1080p': 3200 },
   happyhorse: { '720p': 2400, '1080p': 4800 },
+  happyhorse_full: { '720p': 2700, '1080p': 3600 },
   hailuo: { '720p': 3000, '1080p': 6000 },  // 海螺·与 seedance 同档（写实真人可用；成本算下来此档有 margin，后续按真实成本精调）
 }
 
-/** provider → 计费引擎档：火山=seedance，minimax=hailuo（海螺），其余（云雾 happyhorse / Veo 兜底）=happyhorse 档。 */
-export function providerToEngine(provider?: string | null): VideoEngine {
+/** provider → 计费引擎档：火山=seedance，pixverse/vidu=试验视频档，minimax=hailuo（海螺），其余（历史云雾 / Veo 兜底）=happyhorse 档。 */
+export function providerToEngine(provider?: string | null, model?: string | null): VideoEngine {
   if (provider === 'volcengine') return 'seedance'
+  if (provider === 'vidu' || provider === 'pixverse') return 'vidu'
   if (provider === 'minimax') return 'hailuo'
+  if (provider === 'ali' && /happyhorse-1\.1/i.test(model || '')) return 'happyhorse_full'
   return 'happyhorse'
 }
 
@@ -111,7 +117,7 @@ export function providerToEngine(provider?: string | null): VideoEngine {
 export function videoCost(durationSec?: number | null, resolution?: string | null, engine: VideoEngine = 'seedance'): number {
   const sec = Math.min(15, Math.max(1, Math.round(Number(durationSec) || 5)))
   const rs = String(resolution || '').toLowerCase()
-  const r = rs.includes('1080') ? '1080p' : rs.includes('480') ? '480p' : '720p'
+  const r = rs.includes('1080') ? '1080p' : rs.includes('540') ? '540p' : rs.includes('480') ? '480p' : rs.includes('360') ? '360p' : '720p'
   const table = VIDEO_CREDIT_PER_SEC[engine] ?? VIDEO_CREDIT_PER_SEC.seedance
   return sec * (table[r] ?? table['720p'])
 }
@@ -176,14 +182,14 @@ export async function listHistory(userId: number, limit = 50, offset = 0) {
     .offset(offset)
 }
 
-// === Package catalog (frontend display + future payment integration) ===
+// === Package catalog (frontend display + Alipay payment integration) ===
 export interface CreditPackage {
   id: string
   name: string
   period?: string            // 计价周期，用于「¥X / period」展示：'周' | '月' | '年'
-  periodNote?: string        // 积分有效期说明：'每周有效' | '每月有效'
-  subNote?: string           // 补充说明，如「全年 12 期 · 共 1,800,000 积分」
-  credits: number            // 该周期发放/展示的积分数
+  periodNote?: string        // 积分有效期说明：'每周有效' | '每月有效' | '全年有效'
+  subNote?: string           // 补充说明，如「相当于每月 300,000 积分」
+  credits: number            // 支付成功后实际到账的积分数
   bonus: number              // bonus credits on top of base
   priceCents: number         // CNY cents
   badge?: string
@@ -192,10 +198,9 @@ export interface CreditPackage {
   description?: string
 }
 
-// 订阅制：包周 / 包月 / 包年。积分按周期发放、当期有效（用不完清零 → 沉淀）。
+// 订阅制：包周 / 包月 / 包年。当前支付宝支付成功后一次性到账；
+// 如后续改成按月发放 / 到期清零，需要新增积分有效期与定时发放任务。
 // 定价锚点：充值 ¥1 ≈ 1500 积分；订阅按下方价格。★数字按实际运营调整★。
-// 注意：「按周期发放 / 到期清零 / 自动续订」需「积分有效期 + 支付网关 + 定时任务」，当前未实现——
-//      前端「立即订阅」仍走占位提示（管理员手动充值）。
 const SUB_FEATURES = [
   'Seedance 2.0 高清出片 · 去除水印',
   '视频对口型（原生人声对白）',
@@ -231,14 +236,14 @@ export const PACKAGES: CreditPackage[] = [
     id: 'yearly',
     name: '包年',
     period: '年',
-    periodNote: '每月有效',
-    subNote: '全年 12 期 · 共 3,600,000 积分',
-    credits: 300000,
+    periodNote: '全年有效',
+    subNote: '相当于每月 300,000 积分',
+    credits: 3600000,
     bonus: 0,
-    priceCents: 219900,
+    priceCents: 199900,
     badge: '最划算',
     highlight: true,
-    features: [...SUB_FEATURES, '年付低至 ≈¥183/月（立省 ¥189/年）'],
+    features: [...SUB_FEATURES, '买 10 个月送 2 个月，年付低至 ≈¥166/月（立省 ¥389）'],
   },
 ]
 

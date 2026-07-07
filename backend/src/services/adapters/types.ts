@@ -70,6 +70,7 @@ export interface ProviderRequest {
 
 export interface AIConfig {
   provider: string
+  name?: string | null
   baseUrl: string
   apiKey: string
   model: string

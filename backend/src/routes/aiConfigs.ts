@@ -43,9 +43,9 @@ function geminiHeaders(apiKey?: string, withJson = false) {
   return headers
 }
 
-function viduHeaders(apiKey?: string, withJson = false) {
+function viduHeaders(apiKey?: string, withJson = false, baseUrl = '') {
   const headers: Record<string, string> = {}
-  if (apiKey) headers.Authorization = `Token ${apiKey}`
+  if (apiKey) headers.Authorization = `${/api\.vidu\.com/i.test(baseUrl) ? 'Token' : 'Bearer'} ${apiKey}`
   if (withJson) headers['Content-Type'] = 'application/json'
   return headers
 }
@@ -110,7 +110,16 @@ function buildProbe(serviceType: string, provider: string, baseUrl: string, mode
     return {
       method: 'POST',
       url: joinProviderUrl(baseUrl, '', '/ent/v2/img2video'),
-      headers: viduHeaders(apiKey, true),
+      headers: viduHeaders(apiKey, true, baseUrl),
+      body: {},
+    }
+  }
+
+  if (p === 'pixverse') {
+    return {
+      method: 'POST',
+      url: joinProviderUrl(baseUrl, '', '/openapi/v2/video/text/generate'),
+      headers: { ...bearerHeaders(apiKey, true), ...(apiKey ? { 'API-KEY': apiKey } : {}) },
       body: {},
     }
   }

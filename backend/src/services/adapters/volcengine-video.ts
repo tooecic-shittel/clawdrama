@@ -29,6 +29,8 @@ export class VolcEngineVideoAdapter implements VideoProviderAdapter {
       if (record.firstFrameUrl) {
         content.push({ type: 'image_url', image_url: { url: record.firstFrameUrl }, role: 'first_frame' })
       }
+      // 尾帧会更强地锁定结尾画面，也更容易出现首尾帧补间感；
+      // 前端用「锁尾帧」开关显式决定是否传入。
       if (record.lastFrameUrl) {
         content.push({ type: 'image_url', image_url: { url: record.lastFrameUrl }, role: 'last_frame' })
       }

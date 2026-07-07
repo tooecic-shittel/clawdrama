@@ -4,7 +4,8 @@ import { getActiveConfig, getConfigById, getActiveVideoConfigs } from './ai.js'
 import { now } from '../utils/response.js'
 import { downloadFile, readImageAsCompressedDataUrl } from '../utils/storage.js'
 import { getVideoAdapter } from './adapters/registry'
-import type { AIConfig } from './adapters/types'
+import { buildPixverseSoundEffectRequest, preparePixverseVideoRecord } from './adapters/pixverse-video'
+import type { AIConfig, VideoGenerationRecord } from './adapters/types'
 import { logTaskError, logTaskPayload, logTaskProgress, logTaskStart, logTaskSuccess, logTaskWarn, redactUrl } from '../utils/task-logger.js'
 import { enhanceVideoPrompt, isNativeDialogueShot } from './prompt-enhance.js'
 import { assertBalance, chargeForAction, videoCost, providerToEngine, type VideoEngine } from './credits.js'
@@ -23,7 +24,7 @@ interface GenerateVideoParams {
   duration?: number
   aspectRatio?: string
   resolution?: string   // 用户选的画质档 '720P'/'1080P'
-  /** 用户所选引擎：'seedance'（火山·贵·好）/ 'happyhorse'（云雾·省·带水印）。默认 seedance。 */
+  /** 用户所选引擎：'seedance'（火山·贵·好）/ 'vidu'（云雾 PixVerse）/ 'happyhorse_full'（阿里百炼 HappyHorse 1.1）/ 'hailuo'（海螺）。默认 seedance。 */
   engine?: VideoEngine
   configId?: number
   /** Owner of this generation — used to meter credits (undefined = unmetered/system). */
@@ -33,14 +34,22 @@ interface GenerateVideoParams {
 export async function generateVideo(params: GenerateVideoParams): Promise<number> {
   const ts = now()
   // 用户所选引擎（默认 seedance）。预检按所选引擎计价；最终扣费在完成时按「实际产出 provider」算（见 handleVideoComplete）。
-  const engine: VideoEngine = params.engine === 'happyhorse' ? 'happyhorse' : params.engine === 'hailuo' ? 'hailuo' : 'seedance'
+  const engine: VideoEngine = params.engine === 'vidu'
+    ? 'vidu'
+    : params.engine === 'happyhorse_full'
+      ? 'happyhorse_full'
+    : params.engine === 'happyhorse'
+      ? 'happyhorse'
+      : params.engine === 'hailuo'
+        ? 'hailuo'
+        : 'seedance'
   // Gate on credits before doing any work (throws InsufficientCreditsError → 402 at route).
   // 视频按「时长 × 画质 × 引擎」动态计费。
   await assertBalance(params.userId, 'video', videoCost(params.duration, params.resolution, engine))
 
-  // 候选链（按 provider/baseUrl/model 去重）：
-  //   seedance → [火山, 云雾 HappyHorse R2V, Veo]：火山受并发闸限制，排队超时才回退后面的兜底。
-  //   happyhorse → [云雾 HappyHorse R2V, Veo]：明确不升级到更贵的火山。
+  // 用户在界面上明确选了引擎时，严格只跑所选引擎。
+  // 之前失败后自动兜底到 HappyHorse，会把 Seedance/Hailuo 的真实欠费错误覆盖成云雾繁忙，
+  // 用户看到的结果就像“明明选了 A 却是 B 出错”。这里保持透明：哪个引擎失败就报哪个引擎。
   const allVideo = getActiveVideoConfigs() // 按优先级降序
   const seen = new Set<string>()
   const candidates: AIConfig[] = []
@@ -52,34 +61,38 @@ export async function generateVideo(params: GenerateVideoParams): Promise<number
     seen.add(key)
     candidates.push(c)
   }
-  if (engine === 'happyhorse') {
+  if (engine === 'happyhorse_full') {
+    const hh = findHappyHorseFullConfig(allVideo)
+    if (!hh) throw new Error('HappyHorse 1.1 满血版配置未启用')
+    pushUniq(hh)
+  } else if (engine === 'happyhorse') {
     const hh = findHappyHorseConfig(allVideo)
     if (!hh) throw new Error('HappyHorse 视频配置未启用')
     pushUniq(hh)
-    for (const c of allVideo) if (c.provider !== 'volcengine') pushUniq(c) // 兜底排除火山
+  } else if (engine === 'vidu') {
+    const pix = findPixVerseConfig(allVideo)
+    if (!pix) throw new Error('PixVerse 视频配置未启用')
+    pushUniq(pix)
   } else if (engine === 'hailuo') {
-    // 海螺：以 MiniMax 为主，失败兜底到 happyhorse（不升级到更贵的火山）
     const hl = allVideo.find(c => c.provider === 'minimax')
     if (!hl) throw new Error('海螺 Hailuo 视频配置未启用')
     pushUniq(hl)
-    for (const c of allVideo) if (c.provider !== 'volcengine') pushUniq(c)
   } else {
-    // seedance：明确以火山为主（用户的引擎选择优先于历史的 episode 配置绑定）。
     const seed = allVideo.find(c => c.provider === 'volcengine')
       || (params.configId ? getConfigById(params.configId) : getActiveConfig('video'))
     pushUniq(seed)
-    pushUniq(findHappyHorseConfig(allVideo))
-    for (const c of allVideo) pushUniq(c)
   }
   if (!candidates.length) throw new Error('No active video AI config')
   const config = candidates[0]
 
-  // Inject drama visual style + storyboard sound effect into video prompt.
-  // Veo 3 generates audio from text — describing the soundscape gets baked in.
-  const enhancedPrompt = enhanceVideoPrompt(params.prompt, {
-    dramaId: params.dramaId,
-    storyboardId: params.storyboardId,
-  })
+  // HappyHorse 1.1 满血版吃多参考图和原始导演提示词即可；不要再追加全局强约束，
+  // 避免把模型限制成“按规则补间”而不是发挥完整视频生成能力。
+  const enhancedPrompt = engine === 'happyhorse_full'
+    ? (params.prompt || '')
+    : enhanceVideoPrompt(params.prompt, {
+      dramaId: params.dramaId,
+      storyboardId: params.storyboardId,
+    })
 
   const res = db.insert(schema.videoGenerations).values({
     userId: params.userId,
@@ -129,8 +142,20 @@ export async function generateVideo(params: GenerateVideoParams): Promise<number
 
 function findHappyHorseConfig(configs: AIConfig[]): AIConfig | null {
   return configs.find(c => !isLegacyHappyHorseConfig(c) && /happyhorse-1\.0-r2v/i.test(c.model || ''))
-    || configs.find(c => !isLegacyHappyHorseConfig(c) && c.provider === 'ali' && /happyhorse/i.test(c.model || ''))
-    || configs.find(c => !isLegacyHappyHorseConfig(c) && /happyhorse/i.test(c.model || ''))
+    || configs.find(c => !isLegacyHappyHorseConfig(c) && c.provider === 'ali' && /happyhorse-1\.0/i.test(c.model || ''))
+    || configs.find(c => !isLegacyHappyHorseConfig(c) && /happyhorse-1\.0/i.test(c.model || ''))
+    || null
+}
+
+function findHappyHorseFullConfig(configs: AIConfig[]): AIConfig | null {
+  return configs.find(c => c.provider === 'ali' && /happyhorse-1\.1/i.test(c.model || ''))
+    || configs.find(c => c.provider === 'ali' && /happyhorse/i.test(c.model || '') && /满血|官方|1\.1/i.test(c.name || ''))
+    || null
+}
+
+function findPixVerseConfig(configs: AIConfig[]): AIConfig | null {
+  return configs.find(c => c.provider === 'pixverse' && /"c1"|pixverse-video/i.test(c.model || ''))
+    || configs.find(c => c.provider === 'pixverse')
     || null
 }
 
@@ -148,6 +173,23 @@ interface NormalizedRefs {
 type AttemptOutcome =
   | { ok: true; videoUrl: string; downloadAuth: { kind: 'query-key'; key: string } | null }
   | { ok: false; error: string }
+
+const AMBIENT_AUDIO_CUE = /(雨声|下雨|大雨|暴雨|雷声|风声|脚步声|喘息|呼吸|笑声|哭声|喊叫|尖叫|低语|耳语|对白|台词|说出|开口|音效|环境音|背景音|声响|撞击声|爆炸声|水声|火焰声|金属声|门声|铃声|音乐|bgm|sound|audio|voice|dialogue|rain|thunder|wind|footsteps|whisper|scream|music)/i
+
+function shouldGenerateNativeAudio(record: any): boolean {
+  try {
+    if (!record.storyboardId) return AMBIENT_AUDIO_CUE.test(record.prompt || '')
+    const [sb] = db.select().from(schema.storyboards).where(eq(schema.storyboards.id, record.storyboardId)).all()
+    if (!sb) return AMBIENT_AUDIO_CUE.test(record.prompt || '')
+    if (isNativeDialogueShot(sb)) return true
+    const soundText = [sb.soundEffect, sb.dialogue, sb.description, sb.action, sb.atmosphere, record.prompt]
+      .filter(Boolean)
+      .join(' ')
+    return AMBIENT_AUDIO_CUE.test(soundText)
+  } catch {
+    return AMBIENT_AUDIO_CUE.test(record.prompt || '')
+  }
+}
 
 async function processVideoGeneration(id: number, candidates: AIConfig[], userModel?: string) {
   const rows = db.select().from(schema.videoGenerations).where(eq(schema.videoGenerations.id, id)).all()
@@ -185,14 +227,14 @@ async function processVideoGeneration(id: number, candidates: AIConfig[], userMo
 
     let outcome: AttemptOutcome
     if (config.provider === 'volcengine') {
-      // Seedance 并发闸：占位前标 queued（前端显示「排队中」），排队超时则回退到下一候选（happyhorse）。
+      // Seedance 并发闸：占位前标 queued（前端显示「排队中」）。
       db.update(schema.videoGenerations)
         .set({ status: 'queued', updatedAt: now() })
         .where(eq(schema.videoGenerations.id, id)).run()
       logTaskProgress('VideoTask', 'seedance-queue', { id, ...seedanceStats() })
       const got = await acquireSeedanceSlot()
       if (!got) {
-        lastErr = `Seedance 排队超过 ${SEEDANCE_WAIT_MIN} 分钟未轮到，自动回退兜底`
+        lastErr = `provider=volcengine Seedance 排队超过 ${SEEDANCE_WAIT_MIN} 分钟未轮到，请稍后再试`
         logTaskWarn('VideoTask', 'seedance-queue-giveup', { id, ...seedanceStats() })
         continue
       }
@@ -211,7 +253,7 @@ async function processVideoGeneration(id: number, candidates: AIConfig[], userMo
       await handleVideoComplete(id, outcome.videoUrl, record.duration, record.storyboardId, outcome.downloadAuth)
       return
     }
-    lastErr = outcome.error
+    lastErr = `provider=${config.provider} ${outcome.error}`
   }
 
   logTaskError('VideoTask', 'process', { id, candidates: candidates.length, error: lastErr })
@@ -245,16 +287,10 @@ async function attemptVideoWithConfig(
       referenceMode: record.referenceMode,
     })
 
-    // 原生音频对白：该镜头是真·角色对白时让模型自带配音+对口型（与 prompt 注入、合成跳过 TTS 三处判断同源）
-    let generateAudio = false
-    try {
-      if (record.storyboardId) {
-        const [sb] = db.select().from(schema.storyboards).where(eq(schema.storyboards.id, record.storyboardId)).all()
-        if (sb) generateAudio = isNativeDialogueShot(sb)
-      }
-    } catch {}
+    // Seedance 原生音频：对白镜头开口型音频；有雨声/音效等声音线索的镜头也开启环境音。
+    const generateAudio = shouldGenerateNativeAudio(record)
 
-    const { url, method, headers, body } = adapter.buildGenerateRequest(config, {
+    let providerRecord: VideoGenerationRecord = {
       id: record.id,
       model,
       prompt: record.prompt,
@@ -267,7 +303,11 @@ async function attemptVideoWithConfig(
       aspectRatio: record.aspectRatio,
       resolution: record.resolution,
       generateAudio,
-    })
+    }
+    if (config.provider === 'pixverse') {
+      providerRecord = await preparePixverseVideoRecord(config, providerRecord)
+    }
+    const { url, method, headers, body } = adapter.buildGenerateRequest(config, providerRecord)
     logTaskProgress('VideoTask', 'request', {
       id,
       provider: config.provider,
@@ -288,11 +328,15 @@ async function attemptVideoWithConfig(
         break
       }
       const errText = await resp.text()
+      const isQuotaExhausted =
+        /local:quota_not_enough|Account quota insufficient|quota_not_enough/i.test(errText)
       const isRetryable =
+        !isQuotaExhausted && (
         resp.status === 429 ||
         resp.status === 503 ||
         errText.includes('upstream load is saturated') ||
         errText.includes('饱和')
+        )
       if (!isRetryable || attempt === maxAttempts) {
         throw new Error(`API error ${resp.status}: ${errText}`)
       }
@@ -316,20 +360,67 @@ async function attemptVideoWithConfig(
       .run()
     logTaskProgress('VideoTask', 'poll-start', { id, taskId, provider: config.provider })
 
-    // Vidu 没有轮询端点，依赖 Webhook 回调——无法在此自动兜底
-    if (adapter.provider === 'vidu') {
-      logTaskProgress('VideoTask', 'webhook-wait', { id, taskId, provider: adapter.provider })
-      return { ok: false, error: 'vidu webhook 模式不支持自动兜底轮询' }
-    }
-
     const poll = await pollVideoUntilDone(id, config, taskId!)
     if (poll.status === 'completed') {
+      if (config.provider === 'pixverse' && providerRecord.generateAudio) {
+        const audioVideoUrl = await tryAddPixverseSoundEffect(id, config, taskId!, providerRecord.prompt)
+        return { ok: true, videoUrl: audioVideoUrl || poll.videoUrl, downloadAuth }
+      }
       return { ok: true, videoUrl: poll.videoUrl, downloadAuth }
     }
     return { ok: false, error: poll.error }
   } catch (err: any) {
     logTaskError('VideoTask', 'attempt', { id, provider: config.provider, error: err.message })
     return { ok: false, error: err.message || 'Video generation failed' }
+  }
+}
+
+async function tryAddPixverseSoundEffect(
+  id: number,
+  config: AIConfig,
+  sourceVideoId: string,
+  prompt?: string | null,
+): Promise<string | null> {
+  try {
+    const { url, method, headers, body } = buildPixverseSoundEffectRequest(config, sourceVideoId, prompt)
+    logTaskProgress('VideoTask', 'pixverse-sound-request', {
+      id,
+      provider: config.provider,
+      sourceVideoId,
+      url: redactUrl(url),
+    })
+    logTaskPayload('VideoTask', 'pixverse sound payload', { id, method, url, headers, body })
+
+    const resp = await fetch(url, { method, headers, body: JSON.stringify(body) })
+    const text = await resp.text()
+    let result: any
+    try {
+      result = JSON.parse(text)
+    } catch {
+      throw new Error(`Invalid PixVerse sound response: ${text.slice(0, 180)}`)
+    }
+    if (!resp.ok || Number(result?.ErrCode ?? 0) !== 0) {
+      throw new Error(`PixVerse sound API error ${resp.status}: ${result?.ErrMsg || text.slice(0, 180)}`)
+    }
+    const soundTaskId = result?.Resp?.video_id || result?.video_id || result?.data?.video_id
+    if (!soundTaskId) throw new Error('PixVerse sound response missing video_id')
+
+    const taskId = String(soundTaskId)
+    db.update(schema.videoGenerations)
+      .set({ taskId, status: 'processing', updatedAt: now() })
+      .where(eq(schema.videoGenerations.id, id))
+      .run()
+    logTaskProgress('VideoTask', 'pixverse-sound-poll-start', { id, sourceVideoId, taskId })
+
+    const poll = await pollVideoUntilDone(id, config, taskId)
+    if (poll.status === 'completed') {
+      logTaskSuccess('VideoTask', 'pixverse-sound-complete', { id, sourceVideoId, taskId })
+      return poll.videoUrl
+    }
+    throw new Error(poll.error || 'PixVerse sound generation failed')
+  } catch (err: any) {
+    logTaskWarn('VideoTask', 'pixverse-sound-skip', { id, sourceVideoId, error: err.message })
+    return null
   }
 }
 
@@ -449,9 +540,10 @@ async function handleVideoComplete(id: number, videoUrl: string, duration: numbe
     duration: schema.videoGenerations.duration,
     resolution: schema.videoGenerations.resolution,
     provider: schema.videoGenerations.provider,
+    model: schema.videoGenerations.model,
   }).from(schema.videoGenerations).where(eq(schema.videoGenerations.id, id)).all()
-  // 按「实际产出的 provider」计价：选了 Seedance 但回退到 happyhorse → 按便宜的 happyhorse 档扣。
-  const engine = providerToEngine(vrec?.provider)
+  // 按「实际产出的 provider」计价：选了 Seedance 但回退到其它 provider → 按实际引擎档扣。
+  const engine = providerToEngine(vrec?.provider, vrec?.model)
   const cost = videoCost(vrec?.duration, vrec?.resolution, engine)
   await chargeForAction(vrec?.userId, 'video', {
     referenceId: id,

@@ -10,9 +10,11 @@
  * 需要的环境变量：
  *   GOOGLE_API_KEY        —— Google Gemini（文本）
  *   GOOGLE_VIDEO_API_KEY  —— Google Veo 官方视频。与 GOOGLE_API_KEY 是不同的 key；缺失则跳过视频播种。
- *   YUNWU_API_KEY         —— 云雾（图片 + HappyHorse R2V 视频兜底）
+ *   YUNWU_API_KEY         —— 云雾（图片 + PixVerse 视频）
  *   MINIMAX_API_KEY       —— MiniMax 官方语音（TTS，直连 api.minimaxi.com）
  *   ARK_API_KEY           —— 火山方舟 Seedance 官方视频（主力，直连 ark.cn-beijing.volces.com）
+ *   ALI_BAILIAN_API_KEY / DASHSCOPE_API_KEY —— 阿里云百炼 HappyHorse 1.1 官方视频
+ *   ALI_BAILIAN_BASE_URL  —— 可选，百炼工作空间 endpoint（如 https://xxx.cn-beijing.maas.aliyuncs.com）
  */
 import { eq, and } from 'drizzle-orm'
 import { db, schema } from './index.js'
@@ -25,6 +27,7 @@ interface ManagedConfig {
   provider: string
   name: string
   baseUrl: string
+  baseUrlEnv?: string
   model: string
   priority: number
   envKey: string
@@ -34,13 +37,18 @@ const MANAGED_CONFIGS: ManagedConfig[] = [
   { serviceType: 'text',  provider: 'google', name: 'Google Gemini 文本',    baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai', model: 'gemini-2.5-flash',             priority: 100, envKey: 'GOOGLE_API_KEY' },
   { serviceType: 'image', provider: 'openai', name: '云雾图片服务',           baseUrl: 'https://yunwu.ai/v1',                                     model: 'doubao-seedream-4-5-251128',  priority: 99,  envKey: 'YUNWU_API_KEY' },
   { serviceType: 'video', provider: 'volcengine', name: '火山 Seedance 视频（官方）', baseUrl: 'https://ark.cn-beijing.volces.com',                  model: 'doubao-seedance-2-0-260128',  priority: 100, envKey: 'ARK_API_KEY' },
-  { serviceType: 'video', provider: 'ali', name: '云雾 HappyHorse R2V 视频（兜底）', baseUrl: 'https://yunwu.ai',                                  model: 'happyhorse-1.0-r2v',          priority: 95,  envKey: 'YUNWU_API_KEY' },
+  { serviceType: 'video', provider: 'ali', name: '阿里百炼 HappyHorse 1.1 满血版（官方）', baseUrl: 'https://dashscope.aliyuncs.com', baseUrlEnv: 'ALI_BAILIAN_BASE_URL', model: 'happyhorse-1.1-r2v', priority: 98, envKey: 'ALI_BAILIAN_API_KEY,DASHSCOPE_API_KEY' },
+  { serviceType: 'video', provider: 'pixverse', name: '云雾 PixVerse C1 视频（首尾帧测试）', baseUrl: 'https://yunwu.ai',                          model: 'c1',                          priority: 95,  envKey: 'YUNWU_API_KEY' },
   { serviceType: 'video', provider: 'google-veo', name: 'Google Veo 视频（官方·兜底）', baseUrl: 'https://generativelanguage.googleapis.com/v1beta', model: 'veo-3.0-fast-generate-001',   priority: 90,  envKey: 'GOOGLE_VIDEO_API_KEY' },
   { serviceType: 'audio', provider: 'minimax', name: 'MiniMax 语音（官方）',  baseUrl: 'https://api.minimaxi.com',                                model: 'speech-2.8-hd',               priority: 100, envKey: 'MINIMAX_API_KEY' },
 ]
 
 function resolveKey(envKey: string): string {
-  return (process.env[envKey] || '').trim()
+  for (const key of envKey.split(',').map(s => s.trim()).filter(Boolean)) {
+    const value = (process.env[key] || '').trim()
+    if (value) return value
+  }
+  return ''
 }
 
 export function seedAiConfigs(): void {
@@ -60,7 +68,7 @@ export function seedAiConfigs(): void {
       serviceType: cfg.serviceType,
       provider: cfg.provider,
       name: cfg.name,
-      baseUrl: cfg.baseUrl,
+      baseUrl: cfg.baseUrlEnv ? ((process.env[cfg.baseUrlEnv] || '').trim() || cfg.baseUrl) : cfg.baseUrl,
       apiKey,
       model: JSON.stringify([cfg.model]),
       priority: cfg.priority,
@@ -87,54 +95,36 @@ export function seedAiConfigs(): void {
     console.log(`🔑 AI 配置播种完成：新增 ${inserted}，更新 ${updated}，跳过 ${skipped}（缺环境变量）`)
   }
 
-  migrateLegacyHappyHorseToR2V(ts)
+  disableHappyHorseConfigs(ts)
   migrateAudioToMinimax(ts)
 }
 
 /**
- * 旧版云雾 HappyHorse 走 OpenAI-compatible /v1/videos，接口收 duration 但实际常固定约 5s。
- * 新版改走云雾百炼 happyhorse-1.0-r2v，保留原云雾 key，停用旧 t2v/i2v 配置。
+ * 云雾 HappyHorse 已下架：保留历史记录和配置行，启动时强制标记为暂时下架并停用。
  */
-function migrateLegacyHappyHorseToR2V(ts: string): void {
-  const legacyRows = db.select().from(schema.aiServiceConfigs)
-    .where(and(
-      eq(schema.aiServiceConfigs.serviceType, 'video'),
-      eq(schema.aiServiceConfigs.provider, 'openai'),
-    )).all()
-    .filter(r => /happyhorse-1\.0-[ti]2v/i.test(r.model || ''))
+function disableHappyHorseConfigs(ts: string): void {
+  const rows = db.select().from(schema.aiServiceConfigs)
+    .where(eq(schema.aiServiceConfigs.serviceType, 'video')).all()
+    .filter(r => isLegacyHappyHorseRow(r))
 
-  const legacy = legacyRows.find(r => r.apiKey) || legacyRows[0]
-  if (!legacy) return
-
-  const values = {
-    serviceType: 'video',
-    provider: 'ali',
-    name: '云雾 HappyHorse R2V 视频（兜底）',
-    baseUrl: 'https://yunwu.ai',
-    apiKey: legacy.apiKey,
-    model: JSON.stringify(['happyhorse-1.0-r2v']),
-    priority: legacy.priority || 95,
-    isActive: Boolean(legacy.isActive),
-    updatedAt: ts,
+  for (const row of rows) {
+    const nextName = /暂时下架/.test(row.name || '')
+      ? row.name
+      : `${row.name || '云雾 HappyHorse 视频'}（暂时下架）`
+    db.update(schema.aiServiceConfigs)
+      .set({ name: nextName, isActive: false, updatedAt: ts })
+      .where(eq(schema.aiServiceConfigs.id, row.id))
+      .run()
   }
+  if (rows.length) console.log(`🎞️ HappyHorse：已标记暂时下架并停用 ${rows.length} 个配置`)
+}
 
-  const [existing] = db.select().from(schema.aiServiceConfigs)
-    .where(and(
-      eq(schema.aiServiceConfigs.serviceType, 'video'),
-      eq(schema.aiServiceConfigs.provider, 'ali'),
-    )).all()
-    .filter(r => /happyhorse/i.test(r.model || '') || /HappyHorse/i.test(r.name || ''))
-
-  if (existing) {
-    db.update(schema.aiServiceConfigs).set(values).where(eq(schema.aiServiceConfigs.id, existing.id)).run()
-  } else {
-    db.insert(schema.aiServiceConfigs).values({ ...values, createdAt: ts }).run()
-  }
-
-  for (const row of legacyRows) {
-    db.update(schema.aiServiceConfigs).set({ isActive: false, updatedAt: ts }).where(eq(schema.aiServiceConfigs.id, row.id)).run()
-  }
-  console.log(`🎞️ HappyHorse：已从旧 t2v/i2v 配置迁移到 R2V，停用旧配置 ${legacyRows.length} 个`)
+function isLegacyHappyHorseRow(row: { provider?: string | null; baseUrl?: string | null; model?: string | null; name?: string | null }): boolean {
+  const model = row.model || ''
+  const name = row.name || ''
+  const baseUrl = row.baseUrl || ''
+  if (/happyhorse-1\.1/i.test(model) || /满血版|官方/i.test(name)) return false
+  return /happyhorse/i.test(model) || /HappyHorse/i.test(name) || (/yunwu\.ai/i.test(baseUrl) && /happyhorse/i.test(model))
 }
 
 /**

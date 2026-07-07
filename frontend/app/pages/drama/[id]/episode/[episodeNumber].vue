@@ -201,28 +201,28 @@
             </div>
             <div class="toolbar-right">
               <span v-if="chars.length" class="char-count">{{ chars.length }} 角色 · {{ scenes.length }} 场景</span>
-              <button v-if="chars.length" class="btn btn-sm" @click="doExtract" :disabled="rn">
-                <Loader2 v-if="rn && rt === 'extractor'" :size="11" class="animate-spin" />
+              <button v-if="chars.length" class="btn btn-sm" @click="doExtract" :disabled="rn || extractConfirm.loading">
+                <Loader2 v-if="extractConfirm.loading || (rn && rt === 'extractor')" :size="11" class="animate-spin" />
                 <svg v-else width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
                 重新提取
               </button>
             </div>
           </div>
 
-          <div v-if="!chars.length && !rn" class="step-empty">
+          <div v-if="!chars.length && !rn && !extractConfirm.loading" class="step-empty">
             <div class="empty-visual">
               <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
             </div>
             <div class="empty-title">从剧本提取角色与场景</div>
             <div class="empty-desc">AI 自动分析剧本，提取角色信息和场景列表，与项目已有数据智能去重合并</div>
-            <button class="btn btn-primary" @click="doExtract">
+            <button class="btn btn-primary" :disabled="extractConfirm.loading" @click="doExtract">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
               开始提取
             </button>
           </div>
-          <div v-else-if="rn && rt === 'extractor'" class="step-loading">
+          <div v-else-if="extractConfirm.loading || (rn && rt === 'extractor')" class="step-loading">
             <Loader2 :size="24" class="animate-spin" style="color:var(--accent-dark)" />
-            <div class="loading-text">正在提取角色和场景...</div>
+            <div class="loading-text">正在分析角色匹配...</div>
           </div>
           <div v-else class="extract-stage">
             <aside class="card extract-summary">
@@ -776,6 +776,16 @@
                   <button class="btn btn-sm ml-auto" :disabled="isPendingCharImage(c.id)" @click="genCharImg(c.id)">
                     {{ isPendingCharImage(c.id) ? '生成中' : ((c.image_url || c.imageUrl) ? '重新生成' : '生成') }}
                   </button>
+                  <input
+                    :id="`char-upload-${c.id}`"
+                    type="file"
+                    accept="image/png,image/jpeg,image/jpg,image/webp"
+                    style="display:none"
+                    @change="uploadCharImage(c, $event)"
+                  />
+                  <button class="btn btn-sm" :disabled="isPendingCharUpload(c.id) || isPendingCharImage(c.id)" title="导入人物参考图，并生成当前项目画风的角色图" @click="openCharUpload(c.id)">
+                    {{ isPendingCharUpload(c.id) ? '上传中' : '导入参考' }}
+                  </button>
                   <button class="btn btn-sm" :disabled="isPendingCharImage(c.id)" title="自定义提示词重新生成" @click="openCharCustomDialog(c)">自定义</button>
                 </div>
 
@@ -1255,20 +1265,32 @@
                   <button type="button" :class="['engine-opt', videoEngine==='seedance' && 'active']" @click="videoEngine='seedance'" title="火山 Seedance 2.0：画质更好、无水印；较贵；同时最多 4 条，其余自动排队">
                     Seedance 2.0<span class="engine-tag good">贵·效果好</span>
                   </button>
-                  <button type="button" :class="['engine-opt', videoEngine==='happyhorse' && 'active']" @click="videoEngine='happyhorse'" title="云雾 HappyHorse R2V：参考图生视频；支持更长时长；带水印">
-                    HappyHorse<span class="engine-tag">R2V·带水印</span>
+                  <button type="button" :class="['engine-opt', videoEngine==='vidu' && 'active']" @click="videoEngine='vidu'" title="云雾 PixVerse：支持文生、图生、首尾帧和多参考；当前优先测试首尾帧">
+                    PixVerse<span class="engine-tag good">首尾帧</span>
                   </button>
-                  <button type="button" :class="['engine-opt', videoEngine==='hailuo' && 'active']" @click="videoEngine='hailuo'" title="海螺 Hailuo（MiniMax）：写实真人可用、支持更长时长（6/10秒）；较贵">
-                    海螺 Hailuo<span class="engine-tag good">贵·真人可用</span>
+                  <button type="button" :class="['engine-opt', videoEngine==='happyhorse_full' && 'active']" @click="videoEngine='happyhorse_full'" title="阿里云百炼官方 HappyHorse 1.1：满血版，支持最长 15 秒、音视频生成和多参考图；区别于旧云雾 HappyHorse 下架入口">
+                    HappyHorse 1.1<span class="engine-tag good">满血·官方</span>
+                  </button>
+                  <button type="button" class="engine-opt disabled" disabled title="云雾 HappyHorse 已暂时下架，当前不可用">
+                    HappyHorse 旧版<span class="engine-tag down">暂时下架</span>
+                  </button>
+                  <button type="button" :class="['engine-opt', videoEngine==='hailuo' && 'active']" @click="videoEngine='hailuo'" title="海螺 Hailuo（MiniMax）：写实真人可用，原片通常不带声音；需要到视频合成里混入配音">
+                    海螺 Hailuo<span class="engine-tag good">静音·真人可用</span>
                   </button>
                 </div>
                 <label class="dim" style="font-size:11px;margin:0 4px 0 8px">画质</label>
-                <select v-model="videoResolution" class="input" style="height:28px;font-size:12px;padding:0 8px" title="480P 最省最快，720P 均衡，1080P 最清晰（480P 仅 Seedance 原生支持，HappyHorse 会按 720P 出片）">
+                <select v-model="videoResolution" class="input" style="height:28px;font-size:12px;padding:0 8px" title="480P 仅 Seedance 原生支持；360P/540P 可用于 PixVerse 测试；720P 均衡，1080P 最清晰">
                   <option v-if="videoEngine === 'seedance'" value="480P">480P（最省·最快）</option>
+                  <option v-if="videoEngine === 'vidu'" value="360P">360P（PixVerse 测试）</option>
+                  <option v-if="videoEngine === 'vidu'" value="540P">540P（省积分）</option>
                   <option value="720P">720P（均衡）</option>
                   <option value="1080P">1080P（清晰）</option>
                 </select>
-                <span class="dim" style="font-size:11px;margin:0 4px" :title="`${videoEngine==='seedance'?'Seedance':videoEngine==='hailuo'?'海螺 Hailuo':'HappyHorse'} · ${videoResolution} ≈${videoRatePerSec} 积分/秒。例 5 秒 ≈${videoRatePerSec * 5} 积分`">≈{{ videoRatePerSec }} 积分/秒</span>
+                <span class="dim" style="font-size:11px;margin:0 4px" :title="`${videoEngineLabel} · ${videoResolution} ≈${videoRatePerSec} 积分/秒。例 5 秒 ≈${videoRatePerSec * 5} 积分`">≈{{ videoRatePerSec }} 积分/秒</span>
+                <label class="video-ref-toggle" :title="videoUseLastFrame ? '开启：同时传入尾帧，结尾画面更可控，但可能更像首尾帧补间' : '关闭：只用首帧作起点，尾帧由提示词约束，剧情运动更自由'">
+                  <input type="checkbox" :checked="videoUseLastFrame" @change="setVideoUseLastFrame($event.target.checked)" />
+                  锁尾帧
+                </label>
                 <button class="btn btn-sm" @click="batchVideos">
                   <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
                   批量视频
@@ -1280,15 +1302,24 @@
                 <span v-if="pendingVideoIds.length || videoQueue.length" class="dim" style="font-size:11px;margin-left:6px" :title="videoEngine==='seedance' ? `Seedance 同时最多 ${videoConcurrency} 条，其余自动排队` : `每次最多并发 ${videoConcurrency} 条`">
                   生成中 {{ pendingVideoIds.length }}<template v-if="videoQueue.length"> · 排队 {{ videoQueue.length }}</template>
                 </span>
-                <span v-else-if="videoEngine!=='happyhorse'" class="dim" style="font-size:11px;margin-left:6px" title="并发上限，超出自动排队">同时最多 {{ videoConcurrency }} 条</span>
+                <span class="dim" style="font-size:11px;margin-left:6px" title="并发上限，超出自动排队">同时最多 {{ videoConcurrency }} 条</span>
               </div>
+            </div>
+            <div v-if="videoEngine === 'hailuo'" class="engine-note">
+              海螺生成的是静音原片；需要声音时，请先生成配音，再到「视频合成」把配音和字幕合进去。
+            </div>
+            <div v-else-if="videoEngine === 'happyhorse_full'" class="engine-note">
+              HappyHorse 1.1 满血版走阿里云百炼官方接口，支持 3-15 秒、音视频生成和最多 9 张参考图；旧 HappyHorse 是云雾下架入口，已暂停使用。
+            </div>
+            <div v-else-if="videoEngine === 'vidu'" class="engine-note">
+              PixVerse 试运行：优先使用首尾帧 transition；有台词、音效或环境声的镜头会自动开启模型声音。建议先测 5-6 秒确认画面过渡。
             </div>
             <div class="prod-grid">
               <div v-for="(sb, i) in sbs" :key="sb.id" class="card prod-card">
                 <div class="prod-cover">
                   <video
                     v-if="hasVid(sb)"
-                    :src="'/' + getVideoUrl(sb)"
+                    :src="'/' + getPlayableVideoUrl(sb)"
                     class="prod-video"
                     controls
                     preload="metadata"
@@ -1544,6 +1575,52 @@
           </div>
         </div>
       </div>
+
+      <div v-if="extractConfirm.open" class="overlay extract-confirm-overlay" @click.self="closeExtractConfirm">
+        <div class="card extract-confirm-dialog">
+          <div class="extract-confirm-head">
+            <div>
+              <div class="extract-confirm-title">确认本集角色匹配</div>
+              <div class="extract-confirm-sub">确认后才会保存角色和场景；已有定妆角色会继续沿用，不会重新生成。</div>
+            </div>
+            <button class="btn btn-ghost btn-icon" :disabled="extractConfirm.saving" @click="closeExtractConfirm">×</button>
+          </div>
+          <div class="extract-confirm-body">
+            <div class="extract-section-title">角色</div>
+            <div class="extract-map-list">
+              <div v-for="(item, idx) in extractConfirm.characters" :key="idx" class="extract-map-row">
+                <div class="extract-char-info">
+                  <div class="extract-char-name">{{ item.name || '未命名角色' }}</div>
+                  <div class="extract-char-desc">{{ item.role || item.description || item.match_reason || '本集识别角色' }}</div>
+                </div>
+                <select v-model="item.selection" class="extract-select">
+                  <option value="create">新增角色</option>
+                  <option value="ignore">忽略</option>
+                  <option
+                    v-for="pc in extractConfirm.projectCharacters"
+                    :key="pc.id"
+                    :value="`reuse:${pc.id}`"
+                  >
+                    复用：{{ pc.name }}{{ pc.has_visual ? '（已定妆）' : '' }}
+                  </option>
+                </select>
+              </div>
+            </div>
+            <div class="extract-section-title">场景</div>
+            <div class="extract-scene-summary">
+              <span>识别到 {{ extractConfirm.scenes.length }} 个场景</span>
+              <span>同地点同时间会自动复用，其余新增</span>
+            </div>
+          </div>
+          <div class="extract-confirm-foot">
+            <button class="btn" :disabled="extractConfirm.saving" @click="closeExtractConfirm">取消</button>
+            <button class="btn btn-primary" :disabled="extractConfirm.saving" @click="confirmExtraction">
+              <Loader2 v-if="extractConfirm.saving" :size="13" class="animate-spin" />
+              确认保存
+            </button>
+          </div>
+        </div>
+      </div>
     </main>
     </div>
 
@@ -1568,7 +1645,10 @@
             <div class="vboard-title">镜头 #{{ sbs.indexOf(vidBoardSb) + 1 }} · 视频故事板<span v-if="hasVid(vidBoardSb) && videoModelInfo(vidBoardSb)" class="model-tag" :class="{ warn: videoModelInfo(vidBoardSb).warn }" style="margin-left:8px">{{ videoModelInfo(vidBoardSb).text }}</span></div>
             <button class="btn btn-ghost btn-icon" @click="vidBoard.open = false" title="关闭">×</button>
           </div>
-          <div class="vboard-hint">视频会从<b>首帧</b>运动到<b>尾帧</b>。两帧差别越大、提示词运镜越具体，画面越丰富；两帧太像会显得单调。</div>
+          <div class="vboard-hint">
+            <template v-if="videoUseLastFrame">当前会同时传入<b>首帧</b>和<b>尾帧</b>，结尾更可控，但如果两帧差距大，模型可能更像在做首尾帧补间。</template>
+            <template v-else>当前只把<b>首帧</b>作为起始参考，尾帧不强锁，视频会更多按提示词里的剧情动作和镜头调度推进。</template>
+          </div>
           <div class="vboard-frames">
             <div class="vboard-frame">
               <div class="vboard-frame-label">首帧</div>
@@ -1596,6 +1676,10 @@
           </div>
           <div class="vboard-foot">
             <button class="btn" @click="vidBoard.open = false">关闭</button>
+            <label class="video-ref-toggle board-toggle" :title="videoUseLastFrame ? '开启：同时传入尾帧，结尾画面更可控' : '关闭：不传尾帧，剧情运动更自由'">
+              <input type="checkbox" :checked="videoUseLastFrame" @change="setVideoUseLastFrame($event.target.checked)" />
+              锁尾帧
+            </label>
             <button class="btn btn-primary ml-auto" :disabled="isPendingVideo(vidBoardSb.id) || isQueuedVideo(vidBoardSb.id)" @click="genVid(vidBoardSb)">
               {{ isPendingVideo(vidBoardSb.id) ? '生成中…' : (hasVid(vidBoardSb) ? '重新生成视频' : '生成视频') }}
             </button>
@@ -1612,7 +1696,7 @@ import JSZip from 'jszip'
 import {
   Users, MapPin, Video, ImageIcon, Layers, Mic2, FileText, FolderKanban, Clapperboard, Download,
 } from 'lucide-vue-next'
-import { dramaAPI, episodeAPI, storyboardAPI, characterAPI, sceneAPI, imageAPI, videoAPI, composeAPI, mergeAPI, gridAPI, aiConfigAPI, voicesAPI, creditsAPI, humanizeError } from '~/composables/useApi'
+import { dramaAPI, episodeAPI, storyboardAPI, characterAPI, sceneAPI, imageAPI, videoAPI, composeAPI, mergeAPI, gridAPI, aiConfigAPI, voicesAPI, creditsAPI, agentExtractionAPI, humanizeError } from '~/composables/useApi'
 import { useAgent } from '~/composables/useAgent'
 import BaseSelect from '~/components/BaseSelect.vue'
 import ImageGenerateDialog from '~/components/ImageGenerateDialog.vue'
@@ -1627,6 +1711,14 @@ const drama = ref(null), episode = ref(null), chars = ref([]), scenes = ref([]),
 const panel = ref('script')
 const { running: rn, runningType: rt, run: runAgent } = useAgent()
 const { isAdmin } = useAuth()  // TTS 模型切换等运营操作仅管理员可见
+const extractConfirm = reactive({
+  open: false,
+  loading: false,
+  saving: false,
+  characters: [],
+  scenes: [],
+  projectCharacters: [],
+})
 
 const localRaw = ref(''), localScript = ref('')
 const rawContent = computed(() => episode.value?.content || '')
@@ -1694,18 +1786,31 @@ const TTS_MODEL_PRESETS = [
 ]
 
 // Video model quick-switch — overrides the active config's model per-generation.
-// 视频主力 = 火山 Seedance 2.0（官方）。模型与 provider 强绑定，下拉只列与主力 provider 兼容的，
-// 选默认即用配置中的 Seedance；失败时后端自动兜底到云雾 HappyHorse R2V（无需用户手动选）。
-// 视频引擎：seedance（火山·贵·效果好·无水印·并发限 4）/ happyhorse（云雾 R2V·带水印）/ hailuo（海螺·真人可用）。
-const videoEngine = ref(typeof window !== 'undefined' ? (localStorage.getItem('claw_video_engine') || 'seedance') : 'seedance')
+// 视频引擎：seedance（火山·贵·效果好·无水印·并发限 4）/ vidu（云雾 PixVerse）/ happyhorse_full（阿里百炼 HappyHorse 1.1 满血版）/ hailuo（海螺·真人可用）。
+function normalizeVideoEngine(value) {
+  if (value === 'vidu' || value === 'hailuo' || value === 'seedance' || value === 'happyhorse_full') return value
+  if (value === 'happyhorse') return 'vidu'
+  return 'seedance'
+}
+const videoEngine = ref(typeof window !== 'undefined' ? normalizeVideoEngine(localStorage.getItem('claw_video_engine') || 'seedance') : 'seedance')
 const videoResolution = ref(typeof window !== 'undefined' ? (localStorage.getItem('claw_video_res') || '720P') : '720P')
-// 480P 仅 Seedance 原生支持：HappyHorse / 海螺 选中时把残留的 480P 纠正为 720P
-if (videoEngine.value !== 'seedance' && videoResolution.value === '480P') videoResolution.value = '720P'
+const videoUseLastFrame = ref(typeof window !== 'undefined' ? localStorage.getItem('claw_video_use_last_frame') === '1' : false)
+function normalizeVideoResolutionForEngine(engine, resolution) {
+  if (engine !== 'seedance' && resolution === '480P') return engine === 'vidu' ? '360P' : '720P'
+  if (engine !== 'vidu' && resolution === '540P') return '720P'
+  if (engine !== 'vidu' && resolution === '360P') return '720P'
+  return resolution
+}
+videoResolution.value = normalizeVideoResolutionForEngine(videoEngine.value, videoResolution.value)
 watch(videoEngine, (v) => {
   if (typeof window !== 'undefined') localStorage.setItem('claw_video_engine', v)
-  if (v !== 'seedance' && videoResolution.value === '480P') videoResolution.value = '720P'
+  videoResolution.value = normalizeVideoResolutionForEngine(v, videoResolution.value)
 })
 watch(videoResolution, (v) => { if (typeof window !== 'undefined') localStorage.setItem('claw_video_res', v) })
+function setVideoUseLastFrame(v) {
+  videoUseLastFrame.value = !!v
+  try { localStorage.setItem('claw_video_use_last_frame', v ? '1' : '0') } catch {}
+}
 
 const frameModeOptions = [{ label: '仅首帧', value: 'first' }, { label: '首尾帧', value: 'first_last' }]
 const gridLayoutOptions = [
@@ -1718,13 +1823,14 @@ const imageConfigs = ref([])
 const videoConfigs = ref([])
 const audioConfigs = ref([])
 const pendingCharImageIds = ref([])
+const pendingCharUploadIds = ref([])
 const pendingCharViewKeys = ref([])  // "characterId:view" pairs (view = 'side'|'back')
 const pendingSceneImageIds = ref([])
 const pendingShotFrameKeys = ref([])
 const pendingVideoIds = ref([])
-// 批量视频限并发：Seedance 并发上限约 4（与后端并发闸一致），happyhorse 吞吐更高可多发。
+// 批量视频限并发：Seedance 并发上限约 4（与后端并发闸一致），PixVerse/海螺保守一点。
 // 后端并发闸是跨标签页/用户的最终防线；前端这层是单标签页的节流 + 排队展示。
-const videoConcurrency = computed(() => videoEngine.value === 'happyhorse' ? 6 : videoEngine.value === 'hailuo' ? 3 : 4)
+const videoConcurrency = computed(() => videoEngine.value === 'vidu' ? 3 : videoEngine.value === 'hailuo' ? 3 : videoEngine.value === 'happyhorse_full' ? 3 : 4)
 const videoQueue = ref([]) // 等待中的 storyboard id（排队中，尚未发起）
 const pendingComposeIds = ref([])
 const failedVideoMessages = ref({})
@@ -1742,6 +1848,10 @@ function isPendingCharImage(id) {
   return pendingCharImageIds.value.includes(id)
 }
 
+function isPendingCharUpload(id) {
+  return pendingCharUploadIds.value.includes(id)
+}
+
 function openImageViewer(src, title = '') {
   if (!src) return
   imageViewer.value = { open: true, src, title }
@@ -1755,16 +1865,16 @@ function handleImageViewerKeydown(event) {
   if (event.key === 'Escape' && imageViewer.value.open) closeImageViewer()
 }
 
-const pricing = ref({ image: 1000, tts: 150, videoPerSec: { seedance: { '480p': 1500, '720p': 3000, '1080p': 6000 }, happyhorse: { '720p': 2400, '1080p': 4800 }, hailuo: { '720p': 3000, '1080p': 6000 } } })
+const pricing = ref({ image: 1000, tts: 150, videoPerSec: { seedance: { '480p': 1500, '720p': 3000, '1080p': 6000 }, vidu: { '360p': 1000, '540p': 1600, '720p': 2400, '1080p': 3200 }, happyhorse: { '720p': 2400, '1080p': 4800 }, happyhorse_full: { '720p': 2700, '1080p': 3600 }, hailuo: { '720p': 3000, '1080p': 6000 } } })
 // 视频每秒积分（按引擎×画质动态计费）。兼容后端新结构(按引擎嵌套)与旧结构(扁平)。
 const videoRatePerSec = computed(() => {
   const rs = String(videoResolution.value).toLowerCase()
-  const k = rs.includes('1080') ? '1080p' : rs.includes('480') ? '480p' : '720p'
+  const k = rs.includes('1080') ? '1080p' : rs.includes('540') ? '540p' : rs.includes('480') ? '480p' : rs.includes('360') ? '360p' : '720p'
   const vps = pricing.value.videoPerSec || {}
   const table = vps[videoEngine.value] || vps
-  // happyhorse 没有 480p 档（实际出 720P）→ 用 720p 价兜底，与后端 videoCost 一致
   return table[k] ?? table['720p'] ?? 3000
 })
+const videoEngineLabel = computed(() => videoEngine.value === 'seedance' ? 'Seedance' : videoEngine.value === 'vidu' ? 'PixVerse' : videoEngine.value === 'happyhorse_full' ? 'HappyHorse 1.1' : videoEngine.value === 'hailuo' ? '海螺 Hailuo' : 'HappyHorse')
 onMounted(() => {
   window.addEventListener('keydown', handleImageViewerKeydown)
   creditsAPI.pricing().then(p => { if (p) pricing.value = p }).catch(() => {})
@@ -2632,12 +2742,16 @@ function setCharGender(c, gender) {
 const vidBoard = reactive({ open: false, sbId: null })
 const vidBoardSb = computed(() => sbs.value.find(s => s.id === vidBoard.sbId) || null)
 function openVidBoard(sb) { vidBoard.sbId = sb.id; vidBoard.open = true }
-// 这条视频实际由哪个模型生成（来自后端 video_provider/video_model）；兜底(happyhorse/veo)标 warn
+// 这条视频实际由哪个模型生成（来自后端 video_provider/video_model）；兜底/下架历史模型标 warn
 function videoModelInfo(sb) {
   const m = String(sb?.video_model || sb?.videoModel || '').toLowerCase()
   const p = String(sb?.video_provider || sb?.videoProvider || '').toLowerCase()
   if (!m && !p) return null
   if (m.includes('seedance') || p === 'volcengine') return { text: 'Seedance', warn: false }
+  if (m.includes('pixverse') || p === 'pixverse') return { text: 'PixVerse', warn: false }
+  if (m.includes('viduq3-pro')) return { text: 'Vidu Q3 Pro', warn: false }
+  if (m.includes('viduq3') || p === 'vidu') return { text: 'Vidu Q3', warn: false }
+  if (m.includes('happyhorse-1.1') || (p === 'ali' && m.includes('happyhorse'))) return { text: 'HappyHorse 1.1', warn: false }
   if (m.includes('happyhorse')) return { text: 'HappyHorse·兜底', warn: true }
   if (m.includes('veo')) return { text: 'Veo·兜底', warn: true }
   if (m.includes('sora')) return { text: 'Sora', warn: false }
@@ -2850,7 +2964,72 @@ function skipRewrite() {
   toast.success('已跳过 AI 改写，当前将直接使用原始内容')
   scriptStep.value = 2
 }
-function doExtract() { saveScr(); runAgent('extractor', '请从剧本中提取所有角色和场景信息，提取时自动与项目已有数据进行去重合并', dramaId, epId.value, refresh) }
+function closeExtractConfirm() {
+  if (extractConfirm.saving) return
+  extractConfirm.open = false
+}
+
+function applyExtractionDefaults(data) {
+  extractConfirm.characters = (data?.characters || []).map(item => ({
+    ...item,
+    selection: item.action === 'ignore'
+      ? 'ignore'
+      : (item.existing_character_id ? `reuse:${item.existing_character_id}` : 'create'),
+  }))
+  extractConfirm.scenes = data?.scenes || []
+  extractConfirm.projectCharacters = data?.project_characters || data?.projectCharacters || []
+}
+
+async function doExtract() {
+  saveScr()
+  if (!scriptContent.value && !localScript.value) {
+    toast.warning('请先保存剧本')
+    return
+  }
+  extractConfirm.loading = true
+  try {
+    const data = await agentExtractionAPI.prepare(dramaId, epId.value)
+    applyExtractionDefaults(data)
+    extractConfirm.open = true
+  } catch (e) {
+    toast.error(e.message || '角色提取失败')
+  } finally {
+    extractConfirm.loading = false
+  }
+}
+
+async function confirmExtraction() {
+  extractConfirm.saving = true
+  try {
+    const characters = extractConfirm.characters.map(item => {
+      const selection = item.selection || 'create'
+      if (selection === 'ignore') return { ...item, action: 'ignore', existing_character_id: null }
+      if (selection.startsWith('reuse:')) {
+        const id = Number(selection.replace('reuse:', ''))
+        const pc = extractConfirm.projectCharacters.find(c => c.id === id)
+        return {
+          ...item,
+          action: 'reuse',
+          existing_character_id: id,
+          name: pc?.name || item.name,
+        }
+      }
+      return { ...item, action: 'create', existing_character_id: null }
+    })
+    const scenesPayload = extractConfirm.scenes.map(item => ({
+      ...item,
+      action: item.existing_scene_id ? 'reuse' : (item.action || 'create'),
+    }))
+    const result = await agentExtractionAPI.confirm(dramaId, epId.value, { characters, scenes: scenesPayload })
+    toast.success(`已保存：复用 ${result.characters_reused || 0} 个角色，新增 ${result.characters_created || 0} 个角色`)
+    extractConfirm.open = false
+    await refresh()
+  } catch (e) {
+    toast.error(e.message || '保存失败')
+  } finally {
+    extractConfirm.saving = false
+  }
+}
 function doVoice() { runAgent('voice_assigner', '请为所有角色判别性别并分配合适的音色（对白由模型按性别生成，旁白/独白用此音色真实配音）', dramaId, epId.value, refresh) }
 function doBreakdown() {
   const cfg = videoConfigs.value.find(c => c.id === lockedVideoConfigId.value)
@@ -2895,6 +3074,54 @@ async function genCharImg(id, opts = {}) {
   } catch (e) {
     pendingCharImageIds.value = pendingCharImageIds.value.filter(item => item !== id)
     toast.error(e.message)
+  }
+}
+
+function openCharUpload(id) {
+  const input = document.getElementById(`char-upload-${id}`)
+  input?.click?.()
+}
+
+async function uploadCharImage(char, event) {
+  const input = event?.target
+  const file = input?.files?.[0]
+  if (!file) return
+  if (!file.type?.startsWith('image/')) {
+    toast.error('请上传图片文件')
+    input.value = ''
+    return
+  }
+  if (file.size > 12 * 1024 * 1024) {
+    toast.error('图片不能超过 12MB')
+    input.value = ''
+    return
+  }
+  const id = char.id
+  const before = char?.image_url || char?.imageUrl || ''
+  try {
+    if (!isPendingCharUpload(id)) pendingCharUploadIds.value.push(id)
+    if (!isPendingCharImage(id)) pendingCharImageIds.value.push(id)
+    await characterAPI.uploadImage(id, file, epId.value)
+    const target = chars.value.find(c => c.id === id)
+    if (target) {
+      target.view_side = null
+      target.viewSide = null
+      target.view_back = null
+      target.viewBack = null
+    }
+    toast.success('参考图已导入，正在生成项目风格角色图')
+    await refresh()
+    watchAsyncResult(() => {
+      const latest = chars.value.find(c => c.id === id)
+      const cur = latest?.image_url || latest?.imageUrl || ''
+      return !!cur && cur !== before
+    }, 36, 2500, () => { pendingCharImageIds.value = pendingCharImageIds.value.filter(item => item !== id) })
+  } catch (e) {
+    pendingCharImageIds.value = pendingCharImageIds.value.filter(item => item !== id)
+    toast.error(e.message || '上传失败')
+  } finally {
+    pendingCharUploadIds.value = pendingCharUploadIds.value.filter(item => item !== id)
+    if (input) input.value = ''
   }
 }
 
@@ -3087,6 +3314,7 @@ function getLastFrame(s) { return s?.last_frame_image || s?.lastFrameImage || nu
 function getStoryboardCover(s) { return s?.composed_image || s?.composedImage || getFirstFrame(s) || getLastFrame(s) || null }
 function getVideoUrl(s) { return s?.video_url || s?.videoUrl || null }
 function getComposedVideoUrl(s) { return s?.composed_video_url || s?.composedVideoUrl || null }
+function getPlayableVideoUrl(s) { return getComposedVideoUrl(s) || getVideoUrl(s) }
 function hasImg(s) { return !!getStoryboardCover(s) }
 function hasVid(s) { return !!getVideoUrl(s) }
 function hasComposed(s) { return !!getComposedVideoUrl(s) }
@@ -3261,15 +3489,21 @@ async function genVid(sb) {
     prompt: sb.video_prompt || sb.videoPrompt || '',
     duration: Number(sb.duration || 5),
     resolution: videoResolution.value,
+    use_last_frame: videoUseLastFrame.value,
   }
-  // 用户所选引擎（seedance / happyhorse）——后端据此选主配置 + 计价。
+  // 用户所选引擎（seedance / vidu / happyhorse_full / hailuo）——后端据此选主配置 + 计价。
   params.engine = videoEngine.value
   const first = getFirstFrame(sb)
   const last = getLastFrame(sb)
   const refs = getRefs(sb)
-  if (first && last) { Object.assign(params, { reference_mode: 'first_last', first_frame_url: first, last_frame_url: last }) }
-  else if (refs.length) { Object.assign(params, { reference_mode: 'multiple', reference_image_urls: [first, ...refs].filter(Boolean) }) }
+  if (videoEngine.value === 'happyhorse_full') {
+    const allRefs = uniqueUrls([first, ...refs, last]).slice(0, 9)
+    if (first) params.first_frame_url = first
+    if (last) params.last_frame_url = last
+    if (allRefs.length) Object.assign(params, { reference_mode: 'multiple', reference_image_urls: allRefs })
+  } else if (first && last && videoUseLastFrame.value) { Object.assign(params, { reference_mode: 'first_last', first_frame_url: first, last_frame_url: last }) }
   else if (first) { Object.assign(params, { reference_mode: 'single', image_url: first }) }
+  else if (refs.length) { Object.assign(params, { reference_mode: 'multiple', reference_image_urls: refs.filter(Boolean) }) }
   try {
     delete failedVideoMessages.value[sb.id]
     if (!isPendingVideo(sb.id)) pendingVideoIds.value.push(sb.id)
@@ -3279,7 +3513,12 @@ async function genVid(sb) {
     await pollVideoGeneration(generation?.id, sb.id)
   } catch (e) {
     pendingVideoIds.value = pendingVideoIds.value.filter(item => item !== sb.id)
-    toast.error(e.message)
+    const message = humanizeError(e.message || '视频生成失败')
+    failedVideoMessages.value = {
+      ...failedVideoMessages.value,
+      [sb.id]: message,
+    }
+    toast.error(message)
   } finally {
     // 本条结束（成功/失败）→ 腾出一个并发槽，放队列里的下一条进来
     pumpVideoQueue()
@@ -3314,16 +3553,21 @@ async function pollVideoGeneration(generationId, storyboardId) {
       if (res?.status === 'completed') {
         pendingVideoIds.value = pendingVideoIds.value.filter(item => item !== storyboardId)
         delete failedVideoMessages.value[storyboardId]
-        toast.success('视频生成完成')
+        if ((res?.provider || '').toLowerCase() === 'minimax') {
+          toast.success('海螺视频已生成 · 原片无声，请到「视频合成」混入配音')
+        } else {
+          toast.success('视频生成完成')
+        }
         return
       }
       if (res?.status === 'failed') {
         pendingVideoIds.value = pendingVideoIds.value.filter(item => item !== storyboardId)
+        const message = humanizeError(res?.error_msg || res?.errorMsg || '视频生成失败')
         failedVideoMessages.value = {
           ...failedVideoMessages.value,
-          [storyboardId]: res?.error_msg || res?.errorMsg || '视频生成失败',
+          [storyboardId]: message,
         }
-        toast.error(failedVideoMessages.value[storyboardId])
+        toast.error(message)
         return
       }
     } catch {}
@@ -3335,6 +3579,7 @@ async function pollVideoGeneration(generationId, storyboardId) {
   }
   toast.error('视频生成超时')
 }
+
 async function doCompose(sb) {
   try {
     delete failedComposeMessages.value[sb.id]
@@ -3492,6 +3737,10 @@ function getRefs(sb) {
   const raw = sb.reference_images || sb.referenceImages
   if (!raw) return []
   try { return JSON.parse(raw) } catch { return [] }
+}
+
+function uniqueUrls(urls) {
+  return Array.from(new Set(urls.map(u => String(u || '').trim()).filter(Boolean)))
 }
 
 async function loadConfigs() {
@@ -4090,9 +4339,49 @@ onMounted(() => { refresh(); loadConfigs(); loadVoices() })
 .engine-opt + .engine-opt { border-left: 1px solid #dce3ee; }
 .engine-opt:hover { background: #f4f7fb; }
 .engine-opt.active { background: linear-gradient(135deg, #C2F84E 0%, #8FEF26 100%); color: #0a0e1a; }
+.engine-opt.disabled,
+.engine-opt:disabled { color: #9aa8bb; background: #f3f6fa; cursor: not-allowed; opacity: .72; }
+.engine-opt.disabled:hover,
+.engine-opt:disabled:hover { background: #f3f6fa; }
 .engine-tag { font-size: 9px; font-weight: 700; padding: 1px 5px; border-radius: 4px; background: rgba(50,74,114,0.1); opacity: .85; white-space: nowrap; }
 .engine-tag.good { background: rgba(210,140,30,0.18); color: #c8841e; }
+.engine-tag.down { background: rgba(148,163,184,0.22); color: #64748b; }
 .engine-opt.active .engine-tag { background: rgba(10,14,26,0.14); color: #0a0e1a; }
+.engine-note {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 12px;
+  padding: 8px 12px;
+  border: 1px solid rgba(210, 140, 30, 0.2);
+  border-radius: 10px;
+  background: rgba(210, 140, 30, 0.08);
+  color: #8a6a1e;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.video-ref-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 28px;
+  padding: 0 9px;
+  border: 1px solid rgba(27, 41, 64, 0.12);
+  border-radius: 8px;
+  background: rgba(255,255,255,0.72);
+  color: var(--text-2);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.video-ref-toggle input { accent-color: #8FEF26; margin: 0; }
+.video-ref-toggle:has(input:checked) {
+  color: #183300;
+  border-color: rgba(105, 214, 24, 0.45);
+  background: rgba(194, 248, 78, 0.18);
+}
+.video-ref-toggle.board-toggle { margin-left: 6px; }
 .btn-download { background: #324a72; color: #fff; border-color: #324a72; }
 .btn-download:hover:not(:disabled) { background: #26395a; border-color: #26395a; }
 .prod-tab-beta { font-size: 9px; font-weight: 700; padding: 0 4px; border-radius: 4px; background: rgba(210,140,30,0.18); color: #c8841e; margin-left: 3px; }
@@ -4427,6 +4716,109 @@ onMounted(() => { refresh(); loadConfigs(); loadVoices() })
 .char-view-regen:hover {
   background: var(--accent);
   color: #0a0e1a;
+}
+
+.extract-confirm-overlay {
+  z-index: 1150;
+  align-items: center;
+  justify-content: center;
+  padding: 22px;
+}
+.extract-confirm-dialog {
+  width: min(920px, 96vw);
+  max-height: min(760px, 92vh);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: 18px;
+  box-shadow: 0 28px 80px rgba(18, 30, 54, 0.22);
+}
+.extract-confirm-head,
+.extract-confirm-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 18px 22px;
+  border-bottom: 1px solid var(--border);
+}
+.extract-confirm-foot {
+  border-bottom: 0;
+  border-top: 1px solid var(--border);
+  justify-content: flex-end;
+}
+.extract-confirm-title {
+  font-size: 18px;
+  font-weight: 900;
+  color: var(--text-0);
+}
+.extract-confirm-sub {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--text-2);
+}
+.extract-confirm-body {
+  padding: 18px 22px 22px;
+  overflow: auto;
+}
+.extract-section-title {
+  margin: 4px 0 10px;
+  font-size: 13px;
+  font-weight: 900;
+  color: var(--text-0);
+}
+.extract-map-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 18px;
+}
+.extract-map-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 320px);
+  gap: 12px;
+  align-items: center;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg-0);
+}
+.extract-char-info { min-width: 0; }
+.extract-char-name {
+  font-size: 14px;
+  font-weight: 900;
+  color: var(--text-0);
+}
+.extract-char-desc {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--text-2);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.extract-select {
+  width: 100%;
+  min-height: 38px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #fff;
+  color: var(--text-0);
+  padding: 0 10px;
+  font-weight: 700;
+}
+.extract-scene-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  color: var(--text-2);
+  font-size: 12px;
+}
+.extract-scene-summary span {
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg-0);
 }
 
 /* Frame grid */

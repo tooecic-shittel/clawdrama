@@ -10,6 +10,10 @@ export function humanizeError(raw: string): string {
   if (!raw) return '操作失败'
   const s = String(raw)
 
+  if (/prompt length cannot exceed 2000 characters|prompt.*exceed.*2000/i.test(s)) {
+    return 'Vidu 视频提示词超过 2000 字限制，系统会自动压缩后重试；如果仍失败，请缩短故事板提示词'
+  }
+
   // Field validation BEFORE quota check (aggregators often wrap validation errors in 429)
   if (/invalid_request_error|field invalid|invalid.*voice/i.test(s)) {
     if (/voice/i.test(s)) {
@@ -20,13 +24,26 @@ export function humanizeError(raw: string): string {
     return '请求参数错误'
   }
 
+  if (/local:quota_not_enough|Account quota insufficient|quota_not_enough/i.test(s)) {
+    return '云雾 HappyHorse 账户余额或额度不足，请充值后再试'
+  }
+  if (/local:pre_consume_token_quota_failed|upstream load is saturated|饱和|do_response_failed/i.test(s)) {
+    return '云雾上游繁忙，请稍后再试'
+  }
+  if (/AccountOverdueError|overdue balance/i.test(s)) {
+    return '火山 Seedance 账户欠费或余额逾期，请到火山方舟充值/结清后再试'
+  }
+  if (/provider=minimax|MiniMax|Hailuo|海螺/i.test(s) && /insufficient balance/i.test(s)) {
+    return '海螺 Hailuo 账户余额不足，请到 MiniMax 充值后再试'
+  }
+  if (/insufficient balance/i.test(s)) {
+    return '当前视频引擎账户余额不足，请充值后再试'
+  }
+
   // Quota / rate limit family — only if it's a TRUE quota error
-  if (/RESOURCE_EXHAUSTED|exceeded your current quota|exceeded.*rate limit/i.test(s)) {
+  if (/RESOURCE_EXHAUSTED|exceeded your current quota|exceeded.*rate limit|insufficient quota/i.test(s)) {
     if (/veo|Veo|video/i.test(s)) return '视频生成配额已用完，请等几分钟后再试'
     return '请求过于频繁或配额已用完，请稍后再试'
-  }
-  if (/upstream load is saturated|饱和|do_response_failed/i.test(s)) {
-    return '上游服务繁忙，请稍后再试（系统会自动重试）'
   }
   // Plain 429 fallback (after specific checks above)
   if (/\b429\b/.test(s) && !/voice|model|field/i.test(s)) {
@@ -36,7 +53,7 @@ export function humanizeError(raw: string): string {
   if (/invalid.?api.?key|无效的 ?API ?Key|invalid_request_error.*api/i.test(s)) {
     return 'API Key 无效，请联系管理员检查配置'
   }
-  if (/billing|payment|insufficient quota|未找到模型.*价格/i.test(s)) {
+  if (/billing|payment|未找到模型.*价格/i.test(s)) {
     return '该模型未开通付费/无价格配置，请联系管理员'
   }
   // Image / size errors
@@ -56,7 +73,8 @@ export function humanizeError(raw: string): string {
   }
   // Credits
   if (/积分不足|insufficient credits/i.test(s)) {
-    return '积分余额不足，请充值后再操作'
+    const m = s.match(/当前\s*(\d+)[^\d]+需要\s*(\d+)/)
+    return m ? `积分余额不足：当前 ${m[1]}，本次需要 ${m[2]}` : '积分余额不足，请充值后再操作'
   }
   // Auth
   if (/未登录|token 无效|401|未授权/i.test(s)) {
@@ -115,6 +133,23 @@ async function req<T = any>(method: string, path: string, body?: any): Promise<T
   }
 }
 
+async function uploadReq<T = any>(path: string, formData: FormData): Promise<T> {
+  const headers: Record<string, string> = {}
+  const token = getAuthToken()
+  if (token) headers.Authorization = `Bearer ${token}`
+
+  const resp = await fetch(`${BASE}${path}`, { method: 'POST', headers, body: formData })
+  const json = await resp.json().catch(() => ({}))
+  if (resp.status === 401) {
+    clearAuthOnUnauthorized()
+    throw new Error(humanizeError(json.message || '未登录'))
+  }
+  if (!resp.ok || (json.code && json.code >= 400)) {
+    throw new Error(humanizeError(json.message || `${resp.status}`))
+  }
+  return json.data ?? json
+}
+
 export const api = {
   get: <T = any>(p: string) => req<T>('GET', p),
   post: <T = any>(p: string, b?: any) => req<T>('POST', p, b),
@@ -123,7 +158,15 @@ export const api = {
 }
 
 export const dramaAPI = {
-  list: () => api.get<{ items: any[] }>('/dramas'),
+  list: (params?: { page?: number; page_size?: number; status?: string; keyword?: string }) => {
+    const q = new URLSearchParams()
+    if (params?.page) q.set('page', String(params.page))
+    if (params?.page_size) q.set('page_size', String(params.page_size))
+    if (params?.status) q.set('status', params.status)
+    if (params?.keyword) q.set('keyword', params.keyword)
+    const suffix = q.toString() ? `?${q.toString()}` : ''
+    return api.get<{ items: any[]; pagination?: any }>(`/dramas${suffix}`)
+  },
   get: (id: number) => api.get(`/dramas/${id}`),
   create: (data: any) => api.post('/dramas', data),
   update: (id: number, data: any) => api.put(`/dramas/${id}`, data),
@@ -151,6 +194,12 @@ export const characterAPI = {
   update: (id: number, data: any) => api.put(`/characters/${id}`, data),
   voiceSample: (id: number, episodeId: number) => api.post(`/characters/${id}/generate-voice-sample`, { episode_id: episodeId }),
   generateImage: (id: number, episodeId: number, opts?: { prompt?: string }) => api.post(`/characters/${id}/generate-image`, { episode_id: episodeId, ...(opts?.prompt ? { prompt: opts.prompt } : {}) }),
+  uploadImage: (id: number, file: File, episodeId?: number) => {
+    const form = new FormData()
+    form.append('file', file)
+    if (episodeId) form.append('episode_id', String(episodeId))
+    return uploadReq(`/characters/${id}/upload-image`, form)
+  },
   enhancePrompt: (id: number, prompt?: string) => api.post<{ prompt: string }>(`/characters/${id}/enhance-prompt`, prompt ? { prompt } : {}),
   generateView: (id: number, episodeId: number, view: 'side' | 'back') =>
     api.post(`/characters/${id}/generate-view`, { episode_id: episodeId, view }),
@@ -212,6 +261,12 @@ export const agentConfigAPI = {
   del: (id: number) => api.del(`/agent-configs/${id}`),
 }
 
+export const agentExtractionAPI = {
+  prepare: (dramaId: number, episodeId: number) => api.post('/agent/extractor/prepare', { drama_id: dramaId, episode_id: episodeId }),
+  confirm: (dramaId: number, episodeId: number, data: { characters: any[]; scenes: any[] }) =>
+    api.post('/agent/extractor/confirm', { drama_id: dramaId, episode_id: episodeId, ...data }),
+}
+
 export const skillsAPI = {
   list: () => api.get('/skills'),
   get: (id: string) => api.get(`/skills/${id}`),
@@ -247,4 +302,14 @@ export const creditsAPI = {
   grant: (d: { user_id: number; amount: number; description?: string }) =>
     api.post<{ balance: number; transaction: any }>('/credits/grant', d),
   listUsers: (q?: string) => api.get<{ items: any[] }>(`/credits/users${q ? `?q=${encodeURIComponent(q)}` : ''}`),
+}
+
+export const paymentAPI = {
+  createOrder: (packageId: string) =>
+    api.post<{ order_no: string; pay_url: string; amount_cents: number; credits: number; package_name: string }>(
+      '/payments/orders',
+      { package_id: packageId },
+    ),
+  getOrder: (orderNo: string) =>
+    api.get<{ order: any }>(`/payments/orders/${encodeURIComponent(orderNo)}`),
 }

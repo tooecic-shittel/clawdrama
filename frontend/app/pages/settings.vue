@@ -436,7 +436,7 @@ const dynamicPresetCards = computed(() => {
   ]
 })
 const serviceTypes = [{ type: 'text', label: '文本' }, { type: 'image', label: '图片' }, { type: 'video', label: '视频' }, { type: 'audio', label: '音频' }]
-const providers = ['ali', 'chatfire', 'gemini', 'minimax', 'openai', 'openrouter', 'vidu', 'volcengine']
+const providers = ['ali', 'chatfire', 'gemini', 'minimax', 'openai', 'openrouter', 'pixverse', 'vidu', 'volcengine']
 const providerSelectOptions = computed(() => providers.map(p => ({ label: p, value: p })))
 const serviceMeta = {
   text: { label: '文本', desc: '剧本改写、角色场景提取、分镜拆解等 Agent 文本能力' },
@@ -457,8 +457,10 @@ const providerPresets = {
   },
   video: {
     volcengine: { label: '视频服务', baseUrl: 'https://api.chatfire.site/volcengine', models: ['doubao-seedance-1-5-pro-251215'] },
-    vidu: { label: 'Vidu 推荐', baseUrl: 'https://api.vidu.com', models: ['viduq3-turbo'] },
-    ali: { label: '云雾百炼推荐', baseUrl: 'https://yunwu.ai', models: ['happyhorse-1.0-r2v', 'wan2.6-i2v-flash'] },
+    ali: { label: '阿里百炼 HappyHorse 1.1 满血版（官方）', baseUrl: 'https://dashscope.aliyuncs.com', models: ['happyhorse-1.1-r2v'] },
+    pixverse: { label: '云雾 PixVerse C1 首尾帧推荐', baseUrl: 'https://yunwu.ai', models: ['c1'] },
+    vidu: { label: '云雾 Vidu Q3 Pro', baseUrl: 'https://yunwu.ai', models: ['viduq3-pro'] },
+    ali: { label: '云雾 HappyHorse（暂时下架）', baseUrl: 'https://yunwu.ai', models: ['happyhorse-1.0-r2v'] },
   },
   audio: {
     minimax: { label: '音频服务', baseUrl: 'https://api.chatfire.site/minimax', models: ['speech-2.8-hd'] },
@@ -478,6 +480,7 @@ const endpointPrefixes = {
   gemini: '/v1beta',
   volcengine: '/api/v3',
   ali: '/api/v1',
+  pixverse: '/openapi/v2',
   vidu: '/ent/v2',
 }
 

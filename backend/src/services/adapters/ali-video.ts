@@ -14,10 +14,12 @@ export class AliVideoAdapter implements VideoProviderAdapter {
     headers: Record<string, string>
     body: any
   } {
-    const model = record.model || config.model || 'wan2.6-i2v-flash'
+    const rawModel = record.model || config.model || 'wan2.6-i2v-flash'
     const baseUrl = config.baseUrl || 'https://dashscope.aliyuncs.com'
-    const url = /happyhorse/i.test(model)
-      ? joinProviderUrl(baseUrl, '/alibailian/api/v1', '/services/aigc/video-generation/video-synthesis')
+    const isHappyHorse = /happyhorse/i.test(rawModel)
+    const isYunwuBailian = /yunwu\.ai/i.test(baseUrl)
+    const url = isHappyHorse
+      ? joinProviderUrl(baseUrl, isYunwuBailian ? '/alibailian/api/v1' : '/api/v1', '/services/aigc/video-generation/video-synthesis')
       : joinProviderUrl(baseUrl, '/api/v1', '/services/aigc/video-generation/video-synthesis')
 
     const headers: Record<string, string> = {
@@ -26,12 +28,13 @@ export class AliVideoAdapter implements VideoProviderAdapter {
     }
 
     const referenceUrls = this.collectReferenceUrls(record)
-    if (/happyhorse/i.test(model)) {
+    if (isHappyHorse) {
+      const model = this.normalizeHappyHorseModel(rawModel, referenceUrls.length)
+      headers['X-DashScope-Async'] = 'enable'
       const body: any = {
         model,
         input: {
           prompt: record.prompt || '',
-          media: referenceUrls.map((url) => ({ type: 'reference_image', url })).slice(0, 9),
         },
         parameters: {
           resolution: this.normalizeResolution(record.resolution ?? record.aspectRatio ?? '9:16'),
@@ -40,9 +43,13 @@ export class AliVideoAdapter implements VideoProviderAdapter {
           seed: Math.floor(Math.random() * 2147483647),
         },
       }
+      if (referenceUrls.length) {
+        body.input.media = referenceUrls.map((url) => ({ type: 'reference_image', url })).slice(0, 9)
+      }
       return { url, method: 'POST', headers, body }
     }
 
+    const model = rawModel
     const body: any = {
       model,
       input: {
@@ -159,5 +166,10 @@ export class AliVideoAdapter implements VideoProviderAdapter {
     if (ratio === '9:16') return '720P'
     if (ratio === '1:1') return '720P'
     return '1080P'
+  }
+
+  private normalizeHappyHorseModel(model: string, referenceCount: number): string {
+    if (!/happyhorse-1\.1/i.test(model)) return model
+    return referenceCount > 0 ? 'happyhorse-1.1-r2v' : 'happyhorse-1.1-t2v'
   }
 }

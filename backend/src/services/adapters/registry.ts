@@ -14,6 +14,7 @@ import { GeminiImageAdapter } from './gemini-image'
 import { VolcEngineImageAdapter } from './volcengine-image'
 import { VolcEngineVideoAdapter } from './volcengine-video'
 import { ViduVideoAdapter } from './vidu-video'
+import { PixVerseVideoAdapter } from './pixverse-video'
 import { AliImageAdapter } from './ali-image'
 import { AliVideoAdapter } from './ali-video'
 import type { ImageProviderAdapter, VideoProviderAdapter, TTSProviderAdapter } from './types'
@@ -34,6 +35,7 @@ export const videoAdapters: Record<string, VideoProviderAdapter> = {
   minimax: new MiniMaxVideoAdapter(),
   volcengine: new VolcEngineVideoAdapter(),
   vidu: new ViduVideoAdapter(),
+  pixverse: new PixVerseVideoAdapter(),
   ali: new AliVideoAdapter(),
   // OpenAI-compatible sora endpoint (used by yunwu / official OpenAI / chatfire)
   openai: new OpenAISoraVideoAdapter(),

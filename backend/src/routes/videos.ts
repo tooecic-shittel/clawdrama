@@ -31,9 +31,11 @@ app.post('/', async (c) => {
 
     // Auto-fill reference image from storyboard's first_frame_image
     // for character consistency (when frontend didn't pass image_url explicitly).
+    const useLastFrame = body.use_last_frame === true
     let imageUrl = body.image_url
     let firstFrameUrl = body.first_frame_url
     let referenceMode = body.reference_mode
+    const lastFrameUrl = useLastFrame ? body.last_frame_url : undefined
     if (body.storyboard_id && !imageUrl && !firstFrameUrl) {
       const [sb] = db.select().from(schema.storyboards).where(eq(schema.storyboards.id, Number(body.storyboard_id))).all()
       if (sb?.firstFrameImage) {
@@ -48,6 +50,7 @@ app.post('/', async (c) => {
       referenceMode,
       duration: body.duration,
       hasImageRef: !!imageUrl,
+      useLastFrame,
     })
     logTaskPayload('VideoAPI', 'request body', body)
     const id = await generateVideo({
@@ -60,7 +63,7 @@ app.post('/', async (c) => {
       referenceMode,
       imageUrl,
       firstFrameUrl,
-      lastFrameUrl: body.last_frame_url,
+      lastFrameUrl,
       referenceImageUrls: body.reference_image_urls,
       duration: body.duration,
       aspectRatio: body.aspect_ratio,
