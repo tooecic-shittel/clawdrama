@@ -1865,14 +1865,14 @@ function handleImageViewerKeydown(event) {
   if (event.key === 'Escape' && imageViewer.value.open) closeImageViewer()
 }
 
-const pricing = ref({ image: 1000, tts: 150, videoPerSec: { seedance: { '480p': 1500, '720p': 3000, '1080p': 6000 }, vidu: { '360p': 1000, '540p': 1600, '720p': 2400, '1080p': 3200 }, happyhorse: { '720p': 2400, '1080p': 4800 }, happyhorse_full: { '720p': 2700, '1080p': 3600 }, hailuo: { '720p': 3000, '1080p': 6000 } } })
+const pricing = ref({ image: 500, tts: 75, videoPerSec: { seedance: { '480p': 1250, '720p': 2500, '1080p': 5000 }, vidu: { '360p': 600, '540p': 1000, '720p': 1500, '1080p': 2000 }, happyhorse: { '720p': 2400, '1080p': 4800 }, happyhorse_full: { '720p': 2200, '1080p': 3000 }, hailuo: { '720p': 2500, '1080p': 5000 } } })
 // 视频每秒积分（按引擎×画质动态计费）。兼容后端新结构(按引擎嵌套)与旧结构(扁平)。
 const videoRatePerSec = computed(() => {
   const rs = String(videoResolution.value).toLowerCase()
   const k = rs.includes('1080') ? '1080p' : rs.includes('540') ? '540p' : rs.includes('480') ? '480p' : rs.includes('360') ? '360p' : '720p'
   const vps = pricing.value.videoPerSec || {}
   const table = vps[videoEngine.value] || vps
-  return table[k] ?? table['720p'] ?? 3000
+  return table[k] ?? table['720p'] ?? 2500
 })
 const videoEngineLabel = computed(() => videoEngine.value === 'seedance' ? 'Seedance' : videoEngine.value === 'vidu' ? 'PixVerse' : videoEngine.value === 'happyhorse_full' ? 'HappyHorse 1.1' : videoEngine.value === 'hailuo' ? '海螺 Hailuo' : 'HappyHorse')
 onMounted(() => {

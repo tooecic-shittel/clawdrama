@@ -71,37 +71,40 @@ export async function applyCreditOp(op: CreditOp) {
 }
 
 // === Per-action pricing (credits consumed per successful AI generation) ===
-// 定价锚点：¥1 = 1000 积分（1 积分 = ¥0.001）。积分价 = 真实成本(元) × 毛利倍数 × 1000。
-//   图片  doubao-seedream ¥0.20 × 5 = 1000   （≈¥1.0/张）
-//   配音  MiniMax ≤¥0.03 × 5 = 150           （≈¥0.15/段，实际更低，留足余量）
-//   视频  Seedance 2.0 按「时长 × 画质」动态：成本 720P≈¥1/秒、1080P≈¥2/秒，× 3 毛利
-//         → 720P 3000 积分/秒、1080P 6000 积分/秒（见 videoCost）。例：5秒/720P=15000。
-// 改成本/倍数/锚点时，同步更新这里、videoCost、PACKAGES、前端提示。
+// 定价锚点：积分实际售价 ¥1 ≈ 1500 积分（加油包/包月档；包年 1801/¥ 会再稀释约 17%）。
+// 目标毛利：成本加价 50%–80%（2026-07 运营决定），取中值 ≈65%：
+//   积分价 = 真实成本(元) × 1.65 × 1500 ≈ 成本 × 2500，取整。
+//   图片  doubao-seedream ¥0.20/张 → 500   （售 ≈¥0.33，加价 67%）
+//   配音  MiniMax ≤¥0.03/段     → 75     （售 ≈¥0.05，实际成本更低）
+//   视频  按「引擎 × 时长 × 画质」动态计价，见 VIDEO_CREDIT_PER_SEC。
+// 改成本/倍数/锚点时，同步更新这里、videoCost、PACKAGES、前端 pricing 兜底值。
 export type ChargeableAction = 'image' | 'video' | 'tts'
 
 export const ACTION_COST: Record<ChargeableAction, number> = {
-  image: 1000,
-  video: 15000, // 兜底/默认（5秒·720P）；视频实际按 videoCost 动态计算
-  tts: 150,
+  image: 500,
+  video: 12500, // 兜底/默认（5秒·720P seedance）；视频实际按 videoCost 动态计算
+  tts: 75,
 }
 
 // 视频引擎：seedance（火山·高质量·较贵·拒真人图）/ vidu（当前试验入口：云雾 PixVerse）/ happyhorse（历史/暂时下架）/ happyhorse_full（阿里百炼官方 1.1）/ hailuo（海螺·写实真人可用·支持长时长·较贵）。
 export type VideoEngine = 'seedance' | 'vidu' | 'happyhorse' | 'happyhorse_full' | 'hailuo'
 
-// 视频每秒积分（按引擎 × 画质档）。
-//   seedance：成本 720P≈¥1/秒、1080P≈¥2/秒 × 3 毛利 → 3000 / 6000。
-//   vidu：云雾 PixVerse，按模型广场 360P 不带声约 0.246/s 做测试档，后续按真实消耗调价。
-//   happyhorse：历史档位，暂时下架但保留兼容历史记录。
-//   happyhorse_full：阿里云百炼官方 HappyHorse 1.1，按官方 720P≈¥0.9/s、1080P≈¥1.2/s 估算。
+// 视频每秒积分（按引擎 × 画质档）。统一按「成本 × ~1.65 × 1500」定价（毛利带宽 50%–80%）。
+//   seedance：成本 720P≈¥1/秒、1080P≈¥2/秒 → 2500 / 5000（加价 67%）。
+//   vidu：云雾 PixVerse，按模型广场 360P 不带声约 ¥0.246/s 做测试档 → 600（加价 63%），
+//        其余画质成本未核实，按旧比例同步下调，后续按真实消耗调价。
+//   happyhorse：历史档位，暂时下架，保留旧价兼容历史记录，不参与新定价。
+//   happyhorse_full：阿里云百炼官方 HappyHorse 1.1，官方 720P≈¥0.9/s、1080P≈¥1.2/s → 2200 / 3000。
+//   hailuo：MiniMax 真实成本未核实，暂随 seedance 档；核实账单后精调（若成本高于 ¥1/s 需上调）。
 //   480P：最省档，仅 seedance 原生支持；其它引擎会回退到 720P/540P 出片，故不设 480P 价，
 //        由 videoCost 的 ?? table['720p'] 兜底按其实际产出的 720P 计费。
 // 改价时同步更新前端 pricing 默认值与 PACKAGES 文案。
 export const VIDEO_CREDIT_PER_SEC: Record<VideoEngine, Record<string, number>> = {
-  seedance: { '480p': 1500, '720p': 3000, '1080p': 6000 },
-  vidu: { '360p': 1000, '540p': 1600, '720p': 2400, '1080p': 3200 },
+  seedance: { '480p': 1250, '720p': 2500, '1080p': 5000 },
+  vidu: { '360p': 600, '540p': 1000, '720p': 1500, '1080p': 2000 },
   happyhorse: { '720p': 2400, '1080p': 4800 },
-  happyhorse_full: { '720p': 2700, '1080p': 3600 },
-  hailuo: { '720p': 3000, '1080p': 6000 },  // 海螺·与 seedance 同档（写实真人可用；成本算下来此档有 margin，后续按真实成本精调）
+  happyhorse_full: { '720p': 2200, '1080p': 3000 },
+  hailuo: { '720p': 2500, '1080p': 5000 },
 }
 
 /** provider → 计费引擎档：火山=seedance，pixverse/vidu=试验视频档，minimax=hailuo（海螺），其余（历史云雾 / Veo 兜底）=happyhorse 档。 */

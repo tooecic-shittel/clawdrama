@@ -259,9 +259,9 @@ function priceYuan(p) {
   const y = (p.priceCents || 0) / 100
   return Number.isInteger(y) ? String(y) : y.toFixed(2).replace(/\.?0+$/, '')
 }
-// 估算：1 张图 = 1000 积分；1 个视频 = 5 秒 720P = 15000 积分
-function maxImages(p) { return Math.floor((p.credits || 0) / 1000).toLocaleString() }
-function maxVideos(p) { return Math.floor((p.credits || 0) / 15000) }
+// 估算：1 张图 = 500 积分；1 个视频 = 5 秒 720P = 12500 积分
+function maxImages(p) { return Math.floor((p.credits || 0) / 500).toLocaleString() }
+function maxVideos(p) { return Math.floor((p.credits || 0) / 12500) }
 async function selectPackage(pkg) {
   if (payingPackageId.value) return
   payingPackageId.value = pkg.id
