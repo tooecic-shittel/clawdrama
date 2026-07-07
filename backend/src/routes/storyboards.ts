@@ -13,6 +13,26 @@ import { logTaskError, logTaskPayload, logTaskProgress, logTaskStart, logTaskSuc
 
 const app = new Hono()
 
+function clipText(value: string | null | undefined, max = 1200): string {
+  const text = String(value || '').replace(/\s+/g, ' ').trim()
+  return text.length > max ? `${text.slice(0, max)}...` : text
+}
+
+function formatContextShot(sb: typeof schema.storyboards.$inferSelect): string {
+  const bits = [
+    `#${sb.storyboardNumber}`,
+    sb.title ? `标题：${sb.title}` : '',
+    sb.location ? `地点：${sb.location}` : '',
+    sb.description ? `描述：${clipText(sb.description, 180)}` : '',
+    sb.action ? `动作：${clipText(sb.action, 160)}` : '',
+    sb.dialogue ? `对白：${clipText(sb.dialogue, 160)}` : '',
+    sb.soundEffect ? `音效：${clipText(sb.soundEffect, 120)}` : '',
+    sb.emotionBeat ? `情绪：${clipText(sb.emotionBeat, 120)}` : '',
+    sb.result ? `结果：${clipText(sb.result, 140)}` : '',
+  ].filter(Boolean)
+  return bits.join('；')
+}
+
 // POST /storyboards/:id/enhance-video-prompt —— 用 storyboard_breaker skill 把视频提示词优化成电影级（带角色锚点）
 app.post('/:id/enhance-video-prompt', async (c) => {
   const id = Number(c.req.param('id'))
@@ -26,13 +46,26 @@ app.post('/:id/enhance-video-prompt', async (c) => {
   const scene = sb.sceneId ? (db.select().from(schema.scenes).where(eq(schema.scenes.id, sb.sceneId)).all()[0] || null) : null
   const [ep] = db.select().from(schema.episodes).where(eq(schema.episodes.id, sb.episodeId)).all()
   const drama = ep ? (db.select().from(schema.dramas).where(eq(schema.dramas.id, ep.dramaId)).all()[0] || null) : null
+  const episodeShots = db.select().from(schema.storyboards)
+    .where(eq(schema.storyboards.episodeId, sb.episodeId))
+    .orderBy(schema.storyboards.storyboardNumber)
+    .all()
+  const currentIndex = episodeShots.findIndex(item => item.id === sb.id)
+  const previousShots = currentIndex >= 0 ? episodeShots.slice(Math.max(0, currentIndex - 2), currentIndex) : []
+  const nextShots = currentIndex >= 0 ? episodeShots.slice(currentIndex + 1, currentIndex + 3) : []
   try {
     const prompt = await enhanceShotVideoPrompt({
       description: sb.description, action: sb.action, dialogue: sb.dialogue,
       shotType: sb.shotType, angle: sb.angle, movement: sb.movement, lighting: sb.lighting,
+      composition: sb.composition, emotionBeat: sb.emotionBeat, result: sb.result,
+      soundEffect: sb.soundEffect, bgmPrompt: sb.bgmPrompt,
+      duration: sb.duration,
       location: sb.location || scene?.location || null, time: sb.time || null, atmosphere: sb.atmosphere,
       characters: chars.map(ch => ({ name: ch.name, appearance: ch.appearance })),
       dramaStyle: drama?.style || null,
+      episodeContext: clipText(ep?.scriptContent || ep?.content || ep?.description || drama?.description, 1200),
+      previousShots: previousShots.map(formatContextShot),
+      nextShots: nextShots.map(formatContextShot),
       currentPrompt: (typeof body?.prompt === 'string' && body.prompt.trim()) ? body.prompt : sb.videoPrompt,
     })
     if (!prompt) return badRequest(c, 'AI 未返回优化结果')
