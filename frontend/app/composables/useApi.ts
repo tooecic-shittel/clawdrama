@@ -10,6 +10,11 @@ export function humanizeError(raw: string): string {
   if (!raw) return '操作失败'
   const s = String(raw)
 
+  // 后端重启/网关错误时 nginx 返回 HTML 错误页，JSON.parse 抛 "Unexpected token '<'"
+  if (/Unexpected token '?<'?|is not valid JSON|Bad Gateway|Gateway Time-?out/i.test(s)) {
+    return '服务器正在重启或暂时不可用，等几秒再试一次即可'
+  }
+
   if (/prompt length cannot exceed 2000 characters|prompt.*exceed.*2000/i.test(s)) {
     return 'Vidu 视频提示词超过 2000 字限制，系统会自动压缩后重试；如果仍失败，请缩短故事板提示词'
   }
