@@ -290,6 +290,7 @@ export const authAPI = {
 }
 
 export const inviteAPI = {
+  my: () => api.get<{ code: string; invited_count: number; invited: Array<{ username: string; created_at: string }>; reward_total: number; reward_per_invite: number; invitee_bonus: number }>('/invites/my'),
   list: () => api.get<Array<{ id: number; code: string; note: string | null; max_uses: number; used_count: number; is_active: boolean; used_by: string[]; created_at: string }>>('/invites'),
   create: (d: { count?: number; max_uses?: number; note?: string }) =>
     api.post<{ codes: string[]; max_uses: number; note: string | null }>('/invites', d),

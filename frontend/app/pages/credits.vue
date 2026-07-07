@@ -28,7 +28,7 @@
           </span>
           <span class="balance-meta-divider"></span>
           <span class="balance-meta-item">
-            <span>≈ 可生成 <b>{{ Math.floor(balance / 30) }}</b> 个分镜视频</span>
+            <span>≈ 可生成 <b>{{ Math.floor(balance / 12500) }}</b> 个分镜视频</span>
           </span>
         </div>
       </div>
@@ -400,6 +400,7 @@ function txTypeLabel(type) {
     topup: '充值',
     admin_grant: '管理员发放',
     register_bonus: '注册赠送',
+    referral_bonus: '邀请奖励',
     deduct: '消费',
     refund: '退款',
   }

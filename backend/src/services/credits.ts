@@ -5,6 +5,7 @@ export type CreditTxType =
   | 'topup'           // user-initiated payment (future)
   | 'admin_grant'     // admin manually granted
   | 'register_bonus'  // welcome credits on signup
+  | 'referral_bonus'  // invite reward (both inviter and invitee)
   | 'deduct'          // consumed by an action
   | 'refund'          // refund for failed action
 
@@ -79,6 +80,11 @@ export async function applyCreditOp(op: CreditOp) {
 //   视频  按「引擎 × 时长 × 画质」动态计价，见 VIDEO_CREDIT_PER_SEC。
 // 改成本/倍数/锚点时，同步更新这里、videoCost、PACKAGES、前端 pricing 兜底值。
 export type ChargeableAction = 'image' | 'video' | 'tts'
+
+// 邀请奖励：好友持你的专属邀请码注册成功 → 你得 5000、好友额外得 1000。
+// 刻意低于一条视频的价（12500），刷小号薅不出片，拉真人才划算。
+export const REFERRAL_REWARD_CREDITS = 5000
+export const REFERRAL_INVITEE_BONUS = 1000
 
 export const ACTION_COST: Record<ChargeableAction, number> = {
   image: 500,

@@ -29,9 +29,9 @@
           <input v-model="form.display_name" class="auth-input" type="text" placeholder="如：导演 · 张三" />
         </label>
 
-        <label v-if="mode === 'register' && status?.has_users" class="auth-field">
-          <span class="auth-label">邀请码</span>
-          <input v-model="form.invite_code" class="auth-input" type="text" placeholder="向管理员或邀请人索取" required style="text-transform:uppercase" />
+        <label v-if="mode === 'register'" class="auth-field">
+          <span class="auth-label">邀请码 <span class="auth-label-hint">选填 · 填了双方都得积分</span></span>
+          <input v-model="form.invite_code" class="auth-input" type="text" placeholder="好友给你的邀请码" style="text-transform:uppercase" />
         </label>
 
         <label class="auth-field">
@@ -88,6 +88,10 @@ const errorMsg = ref('')
 const form = reactive({ username: '', password: '', display_name: '', invite_code: '' })
 
 onMounted(async () => {
+  // 分享链接 /register?invite=XXX 自动填入邀请码
+  if (route.query.invite && typeof route.query.invite === 'string') {
+    form.invite_code = route.query.invite.toUpperCase()
+  }
   try { status.value = await authAPI.status() } catch {}
 })
 

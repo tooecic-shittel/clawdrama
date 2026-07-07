@@ -436,7 +436,9 @@ ensureColumn('characters', 'image_prompt', 'TEXT')
 ensureColumn('image_generations', 'user_id', 'INTEGER')
 ensureColumn('video_generations', 'user_id', 'INTEGER')
 ensureColumn('dramas', 'user_id', 'INTEGER')  // 多租户：剧集属主（旧数据 null）
-ensureColumn('users', 'invite_code', 'TEXT')  // 邀请制注册：记录注册用码（旧用户 null）
+ensureColumn('users', 'invite_code', 'TEXT')   // 邀请注册：记录注册用码（旧用户 null）
+ensureColumn('users', 'referral_code', 'TEXT') // 本人专属邀请码（懒生成）
+sqlite.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_referral_code ON users (referral_code)`)
 
 export const db = drizzle(sqlite, { schema })
 export { schema }

@@ -4,7 +4,7 @@ import bcrypt from 'bcryptjs'
 import { and, eq, sql } from 'drizzle-orm'
 import { db, schema } from '../db/index.js'
 import { JWT_SECRET, requireAuth } from '../middleware/auth.js'
-import { applyCreditOp } from '../services/credits.js'
+import { applyCreditOp, REFERRAL_REWARD_CREDITS, REFERRAL_INVITEE_BONUS } from '../services/credits.js'
 
 // 售价 ¥1 ≈ 1500 积分。3000 积分 ≈ ¥2 体验额度：够生成 6 张图 + 几段配音，
 // 但不够白嫖一个视频（5秒·720P ≈ 12500），既能试用又防薅羊毛。
@@ -48,28 +48,32 @@ auth.post('/register', async (c) => {
   const userCount = await db.select().from(schema.users).limit(1)
   const role = userCount.length === 0 ? 'admin' : 'user'
 
-  // 邀请码校验（首个用户豁免）。先占用名额再建号：
-  // guarded UPDATE 保证并发下不会超发；建号极少失败，失败浪费一个名额可接受。
-  if (role !== 'admin') {
-    if (!inviteCodeInput) {
-      return c.json({ code: 400, message: '注册需要邀请码' }, 400)
-    }
-    const codes = await db.select().from(schema.inviteCodes)
-      .where(eq(schema.inviteCodes.code, inviteCodeInput)).limit(1)
-    const invite = codes[0]
-    if (!invite || !invite.isActive || invite.usedCount >= invite.maxUses) {
-      return c.json({ code: 403, message: '邀请码无效或已用完' }, 403)
-    }
-    const claimed = await db.update(schema.inviteCodes)
-      .set({ usedCount: sql`${schema.inviteCodes.usedCount} + 1`, updatedAt: nowIso() })
-      .where(and(
-        eq(schema.inviteCodes.id, invite.id),
-        eq(schema.inviteCodes.isActive, 1),
-        sql`${schema.inviteCodes.usedCount} < ${schema.inviteCodes.maxUses}`,
-      ))
-      .returning()
-    if (claimed.length === 0) {
-      return c.json({ code: 403, message: '邀请码无效或已用完' }, 403)
+  // 邀请码（选填）：优先匹配用户专属邀请码（触发邀请奖励），
+  // 其次匹配管理员渠道码（占用名额、不发奖励）。填了但无效 → 报错让用户改正。
+  let inviterId: number | null = null
+  if (inviteCodeInput && role !== 'admin') {
+    const inviterRows = await db.select({ id: schema.users.id })
+      .from(schema.users).where(eq(schema.users.referralCode, inviteCodeInput)).limit(1)
+    if (inviterRows.length > 0) {
+      inviterId = inviterRows[0].id
+    } else {
+      const codes = await db.select().from(schema.inviteCodes)
+        .where(eq(schema.inviteCodes.code, inviteCodeInput)).limit(1)
+      const invite = codes[0]
+      if (!invite || !invite.isActive || invite.usedCount >= invite.maxUses) {
+        return c.json({ code: 403, message: '邀请码无效或已用完' }, 403)
+      }
+      const claimed = await db.update(schema.inviteCodes)
+        .set({ usedCount: sql`${schema.inviteCodes.usedCount} + 1`, updatedAt: nowIso() })
+        .where(and(
+          eq(schema.inviteCodes.id, invite.id),
+          eq(schema.inviteCodes.isActive, 1),
+          sql`${schema.inviteCodes.usedCount} < ${schema.inviteCodes.maxUses}`,
+        ))
+        .returning()
+      if (claimed.length === 0) {
+        return c.json({ code: 403, message: '邀请码无效或已用完' }, 403)
+      }
     }
   }
 
@@ -82,7 +86,7 @@ auth.post('/register', async (c) => {
     passwordHash,
     displayName,
     role,
-    inviteCode: role === 'admin' ? null : inviteCodeInput,
+    inviteCode: role === 'admin' ? null : (inviteCodeInput || null),
     createdAt: now,
     updatedAt: now,
   }).returning()
@@ -102,6 +106,35 @@ auth.post('/register', async (c) => {
   } catch (e) {
     // Bonus failure shouldn't block registration
     console.error('[auth] register bonus failed:', e)
+  }
+
+  // 邀请奖励（双向，失败不阻断注册）
+  if (inviterId) {
+    try {
+      await applyCreditOp({
+        userId: inviterId,
+        amount: REFERRAL_REWARD_CREDITS,
+        type: 'referral_bonus',
+        description: `邀请 ${user.username} 注册成功，奖励 ${REFERRAL_REWARD_CREDITS} 积分`,
+        referenceType: 'referral',
+        referenceId: user.id,
+      })
+    } catch (e) {
+      console.error('[auth] referral reward (inviter) failed:', e)
+    }
+    try {
+      const result = await applyCreditOp({
+        userId: user.id,
+        amount: REFERRAL_INVITEE_BONUS,
+        type: 'referral_bonus',
+        description: `使用邀请码注册，额外赠送 ${REFERRAL_INVITEE_BONUS} 积分`,
+        referenceType: 'referral',
+        referenceId: inviterId,
+      })
+      finalCredits = result.balanceAfter
+    } catch (e) {
+      console.error('[auth] referral reward (invitee) failed:', e)
+    }
   }
 
   const token = await signUserToken({ id: user.id, username: user.username, role: user.role })
@@ -186,7 +219,7 @@ auth.get('/status', async (c) => {
     data: {
       has_users: userCount.length > 0,
       registration_open: true, // can be gated by env later
-      invite_required: userCount.length > 0, // 邀请制：除首个用户外注册必须持邀请码
+      invite_required: false, // 邀请码为选填：填了触发邀请奖励，不填也能注册
     },
   })
 })

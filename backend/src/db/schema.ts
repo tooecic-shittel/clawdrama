@@ -13,6 +13,7 @@ export const users = sqliteTable('users', {
   role: text('role').notNull().default('user'),
   credits: integer('credits').notNull().default(0),
   inviteCode: text('invite_code'),               // 注册时使用的邀请码（追溯拉新来源）
+  referralCode: text('referral_code'),           // 本人专属邀请码（首次访问邀请页时生成）
   createdAt: text('created_at').notNull(),
   updatedAt: text('updated_at').notNull(),
 })
