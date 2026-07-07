@@ -293,12 +293,13 @@ onMounted(() => { load(); loadConfigs() })
 
 .page-meta { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .style-editor { display: inline-flex; align-items: center; gap: 6px; min-width: 172px; }
-.style-editor-label { font-size: 11px; font-weight: 700; color: var(--text-3); }
+.style-editor-label { font-size: 11px; font-weight: 700; color: var(--text-3); white-space: nowrap; flex-shrink: 0; }
 .style-editor :deep(.base-select-trigger) { min-height: 28px; height: 28px; border-radius: 9px; font-size: 12px; background: rgba(255,255,255,0.7); }
 .meta-divider { width: 3px; height: 3px; border-radius: 50%; background: var(--text-3); }
 .meta-item {
   display: flex; align-items: center; gap: 5px;
   font-size: 12px; color: var(--text-2);
+  white-space: nowrap;
 }
 
 /* Section label */
