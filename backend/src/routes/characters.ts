@@ -11,6 +11,16 @@ import { logTaskError, logTaskStart, logTaskSuccess } from '../utils/task-logger
 
 const app = new Hono()
 
+// 设定里已出现国籍/民族/人种描述时不再叠加默认值
+const ETHNICITY_HINT = /中国|华人|华裔|东亚|亚洲|亚裔|日本|韩国|欧美|西方|外国|美国|英国|法国|德国|俄罗斯|意大利|西班牙|拉丁|非洲|黑人|白人|印度|中东|东南亚|混血/
+// 默认立绘提示词：中文短剧的角色默认按中国人生成——
+// 文生图模型对「护士/医生」这类无国籍描述的词常随机出欧美面孔。
+function defaultPortraitPrompt(char: { name: string; appearance: string | null; description: string | null }): string {
+  const desc = char.appearance || char.description || '人物立绘'
+  const ethnic = ETHNICITY_HINT.test(`${char.name} ${desc}`) ? '' : '中国人，东亚面孔，'
+  return `${ethnic}${char.name}, ${desc}, 高质量, 正面, 白色背景`
+}
+
 // PUT /characters/:id
 app.put('/:id', async (c) => {
   const id = Number(c.req.param('id'))
@@ -24,6 +34,15 @@ app.put('/:id', async (c) => {
   }
   if ('voice_style' in body || 'voiceStyle' in body) {
     updates.voiceSampleUrl = null
+  }
+  // 身份相关设定（名字/外貌/描述）变了就作废旧的生成提示词——
+  // 否则「重新生成」永远复用旧 imagePrompt，用户改设定完全不生效（曾把中国护士一直生成成外国人）。
+  const [current] = db.select().from(schema.characters).where(eq(schema.characters.id, id)).all()
+  if (current) {
+    const identityChanged = ['name', 'appearance', 'description'].some(
+      key => key in updates && String(updates[key] ?? '') !== String((current as any)[key] ?? ''),
+    )
+    if (identityChanged) updates.imagePrompt = null
   }
   db.update(schema.characters).set(updates).where(eq(schema.characters.id, id)).run()
   return success(c)
@@ -110,7 +129,7 @@ app.post('/:id/generate-image', async (c) => {
   const customPrompt = (body.prompt && String(body.prompt).trim()) ? String(body.prompt).trim() : ''
   const prompt = customPrompt
     || char.imagePrompt
-    || `${char.name}, ${char.appearance || char.description || '人物立绘'}, 高质量, 正面, 白色背景`
+    || defaultPortraitPrompt(char)
   if (customPrompt && customPrompt !== char.imagePrompt) {
     db.update(schema.characters).set({ imagePrompt: customPrompt, updatedAt: now() }).where(eq(schema.characters.id, id)).run()
   }
@@ -265,7 +284,7 @@ app.post('/batch-generate-images', async (c) => {
       skippedLocked++
       continue
     }
-    const prompt = `${char.name}, ${char.appearance || char.description || '人物立绘'}, 高质量, 正面, 白色背景`
+    const prompt = char.imagePrompt || defaultPortraitPrompt(char)
     try {
       const genId = await generateImage({ userId: (c.get('user') as any)?.id, characterId: cid, dramaId: char.dramaId, prompt, configId: ep.imageConfigId ?? undefined })
       results.push(genId)
