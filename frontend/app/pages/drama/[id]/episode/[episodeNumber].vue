@@ -4645,7 +4645,8 @@ onMounted(() => { refresh(); loadConfigs(); loadVoices() })
 .asset-body { padding: 8px 10px; }
 .asset-name { font-size: 13px; font-weight: 600; }
 .asset-meta { font-size: 11px; }
-.asset-foot { display: flex; align-items: center; gap: 4px; padding: 6px 10px; border-top: 1px solid var(--border); }
+/* flex-wrap：底栏按钮多于卡宽时换行，而不是被 .asset-card 的 overflow:hidden 裁掉（曾把「自定义」裁没） */
+.asset-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; row-gap: 5px; padding: 6px 10px; border-top: 1px solid var(--border); }
 
 /* Character 三视图 */
 .char-views {
