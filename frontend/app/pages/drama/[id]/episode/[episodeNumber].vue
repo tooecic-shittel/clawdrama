@@ -1262,14 +1262,14 @@
               <div class="ml-auto flex gap-1" style="align-items:center;flex-wrap:wrap;row-gap:6px;justify-content:flex-end">
                 <label class="dim" style="font-size:11px;margin-right:4px">引擎</label>
                 <div class="engine-seg">
+                  <button type="button" :class="['engine-opt', videoEngine==='happyhorse_full' && 'active']" @click="videoEngine='happyhorse_full'" title="阿里云百炼官方 HappyHorse 1.1：满血版，支持最长 15 秒、音视频生成和多参考图；区别于旧云雾 HappyHorse 下架入口">
+                    HappyHorse 1.1<span class="engine-tag good">首选·满血官方</span>
+                  </button>
                   <button type="button" :class="['engine-opt', videoEngine==='seedance' && 'active']" @click="videoEngine='seedance'" title="火山 Seedance 2.0：画质更好、无水印；较贵；同时最多 4 条，其余自动排队">
                     Seedance 2.0<span class="engine-tag good">贵·效果好</span>
                   </button>
                   <button type="button" :class="['engine-opt', videoEngine==='vidu' && 'active']" @click="videoEngine='vidu'" title="云雾 PixVerse：支持文生、图生、首尾帧和多参考；当前优先测试首尾帧">
                     PixVerse<span class="engine-tag good">首尾帧</span>
-                  </button>
-                  <button type="button" :class="['engine-opt', videoEngine==='happyhorse_full' && 'active']" @click="videoEngine='happyhorse_full'" title="阿里云百炼官方 HappyHorse 1.1：满血版，支持最长 15 秒、音视频生成和多参考图；区别于旧云雾 HappyHorse 下架入口">
-                    HappyHorse 1.1<span class="engine-tag good">满血·官方</span>
                   </button>
                   <button type="button" class="engine-opt disabled" disabled title="云雾 HappyHorse 已暂时下架，当前不可用">
                     HappyHorse 旧版<span class="engine-tag down">暂时下架</span>
@@ -1786,13 +1786,13 @@ const TTS_MODEL_PRESETS = [
 ]
 
 // Video model quick-switch — overrides the active config's model per-generation.
-// 视频引擎：seedance（火山·贵·效果好·无水印·并发限 4）/ vidu（云雾 PixVerse）/ happyhorse_full（阿里百炼 HappyHorse 1.1 满血版）/ hailuo（海螺·真人可用）。
+// 视频引擎：happyhorse_full（阿里百炼 HappyHorse 1.1 满血版·首选默认）/ seedance（火山·贵·效果好·无水印·并发限 4）/ vidu（云雾 PixVerse）/ hailuo（海螺·真人可用）。
 function normalizeVideoEngine(value) {
   if (value === 'vidu' || value === 'hailuo' || value === 'seedance' || value === 'happyhorse_full') return value
   if (value === 'happyhorse') return 'vidu'
-  return 'seedance'
+  return 'happyhorse_full'
 }
-const videoEngine = ref(typeof window !== 'undefined' ? normalizeVideoEngine(localStorage.getItem('claw_video_engine') || 'seedance') : 'seedance')
+const videoEngine = ref(typeof window !== 'undefined' ? normalizeVideoEngine(localStorage.getItem('claw_video_engine') || 'happyhorse_full') : 'happyhorse_full')
 const videoResolution = ref(typeof window !== 'undefined' ? (localStorage.getItem('claw_video_res') || '720P') : '720P')
 const videoUseLastFrame = ref(typeof window !== 'undefined' ? localStorage.getItem('claw_video_use_last_frame') === '1' : false)
 function normalizeVideoResolutionForEngine(engine, resolution) {
