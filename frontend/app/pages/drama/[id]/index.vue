@@ -12,7 +12,10 @@
         <div class="head-info">
           <h1 class="page-title">{{ drama.title }}</h1>
           <div class="page-meta">
-            <span v-if="drama.style" class="style-chip">{{ styleLabel(drama.style) }}</span>
+            <label class="style-editor" title="影响后续图片、首尾帧和视频生成的全局视觉风格">
+              <span class="style-editor-label">风格</span>
+              <BaseSelect :model-value="drama.style || ''" :options="styleSelectOptions" placeholder="选择风格" searchable @update:model-value="updateDramaStyle" />
+            </label>
             <span v-if="drama.style" class="meta-divider"></span>
             <span class="meta-item">
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
@@ -152,7 +155,7 @@
 <script setup>
 import { toast } from 'vue-sonner'
 import { aiConfigAPI, dramaAPI, episodeAPI } from '~/composables/useApi'
-import { styleLabel } from '~/composables/useStyleLabels'
+import { STYLE_OPTIONS } from '~/composables/useStyleLabels'
 
 const route = useRoute()
 const drama = ref(null)
@@ -166,6 +169,8 @@ const audioConfigs = ref([])
 const newEpisodeImageConfigId = ref(null)
 const newEpisodeVideoConfigId = ref(null)
 const newEpisodeAudioConfigId = ref(null)
+const savingStyle = ref(false)
+const styleSelectOptions = computed(() => STYLE_OPTIONS)
 
 function hasScript(ep) { return !!(ep.script_content || ep.scriptContent) }
 
@@ -186,6 +191,22 @@ async function load() {
     drama.value = await dramaAPI.get(dramaId)
   } catch (e) {
     toast.error(e.message)
+  }
+}
+
+async function updateDramaStyle(style) {
+  if (!drama.value || savingStyle.value || style === drama.value.style) return
+  const previous = drama.value.style
+  drama.value.style = style
+  try {
+    savingStyle.value = true
+    await dramaAPI.update(dramaId, { style })
+    toast.success('项目风格已更新')
+  } catch (e) {
+    drama.value.style = previous
+    toast.error(e.message)
+  } finally {
+    savingStyle.value = false
   }
 }
 
@@ -271,12 +292,9 @@ onMounted(() => { load(); loadConfigs() })
 }
 
 .page-meta { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-.style-chip {
-  font-size: 11px; font-weight: 600;
-  padding: 2px 8px;
-  background: var(--accent-bg); color: var(--accent-text);
-  border-radius: 99px; border: 1px solid rgba(143,239,38,0.28);
-}
+.style-editor { display: inline-flex; align-items: center; gap: 6px; min-width: 172px; }
+.style-editor-label { font-size: 11px; font-weight: 700; color: var(--text-3); }
+.style-editor :deep(.base-select-trigger) { min-height: 28px; height: 28px; border-radius: 9px; font-size: 12px; background: rgba(255,255,255,0.7); }
 .meta-divider { width: 3px; height: 3px; border-radius: 50%; background: var(--text-3); }
 .meta-item {
   display: flex; align-items: center; gap: 5px;

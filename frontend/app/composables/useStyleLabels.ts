@@ -6,6 +6,7 @@ const STYLE_LABELS: Record<string, string> = {
   anime: '日漫',
   ghibli: '吉卜力',
   cinematic: '电影感',
+  mythic_chinese: '东方玄幻',
   comic: '美漫',
   watercolor: '水彩画',
   '3d': '3D/CGI',

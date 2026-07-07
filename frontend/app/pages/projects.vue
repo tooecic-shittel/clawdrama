@@ -4,7 +4,7 @@
     <div class="page-head">
       <div class="head-left">
         <h1 class="page-title">短剧项目</h1>
-        <p class="page-desc">{{ dramas.length }} 个项目</p>
+        <p class="page-desc">{{ totalDramas }} 个项目</p>
       </div>
       <button class="btn btn-primary" @click="showCreate = true">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
@@ -136,6 +136,7 @@ import { dramaAPI } from '~/composables/useApi'
 import BaseSelect from '~/components/BaseSelect.vue'
 
 const dramas = ref([])
+const totalDramas = ref(0)
 const loading = ref(false)
 const showCreate = ref(false)
 const form = ref({ title: '', total_episodes: 1, style: '' })
@@ -145,8 +146,9 @@ const styleSelectOptions = computed(() => STYLE_OPTIONS)
 async function load() {
   loading.value = true
   try {
-    const res = await dramaAPI.list()
+    const res = await dramaAPI.list({ page_size: 500 })
     dramas.value = res.items || []
+    totalDramas.value = res.pagination?.total ?? dramas.value.length
   } catch (e) {
     toast.error(e.message)
   } finally {
