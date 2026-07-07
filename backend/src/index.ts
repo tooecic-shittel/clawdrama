@@ -24,6 +24,7 @@ import webhooks from './routes/webhooks.js'
 import aiVoices from './routes/aiVoices.js'
 import auth from './routes/auth.js'
 import credits from './routes/credits.js'
+import payments from './routes/payments.js'
 import backup from './routes/backup.js'
 import { requestLogger, errorHandler } from './middleware/logger.js'
 import { requireAuth } from './middleware/auth.js'
@@ -55,6 +56,9 @@ app.get('/api/v1/health', (c) => c.json({ status: 'ok', timestamp: new Date().to
 
 // Public auth routes (no token required)
 app.route('/api/v1/auth', auth)
+
+// Payment routes: order creation is protected per-route; provider callbacks must stay public.
+app.route('/api/v1/payments', payments)
 
 // Protected API routes — require Bearer token
 const api = new Hono()

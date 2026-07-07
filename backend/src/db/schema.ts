@@ -30,6 +30,25 @@ export const creditTransactions = sqliteTable('credit_transactions', {
   createdAt: text('created_at').notNull(),
 })
 
+export const paymentOrders = sqliteTable('payment_orders', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  orderNo: text('order_no').notNull().unique(),
+  userId: integer('user_id').notNull(),
+  packageId: text('package_id').notNull(),
+  packageName: text('package_name').notNull(),
+  credits: integer('credits').notNull(),
+  amountCents: integer('amount_cents').notNull(),
+  currency: text('currency').notNull().default('CNY'),
+  provider: text('provider').notNull().default('alipay'),
+  providerTradeNo: text('provider_trade_no'),
+  status: text('status').notNull().default('pending'),
+  payUrl: text('pay_url'),
+  paidAt: text('paid_at'),
+  rawNotify: text('raw_notify'),
+  createdAt: text('created_at').notNull(),
+  updatedAt: text('updated_at').notNull(),
+})
+
 export const dramas = sqliteTable('dramas', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   userId: integer('user_id'),                       // 属主；旧数据为 null（仅管理员可见）

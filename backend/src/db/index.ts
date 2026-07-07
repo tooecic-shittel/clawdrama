@@ -42,6 +42,28 @@ sqlite.exec(`
   );
   CREATE INDEX IF NOT EXISTS idx_credit_tx_user_created ON credit_transactions (user_id, created_at DESC);
 
+  CREATE TABLE IF NOT EXISTS payment_orders (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    order_no TEXT NOT NULL UNIQUE,
+    user_id INTEGER NOT NULL,
+    package_id TEXT NOT NULL,
+    package_name TEXT NOT NULL,
+    credits INTEGER NOT NULL,
+    amount_cents INTEGER NOT NULL,
+    currency TEXT NOT NULL DEFAULT 'CNY',
+    provider TEXT NOT NULL DEFAULT 'alipay',
+    provider_trade_no TEXT,
+    status TEXT NOT NULL DEFAULT 'pending',
+    pay_url TEXT,
+    paid_at TEXT,
+    raw_notify TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_payment_orders_order_no ON payment_orders (order_no);
+  CREATE INDEX IF NOT EXISTS idx_payment_orders_user_created ON payment_orders (user_id, created_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_payment_orders_status ON payment_orders (status);
+
   CREATE TABLE IF NOT EXISTS dramas (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER,

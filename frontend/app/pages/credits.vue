@@ -73,7 +73,9 @@
               <span>{{ f }}</span>
             </li>
           </ul>
-          <button class="package-btn">{{ isAdmin ? '管理员充值' : '立即订阅' }}</button>
+          <button class="package-btn" :disabled="payingPackageId === p.id">
+            {{ payingPackageId === p.id ? '创建订单...' : '立即订阅' }}
+          </button>
         </article>
       </div>
     </section>
@@ -96,7 +98,9 @@
           <div class="topup-credits"><span class="topup-credits-num">{{ t.credits.toLocaleString() }}</span> 积分</div>
           <div class="topup-meta">≈ {{ maxImages(t) }} 图 / {{ maxVideos(t) }} 视频</div>
           <div class="topup-price"><span class="topup-price-cur">¥</span><span class="topup-price-num">{{ priceYuan(t) }}</span></div>
-          <button class="package-btn">{{ isAdmin ? '管理员充值' : '立即购买' }}</button>
+          <button class="package-btn" :disabled="payingPackageId === t.id">
+            {{ payingPackageId === t.id ? '创建订单...' : '立即购买' }}
+          </button>
         </article>
       </div>
     </section>
@@ -177,7 +181,7 @@
 <script setup>
 import { ref, onMounted, reactive } from 'vue'
 import { toast } from 'vue-sonner'
-import { creditsAPI } from '~/composables/useApi'
+import { creditsAPI, paymentAPI } from '~/composables/useApi'
 import { useAuth } from '~/composables/useAuth'
 
 const { isAdmin, setCredits } = useAuth()
@@ -187,6 +191,7 @@ const packages = ref([])
 const topups = ref([])
 const history = ref([])
 const loadingHistory = ref(false)
+const payingPackageId = ref('')
 
 // Admin form state
 const adminUsers = ref([])
@@ -257,13 +262,17 @@ function priceYuan(p) {
 // 估算：1 张图 = 1000 积分；1 个视频 = 5 秒 720P = 15000 积分
 function maxImages(p) { return Math.floor((p.credits || 0) / 1000).toLocaleString() }
 function maxVideos(p) { return Math.floor((p.credits || 0) / 15000) }
-function selectPackage(pkg) {
-  if (isAdmin.value) {
-    grantForm.amount = pkg.credits + pkg.bonus
-    grantForm.description = `开通 ${pkg.name}（¥${priceYuan(pkg)}${pkg.period ? '/' + pkg.period : ''}）`
-    toast.info(`已填入：${pkg.name} · 选择目标用户后点击执行`)
-  } else {
-    toast.info('订阅支付开发中，请联系管理员开通')
+async function selectPackage(pkg) {
+  if (payingPackageId.value) return
+  payingPackageId.value = pkg.id
+  try {
+    const order = await paymentAPI.createOrder(pkg.id)
+    toast.success('订单已创建，正在跳转支付宝')
+    window.location.href = order.pay_url
+  } catch (e) {
+    toast.error(e.message)
+  } finally {
+    payingPackageId.value = ''
   }
 }
 
