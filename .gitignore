@@ -44,3 +44,9 @@ temp/
 /CLAUDE.md
 /AGENTS.md
 .claude/
+
+# Generated product doc assets (rebuild with scripts/build_clawdrama_product_doc.py)
+docs/
+docs_assets/
+output/
+frontend/dist
