@@ -281,12 +281,19 @@ export const voicesAPI = {
 }
 
 export const authAPI = {
-  status: () => api.get<{ has_users: boolean; registration_open: boolean }>('/auth/status'),
-  register: (d: { username: string; password: string; display_name?: string; email?: string }) =>
+  status: () => api.get<{ has_users: boolean; registration_open: boolean; invite_required?: boolean }>('/auth/status'),
+  register: (d: { username: string; password: string; display_name?: string; email?: string; invite_code?: string }) =>
     api.post<{ token: string; user: any }>('/auth/register', d),
   login: (d: { username: string; password: string }) =>
     api.post<{ token: string; user: any }>('/auth/login', d),
   me: () => api.get<any>('/auth/me'),
+}
+
+export const inviteAPI = {
+  list: () => api.get<Array<{ id: number; code: string; note: string | null; max_uses: number; used_count: number; is_active: boolean; used_by: string[]; created_at: string }>>('/invites'),
+  create: (d: { count?: number; max_uses?: number; note?: string }) =>
+    api.post<{ codes: string[]; max_uses: number; note: string | null }>('/invites', d),
+  toggle: (id: number) => api.post<{ id: number; is_active: boolean }>(`/invites/${id}/toggle`, {}),
 }
 
 export const creditsAPI = {

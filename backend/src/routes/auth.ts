@@ -1,7 +1,7 @@
 import { Hono } from 'hono'
 import { sign } from 'hono/jwt'
 import bcrypt from 'bcryptjs'
-import { eq } from 'drizzle-orm'
+import { and, eq, sql } from 'drizzle-orm'
 import { db, schema } from '../db/index.js'
 import { JWT_SECRET, requireAuth } from '../middleware/auth.js'
 import { applyCreditOp } from '../services/credits.js'
@@ -23,13 +23,14 @@ async function signUserToken(user: { id: number; username: string; role: string 
   return sign({ sub: user.id, username: user.username, role: user.role, exp }, JWT_SECRET, 'HS256')
 }
 
-// POST /auth/register
+// POST /auth/register — 邀请制：除首个用户（自动成为管理员）外，必须持有效邀请码
 auth.post('/register', async (c) => {
   const body = await c.req.json()
   const username = String(body.username || '').trim()
   const password = String(body.password || '')
   const displayName = body.display_name ? String(body.display_name).trim() : null
   const email = body.email ? String(body.email).trim() : null
+  const inviteCodeInput = String(body.invite_code || '').trim().toUpperCase()
 
   if (!username || username.length < 3) {
     return c.json({ code: 400, message: '用户名至少 3 个字符' }, 400)
@@ -43,11 +44,36 @@ auth.post('/register', async (c) => {
     return c.json({ code: 409, message: '用户名已存在' }, 409)
   }
 
-  const passwordHash = await bcrypt.hash(password, 10)
-
   // First user becomes admin
   const userCount = await db.select().from(schema.users).limit(1)
   const role = userCount.length === 0 ? 'admin' : 'user'
+
+  // 邀请码校验（首个用户豁免）。先占用名额再建号：
+  // guarded UPDATE 保证并发下不会超发；建号极少失败，失败浪费一个名额可接受。
+  if (role !== 'admin') {
+    if (!inviteCodeInput) {
+      return c.json({ code: 400, message: '注册需要邀请码' }, 400)
+    }
+    const codes = await db.select().from(schema.inviteCodes)
+      .where(eq(schema.inviteCodes.code, inviteCodeInput)).limit(1)
+    const invite = codes[0]
+    if (!invite || !invite.isActive || invite.usedCount >= invite.maxUses) {
+      return c.json({ code: 403, message: '邀请码无效或已用完' }, 403)
+    }
+    const claimed = await db.update(schema.inviteCodes)
+      .set({ usedCount: sql`${schema.inviteCodes.usedCount} + 1`, updatedAt: nowIso() })
+      .where(and(
+        eq(schema.inviteCodes.id, invite.id),
+        eq(schema.inviteCodes.isActive, 1),
+        sql`${schema.inviteCodes.usedCount} < ${schema.inviteCodes.maxUses}`,
+      ))
+      .returning()
+    if (claimed.length === 0) {
+      return c.json({ code: 403, message: '邀请码无效或已用完' }, 403)
+    }
+  }
+
+  const passwordHash = await bcrypt.hash(password, 10)
 
   const now = nowIso()
   const inserted = await db.insert(schema.users).values({
@@ -56,6 +82,7 @@ auth.post('/register', async (c) => {
     passwordHash,
     displayName,
     role,
+    inviteCode: role === 'admin' ? null : inviteCodeInput,
     createdAt: now,
     updatedAt: now,
   }).returning()
@@ -159,6 +186,7 @@ auth.get('/status', async (c) => {
     data: {
       has_users: userCount.length > 0,
       registration_open: true, // can be gated by env later
+      invite_required: userCount.length > 0, // 邀请制：除首个用户外注册必须持邀请码
     },
   })
 })

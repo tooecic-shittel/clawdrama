@@ -147,6 +147,77 @@
       </form>
     </section>
 
+    <!-- Admin Panel: Invite Codes -->
+    <section v-if="isAdmin" class="admin-section">
+      <div class="section-head">
+        <h2 class="section-title">
+          <span class="admin-icon-wrap">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/>
+            </svg>
+          </span>
+          管理员后台 · 邀请码
+        </h2>
+        <p class="section-desc">注册需持有效邀请码。生成后把码发给受邀人；点击码可复制。</p>
+      </div>
+      <form class="admin-form" @submit.prevent="createInvites">
+        <div class="admin-form-row">
+          <label class="field" style="max-width:140px">
+            <span class="field-label">生成数量</span>
+            <input v-model.number="inviteForm.count" class="input" type="number" min="1" max="50" required />
+          </label>
+          <label class="field" style="max-width:180px">
+            <span class="field-label">每码可用次数</span>
+            <input v-model.number="inviteForm.maxUses" class="input" type="number" min="1" max="1000" required />
+          </label>
+          <label class="field">
+            <span class="field-label">备注</span>
+            <input v-model="inviteForm.note" class="input" placeholder="例如：抖音渠道 7 月" />
+          </label>
+        </div>
+        <div class="admin-form-actions">
+          <button type="submit" class="btn btn-primary" :disabled="inviteCreating">
+            {{ inviteCreating ? '生成中...' : '生成邀请码' }}
+          </button>
+          <span v-if="lastInviteMsg" class="admin-form-msg">{{ lastInviteMsg }}</span>
+        </div>
+      </form>
+      <div v-if="invites.length" style="margin-top:14px;overflow-x:auto">
+        <table style="width:100%;border-collapse:collapse;font-size:13px">
+          <thead>
+            <tr style="text-align:left;color:var(--text-dim,#8b8fa3)">
+              <th style="padding:6px 10px;font-weight:500">邀请码</th>
+              <th style="padding:6px 10px;font-weight:500">备注</th>
+              <th style="padding:6px 10px;font-weight:500">已用/上限</th>
+              <th style="padding:6px 10px;font-weight:500">注册用户</th>
+              <th style="padding:6px 10px;font-weight:500">状态</th>
+              <th style="padding:6px 10px;font-weight:500"></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="iv in invites" :key="iv.id" style="border-top:1px solid var(--border,#2a2d3a)">
+              <td style="padding:6px 10px">
+                <code style="cursor:pointer;letter-spacing:1px" :title="'点击复制 ' + iv.code" @click="copyInvite(iv.code)">{{ iv.code }}</code>
+              </td>
+              <td style="padding:6px 10px;color:var(--text-dim,#8b8fa3)">{{ iv.note || '—' }}</td>
+              <td style="padding:6px 10px">{{ iv.used_count }} / {{ iv.max_uses }}</td>
+              <td style="padding:6px 10px;color:var(--text-dim,#8b8fa3)">{{ iv.used_by.length ? iv.used_by.join('、') : '—' }}</td>
+              <td style="padding:6px 10px">
+                <span v-if="!iv.is_active" style="color:#e5484d">已停用</span>
+                <span v-else-if="iv.used_count >= iv.max_uses" style="color:var(--text-dim,#8b8fa3)">已用完</span>
+                <span v-else style="color:#30a46c">可用</span>
+              </td>
+              <td style="padding:6px 10px">
+                <button type="button" class="btn" style="font-size:12px;padding:2px 10px" @click="toggleInvite(iv)">
+                  {{ iv.is_active ? '停用' : '启用' }}
+                </button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
     <!-- History -->
     <section class="history-section">
       <div class="section-head">
@@ -181,7 +252,7 @@
 <script setup>
 import { ref, onMounted, reactive } from 'vue'
 import { toast } from 'vue-sonner'
-import { creditsAPI, paymentAPI } from '~/composables/useApi'
+import { creditsAPI, paymentAPI, inviteAPI } from '~/composables/useApi'
 import { useAuth } from '~/composables/useAuth'
 
 const { isAdmin, setCredits } = useAuth()
@@ -198,6 +269,12 @@ const adminUsers = ref([])
 const grantForm = reactive({ userId: null, amount: null, description: '' })
 const grantLoading = ref(false)
 const lastGrantMsg = ref('')
+
+// Admin invite-code state
+const invites = ref([])
+const inviteForm = reactive({ count: 5, maxUses: 1, note: '' })
+const inviteCreating = ref(false)
+const lastInviteMsg = ref('')
 
 async function loadAll() {
   try {
@@ -255,6 +332,48 @@ async function grant() {
   }
 }
 
+async function loadInvites() {
+  if (!isAdmin.value) return
+  try {
+    invites.value = await inviteAPI.list()
+  } catch (e) {
+    toast.error(e.message)
+  }
+}
+
+async function createInvites() {
+  inviteCreating.value = true
+  lastInviteMsg.value = ''
+  try {
+    const res = await inviteAPI.create({
+      count: inviteForm.count || 1,
+      max_uses: inviteForm.maxUses || 1,
+      note: inviteForm.note || undefined,
+    })
+    lastInviteMsg.value = `已生成 ${res.codes.length} 个：${res.codes.join('  ')}`
+    try { await navigator.clipboard.writeText(res.codes.join('\n')) ; toast.success('已生成并复制到剪贴板') } catch { toast.success('已生成') }
+    inviteForm.note = ''
+    await loadInvites()
+  } catch (e) {
+    toast.error(e.message)
+  } finally {
+    inviteCreating.value = false
+  }
+}
+
+async function toggleInvite(iv) {
+  try {
+    await inviteAPI.toggle(iv.id)
+    await loadInvites()
+  } catch (e) {
+    toast.error(e.message)
+  }
+}
+
+function copyInvite(code) {
+  navigator.clipboard.writeText(code).then(() => toast.success(`已复制 ${code}`)).catch(() => {})
+}
+
 function priceYuan(p) {
   const y = (p.priceCents || 0) / 100
   return Number.isInteger(y) ? String(y) : y.toFixed(2).replace(/\.?0+$/, '')
@@ -299,6 +418,7 @@ onMounted(async () => {
   await loadAll()
   await loadHistory()
   await loadAdminUsers()
+  await loadInvites()
 })
 </script>
 

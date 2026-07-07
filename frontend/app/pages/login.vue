@@ -29,6 +29,11 @@
           <input v-model="form.display_name" class="auth-input" type="text" placeholder="如：导演 · 张三" />
         </label>
 
+        <label v-if="mode === 'register' && status?.has_users" class="auth-field">
+          <span class="auth-label">邀请码</span>
+          <input v-model="form.invite_code" class="auth-input" type="text" placeholder="向管理员或邀请人索取" required style="text-transform:uppercase" />
+        </label>
+
         <label class="auth-field">
           <span class="auth-label">密码 <span v-if="mode === 'register'" class="auth-label-hint">至少 6 位</span></span>
           <input v-model="form.password" class="auth-input" type="password" autocomplete="current-password" required />
@@ -80,7 +85,7 @@ const mode = computed(() => (route.path === '/register' ? 'register' : 'login'))
 const status = ref(null)
 const loading = ref(false)
 const errorMsg = ref('')
-const form = reactive({ username: '', password: '', display_name: '' })
+const form = reactive({ username: '', password: '', display_name: '', invite_code: '' })
 
 onMounted(async () => {
   try { status.value = await authAPI.status() } catch {}
@@ -96,6 +101,7 @@ async function submit() {
       username: form.username.trim(),
       password: form.password.trim(),
       display_name: form.display_name?.trim() || undefined,
+      invite_code: mode.value === 'register' ? (form.invite_code.trim().toUpperCase() || undefined) : undefined,
     }
     const fn = mode.value === 'login' ? authAPI.login : authAPI.register
     const res = await fn(payload)

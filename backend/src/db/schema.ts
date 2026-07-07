@@ -12,6 +12,20 @@ export const users = sqliteTable('users', {
   displayName: text('display_name'),
   role: text('role').notNull().default('user'),
   credits: integer('credits').notNull().default(0),
+  inviteCode: text('invite_code'),               // 注册时使用的邀请码（追溯拉新来源）
+  createdAt: text('created_at').notNull(),
+  updatedAt: text('updated_at').notNull(),
+})
+
+// 邀请码：注册必须持有效邀请码（首个用户即管理员除外）。
+export const inviteCodes = sqliteTable('invite_codes', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  code: text('code').notNull().unique(),         // 统一存大写
+  note: text('note'),                            // 备注：发给谁 / 哪个渠道
+  maxUses: integer('max_uses').notNull().default(1),
+  usedCount: integer('used_count').notNull().default(0),
+  isActive: integer('is_active').notNull().default(1),
+  createdBy: integer('created_by'),
   createdAt: text('created_at').notNull(),
   updatedAt: text('updated_at').notNull(),
 })

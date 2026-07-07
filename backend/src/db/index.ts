@@ -42,6 +42,19 @@ sqlite.exec(`
   );
   CREATE INDEX IF NOT EXISTS idx_credit_tx_user_created ON credit_transactions (user_id, created_at DESC);
 
+  CREATE TABLE IF NOT EXISTS invite_codes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    code TEXT NOT NULL UNIQUE,
+    note TEXT,
+    max_uses INTEGER NOT NULL DEFAULT 1,
+    used_count INTEGER NOT NULL DEFAULT 0,
+    is_active INTEGER NOT NULL DEFAULT 1,
+    created_by INTEGER,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_invite_codes_code ON invite_codes (code);
+
   CREATE TABLE IF NOT EXISTS payment_orders (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     order_no TEXT NOT NULL UNIQUE,
@@ -423,6 +436,7 @@ ensureColumn('characters', 'image_prompt', 'TEXT')
 ensureColumn('image_generations', 'user_id', 'INTEGER')
 ensureColumn('video_generations', 'user_id', 'INTEGER')
 ensureColumn('dramas', 'user_id', 'INTEGER')  // 多租户：剧集属主（旧数据 null）
+ensureColumn('users', 'invite_code', 'TEXT')  // 邀请制注册：记录注册用码（旧用户 null）
 
 export const db = drizzle(sqlite, { schema })
 export { schema }
