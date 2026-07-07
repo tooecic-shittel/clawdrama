@@ -3042,12 +3042,33 @@ function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms))
 }
 
+// 轮询专用的节流版全量刷新：多个生成任务并行轮询时（批量出图/出视频每个任务一个循环），
+// 各自每 tick 调 refresh() 会叠加成每秒多次全量拉取，曾把服务器出口打满导致全站失联。
+// 这里保证：并发调用共享同一次在途请求；两次真实刷新之间至少间隔 REFRESH_MIN_INTERVAL。
+const REFRESH_MIN_INTERVAL = 3000
+let refreshInFlight = null
+let lastRefreshAt = 0
+function refreshThrottled() {
+  if (refreshInFlight) return refreshInFlight
+  const wait = Math.max(0, REFRESH_MIN_INTERVAL - (Date.now() - lastRefreshAt))
+  refreshInFlight = (async () => {
+    try {
+      if (wait) await sleep(wait)
+      await refresh()
+    } finally {
+      lastRefreshAt = Date.now()
+      refreshInFlight = null
+    }
+  })()
+  return refreshInFlight
+}
+
 function watchAsyncResult(check, attempts = 36, delay = 2500, onSettle) {
   void (async () => {
     try {
       for (let i = 0; i < attempts; i++) {
         await sleep(delay)
-        await refresh()
+        await refreshThrottled()
         if (check()) return
       }
     } finally {
@@ -3549,7 +3570,7 @@ async function pollVideoGeneration(generationId, storyboardId) {
     await sleep(4000)
     try {
       const res = await videoAPI.get(generationId)
-      await refresh()
+      await refreshThrottled()
       if (res?.status === 'completed') {
         pendingVideoIds.value = pendingVideoIds.value.filter(item => item !== storyboardId)
         delete failedVideoMessages.value[storyboardId]
@@ -3711,7 +3732,7 @@ async function pollComposeStatus() {
     await sleep(3000)
     try {
       const res = await composeAPI.status(epId.value)
-      await refresh()
+      await refreshThrottled()
       const items = Array.isArray(res?.items) ? res.items : []
       const processingIds = items.filter(item => item.status === 'compose_processing').map(item => item.id)
       pendingComposeIds.value = processingIds
