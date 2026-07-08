@@ -3434,12 +3434,16 @@ function buildShotImagePrompt(sb, frameType) {
   const contrastHint = isFirstFrame
     ? '明确区分：这是起始关键帧，不要提前表现尾帧的动作完成、结果状态或情绪落点。'
     : '明确区分：这是结束关键帧，需要体现相对首帧发生后的变化，不要复刻首帧站位和动作起点。'
+  // 视频动作里的"眨眼/扑闪"等瞬时动作会被图像模型画成眨到一半（单眼闭合），
+  // 静帧必须显式禁止，否则重新生成多少次都是眨眼脸。
+  const stillFrameHint = '静帧规则：这是一张静止的关键帧照片，眨眼、扑闪睫毛、打哈欠等瞬时动作绝不能出现在画面中；人物双眼自然睁开、目光清晰有神（除非剧情明确要求闭眼或睡着）。'
 
   return [
     `${frameLabel}生成目标：${frameHint}`,
     videoBeat ? `${frameLabel}剧情点：${videoBeat}` : '',
     frameAction ? `${isFirstFrame ? '动作起点' : '动作结果'}：${frameAction}` : '',
     contrastHint,
+    stillFrameHint,
     title ? `镜头标题：${title}` : '',
     description ? `环境与视觉背景：${clipPromptText(description)}` : '',
     shotType ? `景别：${shotType}` : '',
