@@ -795,7 +795,11 @@
                     <span class="char-view-label">三视图</span>
                     <div class="char-view-slot" :title="c.view_side || c.viewSide ? '点击预览' : '点击生成侧面'" @click="(c.view_side || c.viewSide) ? openImageViewer('/' + (c.view_side || c.viewSide), `${c.name} 侧面`) : genCharView(c.id, 'side')">
                       <img v-if="c.view_side || c.viewSide" :src="'/' + (c.view_side || c.viewSide)" />
-                      <Loader2 v-else-if="isPendingCharView(c.id, 'side')" :size="14" class="animate-spin" />
+                      <div v-else-if="isPendingCharView(c.id, 'side')" class="char-view-progress">
+                        <span class="char-view-progress-num">{{ charViewProgress(c.id, 'side') }}%</span>
+                        <span class="char-view-progress-label">生成中</span>
+                        <i class="char-view-progress-track"><b :style="{ width: charViewProgress(c.id, 'side') + '%' }"></b></i>
+                      </div>
                       <div v-else class="char-view-empty">
                         <span class="char-view-glyph">侧</span>
                         <span class="char-view-plus">+</span>
@@ -806,7 +810,11 @@
                     </div>
                     <div class="char-view-slot" :title="c.view_back || c.viewBack ? '点击预览' : '点击生成背面'" @click="(c.view_back || c.viewBack) ? openImageViewer('/' + (c.view_back || c.viewBack), `${c.name} 背面`) : genCharView(c.id, 'back')">
                       <img v-if="c.view_back || c.viewBack" :src="'/' + (c.view_back || c.viewBack)" />
-                      <Loader2 v-else-if="isPendingCharView(c.id, 'back')" :size="14" class="animate-spin" />
+                      <div v-else-if="isPendingCharView(c.id, 'back')" class="char-view-progress">
+                        <span class="char-view-progress-num">{{ charViewProgress(c.id, 'back') }}%</span>
+                        <span class="char-view-progress-label">生成中</span>
+                        <i class="char-view-progress-track"><b :style="{ width: charViewProgress(c.id, 'back') + '%' }"></b></i>
+                      </div>
                       <div v-else class="char-view-empty">
                         <span class="char-view-glyph">背</span>
                         <span class="char-view-plus">+</span>
@@ -1882,6 +1890,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', handleImageViewerKeydown)
+  if (charViewTimer) { clearInterval(charViewTimer); charViewTimer = null }
 })
 
 function isPendingSceneImage(id) {
@@ -3149,6 +3158,18 @@ async function uploadCharImage(char, event) {
 function charViewKey(id, view) { return `${id}:${view}` }
 function isPendingCharView(id, view) { return pendingCharViewKeys.value.includes(charViewKey(id, view)) }
 
+// 三视图进度：没有真实进度接口，按耗时渐近推进（30 秒 ~60%、2 分钟 ~93%），完成时格子直接换成图。
+const charViewStartAt = ref({})
+const charViewTick = ref(0)
+let charViewTimer = null
+function charViewProgress(id, view) {
+  void charViewTick.value  // 依赖 1s 心跳保持响应式刷新
+  const start = charViewStartAt.value[charViewKey(id, view)]
+  if (!start) return 0
+  const elapsed = (Date.now() - start) / 1000
+  return Math.min(96, Math.round(100 * (1 - Math.exp(-elapsed / 35))))
+}
+
 async function genCharView(id, view) {
   const key = charViewKey(id, view)
   if (isPendingCharView(id, view)) return
@@ -3156,16 +3177,28 @@ async function genCharView(id, view) {
   const before = (view === 'side' ? (c0?.view_side || c0?.viewSide) : (c0?.view_back || c0?.viewBack)) || ''
   try {
     pendingCharViewKeys.value.push(key)
+    charViewStartAt.value = { ...charViewStartAt.value, [key]: Date.now() }
+    if (!charViewTimer) charViewTimer = setInterval(() => { charViewTick.value++ }, 1000)
     await characterAPI.generateView(id, epId.value, view)
     toast.success(`${view === 'side' ? '侧面' : '背面'}视图生成中`)
     await refresh()
+    // 3 分钟轮询窗口：排队 + 生成可能超过 90 秒，过早放弃会让用户以为「生成不了」
     watchAsyncResult(() => {
       const char = chars.value.find(c => c.id === id)
       const field = (view === 'side' ? (char?.view_side || char?.viewSide) : (char?.view_back || char?.viewBack)) || ''
       return !!field && field !== before
-    }, 36, 2500, () => { pendingCharViewKeys.value = pendingCharViewKeys.value.filter(k => k !== key) })
+    }, 72, 2500, () => {
+      pendingCharViewKeys.value = pendingCharViewKeys.value.filter(k => k !== key)
+      const next = { ...charViewStartAt.value }
+      delete next[key]
+      charViewStartAt.value = next
+      if (!pendingCharViewKeys.value.length && charViewTimer) { clearInterval(charViewTimer); charViewTimer = null }
+    })
   } catch (e) {
     pendingCharViewKeys.value = pendingCharViewKeys.value.filter(k => k !== key)
+    const next = { ...charViewStartAt.value }
+    delete next[key]
+    charViewStartAt.value = next
     toast.error(e.message)
   }
 }
@@ -4699,6 +4732,20 @@ onMounted(() => { refresh(); loadConfigs(); loadVoices() })
   overflow: hidden;
   display: flex; align-items: center; justify-content: center;
   transition: border-color 0.15s, background 0.15s;
+}
+.char-view-progress {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 2px; width: 100%; padding: 0 10px;
+}
+.char-view-progress-num { font-size: 13px; font-weight: 800; color: var(--accent-dark); font-variant-numeric: tabular-nums; }
+.char-view-progress-label { font-size: 9px; color: var(--text-3); }
+.char-view-progress-track {
+  display: block; width: 100%; height: 4px; margin-top: 3px;
+  background: var(--bg-3); border-radius: 999px; overflow: hidden;
+}
+.char-view-progress-track b {
+  display: block; height: 100%; background: var(--accent);
+  border-radius: 999px; transition: width 0.9s linear;
 }
 .char-view-slot:hover {
   border-color: var(--accent);
