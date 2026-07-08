@@ -345,7 +345,11 @@ function buildStoryboardIdentityClause(storyboardId: number): string {
     for (const l of links) {
       const [ch] = db.select().from(schema.characters).where(eq(schema.characters.id, l.characterId)).all()
       if (!ch || ch.deletedAt) continue
-      const identitySource = [ch.appearance, ch.description, ch.imagePrompt].filter(Boolean).join('，')
+      // 身份锚点只用「设定」，不混入渲染提示词（imagePrompt）——
+      // 它常带"长睫毛扑闪"这类瞬时动作词，混进来会让每一帧都照着画（如永远眨眼）。
+      // 仅当设定完全为空时才退回 imagePrompt 兜底。
+      const identitySource = [ch.appearance, ch.description].filter(Boolean).join('，')
+        || String(ch.imagePrompt || '')
       const gender = extractGender(identitySource)
       const appr = String(identitySource)
         .replace(/性别[：:]\s*/g, '')
@@ -356,7 +360,7 @@ function buildStoryboardIdentityClause(storyboardId: number): string {
       parts.push(tag ? `${ch.name}（${tag}）` : ch.name)
     }
     if (!parts.length) return ''
-    return `本画面出现的角色及其身份（必须与参考图严格对应，不得混淆性别、外貌或张冠李戴；必须保持参考图中的发型、发色、服装款式、服装配色、身材比例和标志性道具，除非剧情动作要求，只改变姿势、表情、光照和环境湿度）：${parts.join('；')}。`
+    return `本画面出现的角色及其身份（必须与参考图严格对应，不得混淆性别、外貌或张冠李戴；必须保持参考图中的发型、发色、服装款式、服装配色、身材比例和标志性道具，除非剧情动作要求，只改变姿势、表情、光照和环境湿度）：${parts.join('；')}。参考图优先级：角色外貌一律以角色立绘参考图（最先出现的人物图）为唯一标准；旧镜头画面仅供构图、光线与场景衔接参考，不得继承其中人物的过时形象或瞬时表情（如眨眼、半闭眼、张嘴）。`
   } catch {
     return ''
   }
