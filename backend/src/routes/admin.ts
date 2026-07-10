@@ -1,6 +1,6 @@
 import { Hono } from 'hono'
 import bcrypt from 'bcryptjs'
-import { eq, sql } from 'drizzle-orm'
+import { desc, eq, sql } from 'drizzle-orm'
 import { db, schema } from '../db/index.js'
 import { requireAdmin } from '../middleware/auth.js'
 import { success, badRequest, now } from '../utils/response.js'
@@ -27,7 +27,7 @@ app.get('/users', async (c) => {
     videoCount: sql<number>`(select count(*) from video_generations v where v.user_id = ${schema.users.id})`,
     paidCents: sql<number>`(select coalesce(sum(p.amount_cents),0) from payment_orders p where p.user_id = ${schema.users.id} and p.status = 'paid')`,
     invitedCount: sql<number>`(select count(*) from users u2 where u2.invite_code = users.referral_code and users.referral_code is not null)`,
-  }).from(schema.users).orderBy(schema.users.id)
+  }).from(schema.users).orderBy(desc(schema.users.createdAt), desc(schema.users.id))
 
   return success(c, {
     items: rows.map(u => ({
