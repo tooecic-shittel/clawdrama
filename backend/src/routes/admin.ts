@@ -49,6 +49,36 @@ app.get('/users', async (c) => {
   })
 })
 
+// GET /admin/users/:id/dramas — 该用户的短剧项目（管理员查看用户作品用）
+app.get('/users/:id/dramas', async (c) => {
+  const id = Number(c.req.param('id'))
+  const rows = await db.select({
+    id: schema.dramas.id,
+    title: schema.dramas.title,
+    style: schema.dramas.style,
+    status: schema.dramas.status,
+    createdAt: schema.dramas.createdAt,
+    updatedAt: schema.dramas.updatedAt,
+    episodeCount: sql<number>`(select count(*) from episodes e where e.drama_id = ${schema.dramas.id} and e.deleted_at is null)`,
+    videoCount: sql<number>`(select count(*) from video_generations v where v.drama_id = ${schema.dramas.id} and v.status = 'completed')`,
+  }).from(schema.dramas)
+    .where(sql`${schema.dramas.userId} = ${id} and ${schema.dramas.deletedAt} is null`)
+    .orderBy(desc(schema.dramas.updatedAt))
+
+  return success(c, {
+    items: rows.map(d => ({
+      id: d.id,
+      title: d.title,
+      style: d.style,
+      status: d.status,
+      created_at: d.createdAt,
+      updated_at: d.updatedAt,
+      episode_count: d.episodeCount,
+      video_count: d.videoCount,
+    })),
+  })
+})
+
 // POST /admin/users/:id/role — 设为/撤销管理员（不能改自己）
 app.post('/users/:id/role', async (c) => {
   const operator = c.get('user')

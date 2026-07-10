@@ -30,7 +30,7 @@
         <tbody>
           <tr v-for="u in filtered" :key="u.id" :class="{ 'is-disabled': u.disabled }">
             <td>
-              <div class="au-user">
+              <div class="au-user au-user-clickable" title="查看该用户的短剧作品" @click="openDramas(u)">
                 <span class="au-avatar">{{ (u.display_name || u.username || '?')[0].toUpperCase() }}</span>
                 <div>
                   <div class="au-name">{{ u.display_name || u.username }}</div>
@@ -64,6 +64,33 @@
         </tbody>
       </table>
     </div>
+
+    <!-- 用户作品弹窗 -->
+    <div v-if="dramaDialog.open" class="au-modal-mask" @click.self="dramaDialog.open = false">
+      <div class="au-modal">
+        <div class="au-modal-head">
+          <div>
+            <div class="au-modal-title">{{ dramaDialog.userName }} 的短剧</div>
+            <div class="au-sub">{{ dramaDialog.loading ? '加载中...' : `共 ${dramaDialog.items.length} 部 · 点击可进入项目` }}</div>
+          </div>
+          <button class="au-btn" @click="dramaDialog.open = false">关闭</button>
+        </div>
+        <div v-if="dramaDialog.loading" class="au-empty">加载中...</div>
+        <div v-else-if="!dramaDialog.items.length" class="au-empty">该用户还没有创建短剧</div>
+        <div v-else class="au-drama-list">
+          <NuxtLink v-for="d in dramaDialog.items" :key="d.id" :to="`/drama/${d.id}`" class="au-drama-row">
+            <div class="au-drama-main">
+              <div class="au-drama-title">{{ d.title }}</div>
+              <div class="au-sub">{{ styleLabel(d.style) }}{{ d.style ? ' · ' : '' }}创建于 {{ fmtTime(d.created_at) }} · 更新于 {{ fmtTime(d.updated_at) }}</div>
+            </div>
+            <div class="au-drama-stats">
+              <span class="au-badge">{{ d.episode_count }} 集</span>
+              <span class="au-badge">{{ d.video_count }} 条成片镜头</span>
+            </div>
+          </NuxtLink>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -72,6 +99,7 @@ import { ref, computed, onMounted } from 'vue'
 import { toast } from 'vue-sonner'
 import { adminAPI, creditsAPI } from '~/composables/useApi'
 import { useAuth } from '~/composables/useAuth'
+import { styleLabel } from '~/composables/useStyleLabels'
 
 const { user: me, isAdmin } = useAuth()
 const myId = computed(() => me.value?.id)
@@ -98,6 +126,20 @@ async function load() {
     toast.error(e.message)
   } finally {
     loading.value = false
+  }
+}
+
+const dramaDialog = ref({ open: false, userName: '', loading: false, items: [] })
+
+async function openDramas(u) {
+  dramaDialog.value = { open: true, userName: u.display_name || u.username, loading: true, items: [] }
+  try {
+    const res = await adminAPI.userDramas(u.id)
+    dramaDialog.value.items = res.items || []
+  } catch (e) {
+    toast.error(e.message)
+  } finally {
+    dramaDialog.value.loading = false
   }
 }
 
@@ -192,6 +234,32 @@ onMounted(async () => {
 .mono { font-variant-numeric: tabular-nums; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 
 .au-user { display: flex; align-items: center; gap: 9px; }
+.au-user-clickable { cursor: pointer; border-radius: 8px; margin: -3px -6px; padding: 3px 6px; transition: background 0.15s; }
+.au-user-clickable:hover { background: var(--accent-bg, rgba(143,239,38,0.14)); }
+.au-user-clickable:hover .au-name { color: var(--accent-dark, #5da817); }
+
+.au-modal-mask {
+  position: fixed; inset: 0; z-index: 60;
+  background: rgba(18, 26, 42, 0.45);
+  display: flex; align-items: center; justify-content: center; padding: 24px;
+}
+.au-modal {
+  width: 640px; max-width: 100%; max-height: 80vh; overflow-y: auto;
+  background: var(--bg-0, #fff); border-radius: 16px; padding: 18px 20px;
+  box-shadow: 0 24px 60px rgba(18, 26, 42, 0.25);
+}
+.au-modal-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.au-modal-title { font-size: 16px; font-weight: 700; color: var(--text-0, #182132); }
+.au-drama-list { display: flex; flex-direction: column; gap: 8px; }
+.au-drama-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 11px 14px; border: 1px solid var(--border, #dbe4f0); border-radius: 12px;
+  text-decoration: none; transition: border-color 0.15s, background 0.15s;
+}
+.au-drama-row:hover { border-color: var(--accent, #8FEF26); background: var(--accent-bg, rgba(143,239,38,0.14)); }
+.au-drama-main { min-width: 0; }
+.au-drama-title { font-size: 14px; font-weight: 600; color: var(--text-0, #182132); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.au-drama-stats { display: flex; gap: 6px; flex-shrink: 0; }
 .au-avatar {
   width: 28px; height: 28px; flex-shrink: 0; display: flex; align-items: center; justify-content: center;
   border-radius: 50%; background: var(--accent-bg, rgba(143,239,38,0.14));
