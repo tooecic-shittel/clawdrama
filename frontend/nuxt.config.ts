@@ -10,8 +10,9 @@ export default defineNuxtConfig({
       title: '爪爪短剧 ClawDrama',
       meta: [{ name: 'viewport', content: 'width=device-width, initial-scale=1' }],
       link: [
-        { rel: 'icon', type: 'image/svg+xml', href: '/claw-logo.svg' },
-        { rel: 'shortcut icon', type: 'image/svg+xml', href: '/claw-logo.svg' },
+        { rel: 'icon', type: 'image/svg+xml', href: '/favicon.svg' },
+        { rel: 'shortcut icon', type: 'image/svg+xml', href: '/favicon.svg' },
+        { rel: 'apple-touch-icon', href: '/favicon.svg' },
       ],
     },
   },
