@@ -12,6 +12,7 @@ export const users = sqliteTable('users', {
   displayName: text('display_name'),
   role: text('role').notNull().default('user'),
   credits: integer('credits').notNull().default(0),
+  disabled: integer('disabled').notNull().default(0), // 1=禁用：无法登录，现有 token 立即失效
   inviteCode: text('invite_code'),               // 注册时使用的邀请码（追溯拉新来源）
   referralCode: text('referral_code'),           // 本人专属邀请码（首次访问邀请页时生成）
   createdAt: text('created_at').notNull(),

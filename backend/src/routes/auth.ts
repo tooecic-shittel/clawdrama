@@ -174,6 +174,9 @@ auth.post('/login', async (c) => {
   if (!ok) {
     return c.json({ code: 401, message: '用户名或密码错误' }, 401)
   }
+  if (user.disabled) {
+    return c.json({ code: 403, message: '账号已被禁用，请联系管理员' }, 403)
+  }
 
   const token = await signUserToken({ id: user.id, username: user.username, role: user.role })
 

@@ -26,6 +26,7 @@ import auth from './routes/auth.js'
 import credits from './routes/credits.js'
 import payments from './routes/payments.js'
 import invites from './routes/invites.js'
+import admin from './routes/admin.js'
 import backup from './routes/backup.js'
 import { requestLogger, errorHandler } from './middleware/logger.js'
 import { requireAuth } from './middleware/auth.js'
@@ -83,6 +84,7 @@ api.route('/skills', skills)
 api.route('/ai-voices', aiVoices)
 api.route('/credits', credits)
 api.route('/invites', invites)
+api.route('/admin', admin)
 api.route('/backup', backup) // 临时：迁移 Railway→阿里云 用，迁完删除
 
 app.route('/api/v1', api)

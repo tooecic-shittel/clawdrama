@@ -300,6 +300,13 @@ export const authAPI = {
   me: () => api.get<any>('/auth/me'),
 }
 
+export const adminAPI = {
+  users: () => api.get<{ items: any[] }>('/admin/users'),
+  setRole: (id: number, role: 'admin' | 'user') => api.post(`/admin/users/${id}/role`, { role }),
+  setStatus: (id: number, disabled: boolean) => api.post(`/admin/users/${id}/status`, { disabled }),
+  resetPassword: (id: number) => api.post<{ temp_password: string }>(`/admin/users/${id}/reset-password`, {}),
+}
+
 export const inviteAPI = {
   my: () => api.get<{ code: string; invited_count: number; invited: Array<{ username: string; created_at: string }>; reward_total: number; reward_per_invite: number; invitee_bonus: number }>('/invites/my'),
   list: () => api.get<Array<{ id: number; code: string; note: string | null; max_uses: number; used_count: number; is_active: boolean; used_by: string[]; created_at: string }>>('/invites'),
