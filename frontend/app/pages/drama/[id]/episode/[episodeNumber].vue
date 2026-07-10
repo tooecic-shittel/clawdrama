@@ -868,6 +868,16 @@
                   <button class="btn btn-sm" :disabled="isPendingSceneImage(s.id)" @click="genSceneImg(s.id)">
                     {{ isPendingSceneImage(s.id) ? '生成中' : ((s.image_url || s.imageUrl) ? '重新生成' : '生成') }}
                   </button>
+                  <input
+                    :id="`scene-upload-${s.id}`"
+                    type="file"
+                    accept="image/png,image/jpeg,image/jpg,image/webp"
+                    style="display:none"
+                    @change="uploadSceneImage(s, $event)"
+                  />
+                  <button class="btn btn-sm" :disabled="isPendingSceneUpload(s.id) || isPendingSceneImage(s.id)" title="导入场景参考图，并生成当前项目画风的场景图" @click="openSceneUpload(s.id)">
+                    {{ isPendingSceneUpload(s.id) ? '上传中' : '导入参考' }}
+                  </button>
                 </div>
               </div>
             </div>
@@ -1832,6 +1842,7 @@ const videoConfigs = ref([])
 const audioConfigs = ref([])
 const pendingCharImageIds = ref([])
 const pendingCharUploadIds = ref([])
+const pendingSceneUploadIds = ref([])
 const pendingCharViewKeys = ref([])  // "characterId:view" pairs (view = 'side'|'back')
 const pendingSceneImageIds = ref([])
 const pendingShotFrameKeys = ref([])
@@ -3151,6 +3162,48 @@ async function uploadCharImage(char, event) {
     toast.error(e.message || '上传失败')
   } finally {
     pendingCharUploadIds.value = pendingCharUploadIds.value.filter(item => item !== id)
+    if (input) input.value = ''
+  }
+}
+
+function isPendingSceneUpload(id) { return pendingSceneUploadIds.value.includes(id) }
+function openSceneUpload(id) {
+  const input = document.getElementById(`scene-upload-${id}`)
+  input?.click?.()
+}
+
+async function uploadSceneImage(scene, event) {
+  const input = event?.target
+  const file = input?.files?.[0]
+  if (!file) return
+  if (!file.type?.startsWith('image/')) {
+    toast.error('请上传图片文件')
+    input.value = ''
+    return
+  }
+  if (file.size > 12 * 1024 * 1024) {
+    toast.error('图片不能超过 12MB')
+    input.value = ''
+    return
+  }
+  const id = scene.id
+  const before = scene?.image_url || scene?.imageUrl || ''
+  try {
+    if (!isPendingSceneUpload(id)) pendingSceneUploadIds.value.push(id)
+    if (!isPendingSceneImage(id)) pendingSceneImageIds.value.push(id)
+    await sceneAPI.uploadImage(id, file, epId.value)
+    toast.success('参考图已导入，正在生成项目风格场景图')
+    await refresh()
+    watchAsyncResult(() => {
+      const latest = scenes.value.find(s => s.id === id)
+      const cur = latest?.image_url || latest?.imageUrl || ''
+      return !!cur && cur !== before
+    }, 36, 2500, () => { pendingSceneImageIds.value = pendingSceneImageIds.value.filter(item => item !== id) })
+  } catch (e) {
+    pendingSceneImageIds.value = pendingSceneImageIds.value.filter(item => item !== id)
+    toast.error(e.message || '上传失败')
+  } finally {
+    pendingSceneUploadIds.value = pendingSceneUploadIds.value.filter(item => item !== id)
     if (input) input.value = ''
   }
 }

@@ -218,6 +218,12 @@ export const sceneAPI = {
     if (Array.isArray(opts?.referenceCharacterIds)) payload.reference_character_ids = opts.referenceCharacterIds
     return api.post(`/scenes/${id}/generate-image`, payload)
   },
+  uploadImage: (id: number, file: File, episodeId: number) => {
+    const form = new FormData()
+    form.append('file', file)
+    form.append('episode_id', String(episodeId))
+    return uploadReq(`/scenes/${id}/upload-image`, form)
+  },
 }
 
 export const imageAPI = {
