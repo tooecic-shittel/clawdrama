@@ -303,6 +303,7 @@ export const authAPI = {
 export const adminAPI = {
   users: () => api.get<{ items: any[] }>('/admin/users'),
   userDramas: (id: number) => api.get<{ items: any[] }>(`/admin/users/${id}/dramas`),
+  restoreDrama: (id: number) => api.post(`/admin/dramas/${id}/restore`, {}),
   setRole: (id: number, role: 'admin' | 'user') => api.post(`/admin/users/${id}/role`, { role }),
   setStatus: (id: number, disabled: boolean) => api.post(`/admin/users/${id}/status`, { disabled }),
   resetPassword: (id: number) => api.post<{ temp_password: string }>(`/admin/users/${id}/reset-password`, {}),

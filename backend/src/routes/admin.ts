@@ -49,7 +49,7 @@ app.get('/users', async (c) => {
   })
 })
 
-// GET /admin/users/:id/dramas — 该用户的短剧项目（管理员查看用户作品用）
+// GET /admin/users/:id/dramas — 该用户的短剧项目（含软删除的：运营要能看到并可恢复）
 app.get('/users/:id/dramas', async (c) => {
   const id = Number(c.req.param('id'))
   const rows = await db.select({
@@ -59,10 +59,11 @@ app.get('/users/:id/dramas', async (c) => {
     status: schema.dramas.status,
     createdAt: schema.dramas.createdAt,
     updatedAt: schema.dramas.updatedAt,
+    deletedAt: schema.dramas.deletedAt,
     episodeCount: sql<number>`(select count(*) from episodes e where e.drama_id = ${schema.dramas.id} and e.deleted_at is null)`,
     videoCount: sql<number>`(select count(*) from video_generations v where v.drama_id = ${schema.dramas.id} and v.status = 'completed')`,
   }).from(schema.dramas)
-    .where(sql`${schema.dramas.userId} = ${id} and ${schema.dramas.deletedAt} is null`)
+    .where(eq(schema.dramas.userId, id))
     .orderBy(desc(schema.dramas.updatedAt))
 
   return success(c, {
@@ -73,10 +74,23 @@ app.get('/users/:id/dramas', async (c) => {
       status: d.status,
       created_at: d.createdAt,
       updated_at: d.updatedAt,
+      deleted_at: d.deletedAt,
       episode_count: d.episodeCount,
       video_count: d.videoCount,
     })),
   })
+})
+
+// POST /admin/dramas/:id/restore — 恢复用户软删除的项目
+app.post('/dramas/:id/restore', async (c) => {
+  const operator = c.get('user')
+  const id = Number(c.req.param('id'))
+  const [drama] = await db.select().from(schema.dramas).where(eq(schema.dramas.id, id)).limit(1)
+  if (!drama) return badRequest(c, '项目不存在')
+  if (!drama.deletedAt) return badRequest(c, '该项目未被删除')
+  await db.update(schema.dramas).set({ deletedAt: null, updatedAt: now() }).where(eq(schema.dramas.id, id))
+  logTaskSuccess('Admin', 'restore-drama', { operatorId: operator.id, dramaId: id })
+  return success(c, { id })
 })
 
 // POST /admin/users/:id/role — 设为/撤销管理员（不能改自己）

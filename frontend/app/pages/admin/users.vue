@@ -78,16 +78,29 @@
         <div v-if="dramaDialog.loading" class="au-empty">加载中...</div>
         <div v-else-if="!dramaDialog.items.length" class="au-empty">该用户还没有创建短剧</div>
         <div v-else class="au-drama-list">
-          <NuxtLink v-for="d in dramaDialog.items" :key="d.id" :to="`/drama/${d.id}`" class="au-drama-row">
-            <div class="au-drama-main">
-              <div class="au-drama-title">{{ d.title }}</div>
-              <div class="au-sub">{{ styleLabel(d.style) }}{{ d.style ? ' · ' : '' }}创建于 {{ fmtTime(d.created_at) }} · 更新于 {{ fmtTime(d.updated_at) }}</div>
+          <template v-for="d in dramaDialog.items" :key="d.id">
+            <NuxtLink v-if="!d.deleted_at" :to="`/drama/${d.id}`" class="au-drama-row">
+              <div class="au-drama-main">
+                <div class="au-drama-title">{{ d.title }}</div>
+                <div class="au-sub">{{ styleLabel(d.style) }}{{ d.style ? ' · ' : '' }}创建于 {{ fmtTime(d.created_at) }} · 更新于 {{ fmtTime(d.updated_at) }}</div>
+              </div>
+              <div class="au-drama-stats">
+                <span class="au-badge">{{ d.episode_count }} 集</span>
+                <span class="au-badge">{{ d.video_count }} 条成片镜头</span>
+              </div>
+            </NuxtLink>
+            <div v-else class="au-drama-row au-drama-deleted">
+              <div class="au-drama-main">
+                <div class="au-drama-title">{{ d.title }}</div>
+                <div class="au-sub">用户已于 {{ fmtTime(d.deleted_at) }} 删除 · 内容仍在，可恢复</div>
+              </div>
+              <div class="au-drama-stats">
+                <span class="au-badge">{{ d.episode_count }} 集</span>
+                <span class="au-badge is-banned">已删除</span>
+                <button class="au-btn" @click="restoreDrama(d)">恢复</button>
+              </div>
             </div>
-            <div class="au-drama-stats">
-              <span class="au-badge">{{ d.episode_count }} 集</span>
-              <span class="au-badge">{{ d.video_count }} 条成片镜头</span>
-            </div>
-          </NuxtLink>
+          </template>
         </div>
       </div>
     </div>
@@ -140,6 +153,17 @@ async function openDramas(u) {
     toast.error(e.message)
   } finally {
     dramaDialog.value.loading = false
+  }
+}
+
+async function restoreDrama(d) {
+  if (!window.confirm(`确认恢复项目「${d.title}」？恢复后用户将重新在项目列表看到它。`)) return
+  try {
+    await adminAPI.restoreDrama(d.id)
+    toast.success('已恢复')
+    d.deleted_at = null
+  } catch (e) {
+    toast.error(e.message)
   }
 }
 
@@ -258,6 +282,8 @@ onMounted(async () => {
 }
 .au-drama-row:hover { border-color: var(--accent, #8FEF26); background: var(--accent-bg, rgba(143,239,38,0.14)); }
 .au-drama-main { min-width: 0; }
+.au-drama-deleted { opacity: 0.75; background: var(--bg-1, #f8fbff); }
+.au-drama-deleted:hover { border-color: var(--border, #dbe4f0); background: var(--bg-1, #f8fbff); }
 .au-drama-title { font-size: 14px; font-weight: 600; color: var(--text-0, #182132); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .au-drama-stats { display: flex; gap: 6px; flex-shrink: 0; }
 .au-avatar {
