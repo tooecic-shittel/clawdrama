@@ -1714,6 +1714,7 @@
               <button type="button" class="btn btn-sm btn-primary" :disabled="vidEnhancing" style="margin-left:auto" @click="enhanceVidPrompt(vidBoardSb)" title="用 storyboard_breaker skill 优化成电影级、带角色锚点">{{ vidEnhancing ? '✨ 优化中…' : '✨ AI 优化' }}</button>
             </div>
             <textarea :value="vidBoardSb.video_prompt || vidBoardSb.videoPrompt || ''" class="textarea" rows="5" placeholder="按 3 秒分段；写清运镜与动作变化（如：0-3秒 缓慢推近…）" @blur="updateField(vidBoardSb, 'video_prompt', $event.target.value)" />
+            <div class="dim" style="font-size:11px;margin-top:4px">简版提示词（少于 600 字）在点「生成视频」时会自动先 AI 优化成导演级逐秒执行单再送引擎；也可以点上方「AI 优化」先看效果再改。</div>
           </div>
           <div class="vboard-foot">
             <button class="btn" @click="vidBoard.open = false">关闭</button>
@@ -3694,10 +3695,31 @@ async function genVid(sb) {
   const rawDuration = Number(sb.duration || 5)
   const duration = Math.min(12, rawDuration)
   if (rawDuration > 12) toast.info(`#${sb.storyboard_number || sb.storyboardNumber || ''} 镜头 ${rawDuration}s 超出引擎上限，按 12s 生成（建议重拆或手动拆分该镜头）`)
+
+  // 拆分镜写的是骨架提示词（一两百字），直接生成出不来剧本的戏。
+  // <600 字视为未优化：自动走一遍「AI 优化」升级成导演级逐秒执行单，并存回分镜复用。
+  let vprompt = sb.video_prompt || sb.videoPrompt || ''
+  if (vprompt.length < 600) {
+    const num = sb.storyboard_number || sb.storyboardNumber || ''
+    toast.info(`#${num} 提示词为简版，正在 AI 优化成导演级再生成…`)
+    try {
+      const r = await storyboardAPI.enhanceVideoPrompt(sb.id, vprompt)
+      if (r?.prompt && r.prompt.length > vprompt.length) {
+        vprompt = r.prompt
+        storyboardAPI.update(sb.id, { video_prompt: vprompt }).catch(() => {})
+        sb.video_prompt = vprompt
+        sb.videoPrompt = vprompt
+      }
+    } catch (e) {
+      console.error('[genVid] auto-enhance failed, fallback to raw prompt', e)
+      toast.error('AI 优化失败，本次按原始提示词生成')
+    }
+  }
+
   const params = {
     storyboard_id: sb.id,
     drama_id: dramaId,
-    prompt: sb.video_prompt || sb.videoPrompt || '',
+    prompt: vprompt,
     duration,
     resolution: videoResolution.value,
     use_last_frame: videoUseLastFrame.value,
