@@ -247,7 +247,16 @@
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
                 <span>角色</span>
                 <span class="tag tag-accent">{{ chars.length }}</span>
+                <button type="button" class="btn btn-sm ml-auto" @click="addCharForm.open = !addCharForm.open">{{ addCharForm.open ? '收起' : '+ 手动添加' }}</button>
               </div>
+              <form v-if="addCharForm.open" class="extract-add-form" @submit.prevent="submitAddChar">
+                <input v-model="addCharForm.name" class="input" placeholder="角色名称 *（如：女孩A）" required />
+                <input v-model="addCharForm.role" class="input" placeholder="定位（如：独自用餐的顾客）" />
+                <input v-model="addCharForm.description" class="input" placeholder="描述（外貌/身份，越具体形象越准）" />
+                <button type="submit" class="btn btn-primary btn-sm" :disabled="addCharForm.saving || !addCharForm.name.trim()">
+                  {{ addCharForm.saving ? '添加中...' : '添加角色' }}
+                </button>
+              </form>
               <div class="extract-list">
                 <div v-for="c in chars" :key="c.id" class="extract-row">
                   <div class="char-avatar">{{ c.name?.[0] || '?' }}</div>
@@ -262,12 +271,22 @@
               </div>
             </div>
 
-            <div class="card extract-card" v-if="scenes.length">
+            <div class="card extract-card">
               <div class="extract-card-head">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
                 <span>场景</span>
                 <span class="tag tag-accent">{{ scenes.length }}</span>
+                <button type="button" class="btn btn-sm ml-auto" @click="addSceneForm.open = !addSceneForm.open">{{ addSceneForm.open ? '收起' : '+ 手动添加' }}</button>
               </div>
+              <form v-if="addSceneForm.open" class="extract-add-form" @submit.prevent="submitAddScene">
+                <input v-model="addSceneForm.location" class="input" placeholder="场景地点 *（如：缦云里花园餐厅）" required />
+                <input v-model="addSceneForm.time" class="input" placeholder="时间（如：傍晚）" />
+                <input v-model="addSceneForm.prompt" class="input" placeholder="场景描述/生成提示词（可选）" />
+                <button type="submit" class="btn btn-primary btn-sm" :disabled="addSceneForm.saving || !addSceneForm.location.trim()">
+                  {{ addSceneForm.saving ? '添加中...' : '添加场景' }}
+                </button>
+              </form>
+              <div v-if="!scenes.length" class="extract-meta" style="padding:8px 2px">还没有场景，AI 没提取到时可以手动添加</div>
               <div class="extract-list">
                 <div v-for="s in scenes" :key="s.id" class="extract-row">
                   <div class="scene-icon">
@@ -1737,6 +1756,58 @@ const extractConfirm = reactive({
   scenes: [],
   projectCharacters: [],
 })
+
+// AI 提取不准时的人工兜底：手动添加角色/场景
+const addCharForm = reactive({ open: false, saving: false, name: '', role: '', description: '' })
+const addSceneForm = reactive({ open: false, saving: false, location: '', time: '', prompt: '' })
+
+async function submitAddChar() {
+  if (!addCharForm.name.trim() || addCharForm.saving) return
+  addCharForm.saving = true
+  try {
+    await characterAPI.create({
+      drama_id: dramaId,
+      episode_id: epId.value,
+      name: addCharForm.name.trim(),
+      role: addCharForm.role.trim() || undefined,
+      description: addCharForm.description.trim() || undefined,
+    })
+    toast.success(`角色「${addCharForm.name.trim()}」已添加`)
+    addCharForm.name = ''
+    addCharForm.role = ''
+    addCharForm.description = ''
+    addCharForm.open = false
+    await refresh()
+  } catch (e) {
+    toast.error(e.message)
+  } finally {
+    addCharForm.saving = false
+  }
+}
+
+async function submitAddScene() {
+  if (!addSceneForm.location.trim() || addSceneForm.saving) return
+  addSceneForm.saving = true
+  try {
+    await sceneAPI.create({
+      drama_id: dramaId,
+      episode_id: epId.value,
+      location: addSceneForm.location.trim(),
+      time: addSceneForm.time.trim() || undefined,
+      prompt: addSceneForm.prompt.trim() || undefined,
+    })
+    toast.success(`场景「${addSceneForm.location.trim()}」已添加`)
+    addSceneForm.location = ''
+    addSceneForm.time = ''
+    addSceneForm.prompt = ''
+    addSceneForm.open = false
+    await refresh()
+  } catch (e) {
+    toast.error(e.message)
+  } finally {
+    addSceneForm.saving = false
+  }
+}
 
 const localRaw = ref(''), localScript = ref('')
 const rawContent = computed(() => episode.value?.content || '')
@@ -4350,6 +4421,14 @@ onMounted(() => { refresh(); loadConfigs(); loadVoices() })
 .extract-summary-stat strong { font-size: 18px; color: var(--text-0); font-family: var(--font-display); }
 .extract-summary-note { padding: 10px 12px; border-radius: 14px; background: rgba(255,255,255,0.56); border: 1px solid rgba(27, 41, 64, 0.08); font-size: 11px; line-height: 1.7; color: var(--text-2); }
 .extract-card { overflow: hidden; min-height: 0; display: flex; flex-direction: column; }
+.extract-add-form {
+  display: flex; flex-direction: column; gap: 7px;
+  padding: 11px 14px; border-bottom: 1px solid var(--border);
+  background: var(--accent-bg);
+}
+.extract-add-form .input { height: 30px; font-size: 12px; }
+.extract-add-form .btn { align-self: flex-end; }
+
 .extract-card-head {
   display: flex; align-items: center; gap: 8px;
   padding: 11px 14px; font-size: 12px; font-weight: 600;

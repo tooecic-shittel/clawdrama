@@ -21,6 +21,36 @@ function defaultPortraitPrompt(char: { name: string; appearance: string | null; 
   return `${ethnic}${char.name}, ${desc}, 高质量, 正面, 白色背景`
 }
 
+// POST /characters — 手动添加角色（AI 提取不准时的人工补充），并挂到当前集
+app.post('/', async (c) => {
+  const body = await c.req.json()
+  const dramaId = Number(body.drama_id)
+  const name = String(body.name || '').trim()
+  if (!dramaId) return badRequest(c, 'drama_id is required')
+  if (!name) return badRequest(c, '角色名称不能为空')
+  if (!canAccess(c, dramaOwnerId(dramaId))) return notFound(c, '剧本不存在')
+
+  const ts = now()
+  const res = db.insert(schema.characters).values({
+    dramaId,
+    name,
+    role: body.role ? String(body.role).trim() : null,
+    description: body.description ? String(body.description).trim() : null,
+    appearance: body.appearance ? String(body.appearance).trim() : null,
+    createdAt: ts,
+    updatedAt: ts,
+  }).run()
+  const charId = Number(res.lastInsertRowid)
+
+  const episodeId = Number(body.episode_id || 0)
+  if (episodeId) {
+    if (!canAccess(c, episodeOwnerId(episodeId))) return notFound(c, '剧集不存在')
+    db.insert(schema.episodeCharacters).values({ episodeId, characterId: charId, createdAt: ts }).run()
+  }
+  const [result] = db.select().from(schema.characters).where(eq(schema.characters.id, charId)).all()
+  return success(c, result)
+})
+
 // PUT /characters/:id
 app.put('/:id', async (c) => {
   const id = Number(c.req.param('id'))

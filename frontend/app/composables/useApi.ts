@@ -197,6 +197,8 @@ export const storyboardAPI = {
 
 export const characterAPI = {
   update: (id: number, data: any) => api.put(`/characters/${id}`, data),
+  create: (d: { drama_id: number; episode_id: number; name: string; role?: string; description?: string }) =>
+    api.post('/characters', d),
   voiceSample: (id: number, episodeId: number) => api.post(`/characters/${id}/generate-voice-sample`, { episode_id: episodeId }),
   generateImage: (id: number, episodeId: number, opts?: { prompt?: string }) => api.post(`/characters/${id}/generate-image`, { episode_id: episodeId, ...(opts?.prompt ? { prompt: opts.prompt } : {}) }),
   uploadImage: (id: number, file: File, episodeId?: number) => {
@@ -212,6 +214,8 @@ export const characterAPI = {
 }
 
 export const sceneAPI = {
+  create: (d: { drama_id: number; episode_id: number; location: string; time?: string; prompt?: string }) =>
+    api.post('/scenes', d),
   generateImage: (id: number, episodeId: number, opts?: { prompt?: string; referenceCharacterIds?: number[] | null }) => {
     const payload: any = { episode_id: episodeId }
     if (opts?.prompt) payload.prompt = opts.prompt

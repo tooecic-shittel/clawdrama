@@ -23,8 +23,13 @@ app.post('/', async (c) => {
     createdAt: ts,
     updatedAt: ts,
   }).run()
+  const sceneId = Number(res.lastInsertRowid)
+  // 集内场景列表按 episode_scenes 关联表查询——不建关联的话，手动添加的场景在工作台看不到
+  if (body.episode_id) {
+    db.insert(schema.episodeScenes).values({ episodeId: Number(body.episode_id), sceneId, createdAt: ts }).run()
+  }
   const [result] = db.select().from(schema.scenes)
-    .where(eq(schema.scenes.id, Number(res.lastInsertRowid))).all()
+    .where(eq(schema.scenes.id, sceneId)).all()
   return created(c, result)
 })
 
