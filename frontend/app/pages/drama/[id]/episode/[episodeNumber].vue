@@ -1323,6 +1323,11 @@
                   <option value="720P">720P（均衡）</option>
                   <option value="1080P">1080P（清晰）</option>
                 </select>
+                <label class="dim" style="font-size:11px;margin:0 4px 0 8px">画幅</label>
+                <select v-model="videoAspect" class="input" style="height:28px;font-size:12px;padding:0 8px" title="决定视频和首尾帧图片的画幅。竖屏 9:16 适合抖音/快手；切换后新生成的首尾帧和视频按新画幅出">
+                  <option value="16:9">16:9 横屏</option>
+                  <option value="9:16">9:16 竖屏</option>
+                </select>
                 <span class="dim" style="font-size:11px;margin:0 4px" :title="`${videoEngineLabel} · ${videoResolution} ≈${videoRatePerSec} 积分/秒。例 5 秒 ≈${videoRatePerSec * 5} 积分`">≈{{ videoRatePerSec }} 积分/秒</span>
                 <label class="video-ref-toggle" :title="videoUseLastFrame ? '开启：同时传入尾帧，结尾画面更可控，但可能更像首尾帧补间' : '关闭：只用首帧作起点，尾帧由提示词约束，剧情运动更自由'">
                   <input type="checkbox" :checked="videoUseLastFrame" @change="setVideoUseLastFrame($event.target.checked)" />
@@ -1888,6 +1893,9 @@ function normalizeVideoEngine(value) {
 }
 const videoEngine = ref(typeof window !== 'undefined' ? normalizeVideoEngine(localStorage.getItem('claw_video_engine') || 'happyhorse_full') : 'happyhorse_full')
 const videoResolution = ref(typeof window !== 'undefined' ? (localStorage.getItem('claw_video_res') || '720P') : '720P')
+// 画幅：16:9 横屏（默认）/ 9:16 竖屏（抖音/快手）。同时决定首尾帧图片的出图尺寸。
+const videoAspect = ref(typeof window !== 'undefined' ? (localStorage.getItem('claw_video_aspect') || '16:9') : '16:9')
+watch(videoAspect, (v) => { if (typeof window !== 'undefined') localStorage.setItem('claw_video_aspect', v) })
 const videoUseLastFrame = ref(typeof window !== 'undefined' ? localStorage.getItem('claw_video_use_last_frame') === '1' : false)
 function normalizeVideoResolutionForEngine(engine, resolution) {
   if (engine !== 'seedance' && resolution === '480P') return engine === 'vidu' ? '360P' : '720P'
@@ -3635,6 +3643,8 @@ async function genShotFrame(sb, frameType, opts = {}) {
       drama_id: dramaId,
       prompt,
       frame_type: frameType,
+      // 首尾帧尺寸跟随画幅开关，保证图与视频同画幅
+      size: videoAspect.value === '9:16' ? '720x1280' : '1280x720',
       reference_images: referenceImages.length ? referenceImages : undefined,
     }
     // null = auto, array (even empty) = explicit choice
@@ -3722,6 +3732,7 @@ async function genVid(sb) {
     prompt: vprompt,
     duration,
     resolution: videoResolution.value,
+    aspect_ratio: videoAspect.value,
     use_last_frame: videoUseLastFrame.value,
   }
   // 用户所选引擎（seedance / vidu / happyhorse_full / hailuo）——后端据此选主配置 + 计价。
