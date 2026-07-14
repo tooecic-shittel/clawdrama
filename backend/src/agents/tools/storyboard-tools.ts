@@ -192,9 +192,33 @@ export function createStoryboardTools(episodeId: number, dramaId: number) {
       }
       db.delete(schema.storyboards).where(eq(schema.storyboards.episodeId, episodeId)).run()
 
+      // 时长兜底：模型经常把全集镜头填成同一个时长（如全 6s），节奏感尽失。
+      // 先把时长规整到 6/8/10/12 档；若 ≥80% 的镜头时长相同，按情绪节拍/内容关键词重排。
+      const normalizeDuration = (raw: any): number => {
+        const d = Number(raw) || 8
+        if (d <= 6) return 6
+        if (d <= 8) return 8
+        if (d <= 10) return 10
+        return 12
+      }
+      const beatDuration = (sb: any): number => {
+        const text = `${sb.emotion_beat || ''} ${sb.title || ''} ${sb.description || ''}`
+        if (/爆发|反转|高光|名场面|爆点|揭示|顶点|决裂|摊牌/.test(text)) return 12
+        if (/对峙|张力|升级|推进|互动|追逐|打斗|动作|争执|抢/.test(text)) return 10
+        if (/钩子|悬念|反应|眼神|一瞥|快切|回眸|定格/.test(text)) return 6
+        return 8
+      }
+      const rawDurations = storyboards.map(sb => normalizeDuration(sb.duration))
+      const modeCount = Math.max(...[...new Set(rawDurations)].map(v => rawDurations.filter(x => x === v).length))
+      const degenerate = storyboards.length >= 5 && modeCount / storyboards.length >= 0.8
+      if (degenerate) {
+        logTaskStart('StoryboardTool', 'rebalance-durations', { episodeId, reason: '≥80% 镜头时长相同，按节拍重排' })
+      }
+
       let totalDuration = 0
       for (const sb of storyboards) {
         validateStoryboardBindings(episodeId, sb.scene_id, sb.character_ids)
+        sb.duration = degenerate ? beatDuration(sb) : normalizeDuration(sb.duration)
         const res = db.insert(schema.storyboards).values({
           episodeId,
           storyboardNumber: sb.shot_number,
@@ -207,11 +231,11 @@ export function createStoryboardTools(episodeId: number, dramaId: number) {
           videoPrompt: sb.video_prompt, bgmPrompt: sb.bgm_prompt,
           soundEffect: sb.sound_effect,
           lighting: sb.lighting, composition: sb.composition, emotionBeat: sb.emotion_beat,
-          sceneId: sb.scene_id, duration: sb.duration || 10,
+          sceneId: sb.scene_id, duration: sb.duration,
           createdAt: ts, updatedAt: ts,
         }).run()
         syncStoryboardCharacters(Number(res.lastInsertRowid), sb.character_ids || [])
-        totalDuration += sb.duration || 10
+        totalDuration += sb.duration
       }
 
       db.update(schema.episodes)
