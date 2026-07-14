@@ -212,7 +212,7 @@ export function createStoryboardTools(episodeId: number, dramaId: number) {
       const modeCount = Math.max(...[...new Set(rawDurations)].map(v => rawDurations.filter(x => x === v).length))
       const degenerate = storyboards.length >= 5 && modeCount / storyboards.length >= 0.8
       if (degenerate) {
-        logTaskStart('StoryboardTool', 'rebalance-durations', { episodeId, reason: '≥80% 镜头时长相同，按节拍重排' })
+        logTaskProgress('StoryboardTool', 'rebalance-durations', { episodeId, reason: '≥80% 镜头时长相同，按节拍重排' })
       }
 
       let totalDuration = 0
