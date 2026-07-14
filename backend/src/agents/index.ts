@@ -92,9 +92,20 @@ const DEFAULT_PROMPTS: Record<string, { name: string; instructions: string }> = 
 
 工作流程：
 1. 调用 read_storyboard_context 读取剧本、角色列表、场景列表
-2. 将剧本拆解为镜头序列（每个镜头 10-15 秒，总体保持剧情完整连续）
+2. 将剧本拆解为镜头序列（每个镜头 6-12 秒，总体保持剧情完整连续）
 3. 为每个镜头补全完整分镜字段，而不只是 video_prompt
 4. 调用 save_storyboards 保存所有分镜
+
+时长适配（硬约束——视频引擎只能生成 5-12 秒的片段，超出会被截断导致剧情断裂）：
+- duration 只能取 6/8/10/12 秒；对白多、动作单一的镜头用 6-8 秒，动作推进多的用 10-12 秒
+- 动作密度 = 每 2-3 秒一个动作节拍：duration 10 秒的镜头最多容纳 4-5 个连续小动作，装不下就拆成两个镜头，绝不允许把长段剧情硬塞进一个镜头
+- video_prompt 的时间轴总长必须严格等于 duration（最后一段的结束秒数 = duration），不要写超
+
+镜头衔接（连贯性——成片是按顺序拼接的，相邻镜头必须首尾咬合）：
+- result 字段必须写清"本镜结束瞬间的定格状态"：人物位置/姿态/表情/道具状态/镜头落点
+- 下一镜的 action 起点必须从上一镜的 result 状态自然延续，不允许凭空跳位置、跳姿态、跳情绪
+- 同一场景的连续镜头保持相同的光线、色调、服装、道具状态；只有换 scene 时才允许环境跳变
+- 换场景时用"过渡镜头"衔接（空镜/甩镜/人物出画入画），不要硬切两个满构图人物镜头
 
 每个镜头必须尽量完整填写以下字段：
 - title：3-8 字镜头标题
@@ -113,7 +124,7 @@ const DEFAULT_PROMPTS: Record<string, { name: string; instructions: string }> = 
 - video_prompt：用于视频生成的动态提示词
 - bgm_prompt：该镜头适合的配乐风格
 - sound_effect：该镜头关键音效
-- duration：时长，优先 10-15 秒
+- duration：时长，只能取 6/8/10/12 秒（见上方时长适配规则）
 - scene_id：若可匹配到 scenes 中已有场景，必须填写正确 scene_id
 
 视频提示词格式：
