@@ -193,6 +193,7 @@ app.put('/:id', async (c) => {
     time: 'time', atmosphere: 'atmosphere', result: 'result',
     bgm_prompt: 'bgmPrompt', sound_effect: 'soundEffect',
     lighting: 'lighting', composition: 'composition', emotion_beat: 'emotionBeat',
+    first_frame_prompt: 'firstFramePrompt', last_frame_prompt: 'lastFramePrompt',
   }
 
   const updates: Record<string, any> = { updatedAt: now() }

@@ -187,6 +187,8 @@ export const storyboards = sqliteTable('storyboards', {
   composedImage: text('composed_image'),
   firstFrameImage: text('first_frame_image'),
   lastFrameImage: text('last_frame_image'),
+  firstFramePrompt: text('first_frame_prompt'), // 用户自定义的首帧提示词（空=按分镜字段自动拼）
+  lastFramePrompt: text('last_frame_prompt'),   // 用户自定义的尾帧提示词（空=自动拼）
   referenceImages: text('reference_images'),
   videoUrl: text('video_url'),
   ttsAudioUrl: text('tts_audio_url'),

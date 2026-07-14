@@ -3617,7 +3617,8 @@ function buildShotImagePrompt(sb, frameType) {
 }
 
 async function genShotFrame(sb, frameType, opts = {}) {
-  const prompt = opts.prompt || buildShotImagePrompt(sb, frameType)
+  // 优先级：本次弹窗填的 > 之前保存的自定义 > 按分镜字段自动拼
+  const prompt = opts.prompt || getSavedFramePrompt(sb, frameType) || buildShotImagePrompt(sb, frameType)
   const referenceImages = getShotReferenceImages(sb, frameType)
   const key = framePendingKey(sb.id, frameType)
   // 重新生成时旧帧还在，等地址「变了」才算完成
@@ -3649,16 +3650,36 @@ async function genShotFrame(sb, frameType, opts = {}) {
   }
 }
 
+// 首尾帧的自定义提示词持久化在分镜上；空 = 按分镜字段自动拼
+function getSavedFramePrompt(sb, frameType) {
+  return (frameType === 'first_frame'
+    ? (sb.first_frame_prompt || sb.firstFramePrompt)
+    : (sb.last_frame_prompt || sb.lastFramePrompt)) || ''
+}
+
 function openShotCustomDialog(sb, frameType) {
   const label = frameType === 'first_frame' ? '首帧' : '尾帧'
   const num = String((sbs.value.findIndex(s => s.id === sb.id) + 1)).padStart(2, '0')
   customGenDialog.title = `自定义生成 · #${num} ${label}`
   const desc = sb.description || sb.action || sb.result || ''
   customGenDialog.subtitle = desc ? `分镜描述：${desc.slice(0, 80)}` : ''
-  customGenDialog.defaultPrompt = buildShotImagePrompt(sb, frameType)
+  // 上次自定义过就回显自定义版，避免"改完一关就丢"
+  customGenDialog.defaultPrompt = getSavedFramePrompt(sb, frameType) || buildShotImagePrompt(sb, frameType)
   customGenDialog.defaultCharIds = null  // auto by default
   customGenDialog.onEnhance = null
   customGenDialog.onConfirm = async ({ prompt, referenceCharacterIds }) => {
+    // 持久化：与自动拼的默认版不同才算自定义；改回默认则清除覆盖，让后续跟随分镜字段变化
+    const field = frameType === 'first_frame' ? 'first_frame_prompt' : 'last_frame_prompt'
+    const auto = buildShotImagePrompt(sb, frameType)
+    const custom = prompt && prompt.trim() && prompt.trim() !== auto ? prompt.trim() : null
+    if (custom !== (getSavedFramePrompt(sb, frameType) || null)) {
+      try {
+        await storyboardAPI.update(sb.id, { [field]: custom })
+        sb[field] = custom
+      } catch (e) {
+        console.error('[frame-prompt] save failed', e)
+      }
+    }
     await genShotFrame(sb, frameType, { prompt, referenceCharacterIds })
   }
   customGenDialog.open = true
