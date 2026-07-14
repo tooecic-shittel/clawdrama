@@ -1328,6 +1328,10 @@
                   <input type="checkbox" :checked="videoUseLastFrame" @change="setVideoUseLastFrame($event.target.checked)" />
                   锁尾帧
                 </label>
+                <button class="btn btn-sm" :disabled="batchFramesRunning" @click="batchShotFirstFrames" title="给所有还没有首帧的镜头批量生成首帧（视频生成的前置条件）">
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                  {{ batchFramesRunning ? '首帧生成中…' : '批量首帧' }}
+                </button>
                 <button class="btn btn-sm" @click="batchVideos">
                   <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
                   批量视频
@@ -3637,8 +3641,8 @@ async function genShotFrame(sb, frameType, opts = {}) {
       body.reference_character_ids = opts.referenceCharacterIds
     }
     await imageAPI.generate(body)
-    toast.success(frameType === 'first_frame' ? '首帧生成中' : '尾帧生成中')
-    await refresh()
+    if (!opts.quiet) toast.success(frameType === 'first_frame' ? '首帧生成中' : '尾帧生成中')
+    if (!opts.quiet) await refresh()
     watchAsyncResult(() => {
       const target = sbs.value.find(s => s.id === sb.id)
       const cur = (frameType === 'first_frame' ? getFirstFrame(target) : getLastFrame(target)) || ''
@@ -3686,11 +3690,15 @@ function openShotCustomDialog(sb, frameType) {
 }
 
 async function genVid(sb) {
+  // 引擎最长 12 秒：旧分镜里 >12s 的镜头会被截断且按请求时长计费，生成时统一夹到 12
+  const rawDuration = Number(sb.duration || 5)
+  const duration = Math.min(12, rawDuration)
+  if (rawDuration > 12) toast.info(`#${sb.storyboard_number || sb.storyboardNumber || ''} 镜头 ${rawDuration}s 超出引擎上限，按 12s 生成（建议重拆或手动拆分该镜头）`)
   const params = {
     storyboard_id: sb.id,
     drama_id: dramaId,
     prompt: sb.video_prompt || sb.videoPrompt || '',
-    duration: Number(sb.duration || 5),
+    duration,
     resolution: videoResolution.value,
     use_last_frame: videoUseLastFrame.value,
   }
@@ -3800,6 +3808,19 @@ async function doCompose(sb) {
     toast.error(e.message)
   }
 }
+// 批量首帧：给所有缺首帧的镜头发起生成，补齐视频生成的前置条件。
+// genShotFrame 发起即返回（完成靠各自轮询），这里只做节流的顺序派发。
+const batchFramesRunning = computed(() => pendingShotFrameKeys.value.some(k => k.endsWith(':first_frame')))
+async function batchShotFirstFrames() {
+  const targets = sbs.value.filter(s => !getFirstFrame(s) && !pendingShotFrameKeys.value.includes(framePendingKey(s.id, 'first_frame')))
+  if (!targets.length) { toast.info('所有镜头都已有首帧'); return }
+  toast.success(`开始为 ${targets.length} 个镜头生成首帧`)
+  for (const sb of targets) {
+    try { await genShotFrame(sb, 'first_frame', { quiet: true }) } catch {}
+  }
+  await refresh()
+}
+
 function batchVideos() {
   // 只排还没出片、且不在生成中/不在队列里的镜头
   const newIds = sbs.value
