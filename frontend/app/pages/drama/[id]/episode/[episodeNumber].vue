@@ -3517,9 +3517,13 @@ function getShotReferenceImages(sb, frameType) {
     refs.push(value)
   }
   const pushCharacterRefs = () => {
-    for (const charId of getStoryboardCharacterIds(sb)) {
+    const charIds = getStoryboardCharacterIds(sb)
+    for (const charId of charIds) {
       const char = chars.value.find(item => item.id === charId)
       pushRef(char?.image_url || char?.imageUrl)
+      // 单角色镜头把侧视图也带上锁服装（后端参考上限 4 张：立绘+侧视+场景+上镜帧刚好占满；
+      // 多角色镜头位子不够，只带各自立绘，把场景/衔接帧留住）
+      if (charIds.length === 1) pushRef(char?.view_side || char?.viewSide)
     }
   }
   const sceneId = sb?.scene_id || sb?.sceneId
@@ -3725,7 +3729,15 @@ async function genVid(sb) {
   const last = getLastFrame(sb)
   const refs = getRefs(sb)
   if (videoEngine.value === 'happyhorse_full') {
-    const allRefs = uniqueUrls([first, ...refs, last]).slice(0, 9)
+    // 9 个参考位优先塞满角色官方形象（立绘+三视图）——服装/长相锁定的主力；
+    // 否则视频模型只看首帧，衣服会按每镜氛围乱换
+    const charRefs = getStoryboardCharacterIds(sb)
+      .flatMap(cid => {
+        const ch = chars.value.find(c => c.id === cid)
+        return ch ? [ch.image_url || ch.imageUrl, ch.view_side || ch.viewSide, ch.view_back || ch.viewBack] : []
+      })
+      .filter(Boolean)
+    const allRefs = uniqueUrls([first, ...charRefs, ...refs, last]).slice(0, 9)
     if (first) params.first_frame_url = first
     if (last) params.last_frame_url = last
     if (allRefs.length) Object.assign(params, { reference_mode: 'multiple', reference_image_urls: allRefs })
