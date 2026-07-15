@@ -1333,6 +1333,10 @@
                   <input type="checkbox" :checked="videoUseLastFrame" @change="setVideoUseLastFrame($event.target.checked)" />
                   锁尾帧
                 </label>
+                <button class="btn btn-sm" @click="maxAllDurations" title="素材模式：把全部镜头时长设为 12 秒，多出素材方便后期剪辑挑选。改完建议逐镜点「AI 优化」让提示词按 12 秒写满推进，再批量视频。注意积分消耗约翻倍；海螺引擎最高只支持 10 秒">
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                  时长拉满
+                </button>
                 <button class="btn btn-sm" :disabled="batchFramesRunning" @click="batchShotFirstFrames" title="给所有还没有首帧的镜头批量生成首帧（视频生成的前置条件）">
                   <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
                   {{ batchFramesRunning ? '首帧生成中…' : '批量首帧' }}
@@ -3837,6 +3841,26 @@ async function doCompose(sb) {
     toast.error(e.message)
   }
 }
+// 素材模式：全部镜头时长拉满 12 秒（多出素材好剪）。改完建议再逐镜 AI 优化，让提示词按 12 秒写满。
+async function maxAllDurations() {
+  const targets = sbs.value.filter(s => Number(s.duration || 0) !== 12)
+  if (!targets.length) { toast.info('所有镜头已经是 12 秒'); return }
+  const est = videoRatePerSec.value * 12 * sbs.value.length
+  if (!window.confirm(`把 ${targets.length} 个镜头的时长全部设为 12 秒？\n\n素材模式适合后期精剪：片段更长、可挑选的内容更多。\n整集按当前引擎/画质估算约 ${est.toLocaleString()} 积分（海螺引擎最高只支持 10 秒，不建议配合使用）。\n\n改完建议逐镜点「AI 优化」，让提示词按 12 秒写满推进节奏。`)) return
+  let done = 0
+  for (const sb of targets) {
+    try {
+      await storyboardAPI.update(sb.id, { duration: 12 })
+      sb.duration = 12
+      done++
+    } catch (e) {
+      toast.error(`#${sb.storyboard_number || sb.storyboardNumber} 更新失败：${e.message}`)
+    }
+  }
+  toast.success(`已把 ${done} 个镜头时长设为 12 秒`)
+  await refresh()
+}
+
 // 批量首帧：给所有缺首帧的镜头发起生成，补齐视频生成的前置条件。
 // genShotFrame 发起即返回（完成靠各自轮询），这里只做节流的顺序派发。
 const batchFramesRunning = computed(() => pendingShotFrameKeys.value.some(k => k.endsWith(':first_frame')))
