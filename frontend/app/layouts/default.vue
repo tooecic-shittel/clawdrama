@@ -29,6 +29,12 @@
           </svg>
           <span>项目</span>
         </NuxtLink>
+        <NuxtLink v-if="isAdmin" to="/admin/learning" class="nav-link nav-link-admin" :class="{ active: route.path === '/admin/learning' }" title="仅管理员可见">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>
+          </svg>
+          <span>课程管理</span>
+        </NuxtLink>
         <NuxtLink v-if="isAdmin" to="/admin/users" class="nav-link nav-link-admin" :class="{ active: route.path === '/admin/users' }" title="仅管理员可见">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
             <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>

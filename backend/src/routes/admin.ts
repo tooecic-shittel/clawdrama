@@ -195,4 +195,100 @@ app.post('/learning/codes/:id/disable', async (c) => {
   }
 })
 
+// GET /admin/learning/enrollments?q= — 兑换用户与学习进度报表
+app.get('/learning/enrollments', async (c) => {
+  const q = String(c.req.query('q') || '').trim().toLowerCase()
+  const rows = await db.select({
+    id: schema.learningEntitlements.id,
+    userId: schema.learningEntitlements.userId,
+    courseId: schema.learningEntitlements.courseId,
+    status: schema.learningEntitlements.status,
+    grantedAt: schema.learningEntitlements.grantedAt,
+    revokedAt: schema.learningEntitlements.revokedAt,
+    sourceCodeId: schema.learningEntitlements.sourceCodeId,
+    username: schema.users.username,
+    displayName: schema.users.displayName,
+    email: schema.users.email,
+    completedLessons: sql<number>`(select count(*) from learning_progress p where p.user_id = learning_entitlements.user_id and p.course_id = learning_entitlements.course_id and p.status = 'completed')`,
+    lastLearnedAt: sql<string | null>`(select max(p.updated_at) from learning_progress p where p.user_id = learning_entitlements.user_id and p.course_id = learning_entitlements.course_id)`,
+    creditsGranted: sql<number>`coalesce((select b.included_credits from learning_codes lc join learning_code_batches b on b.id = lc.batch_id where lc.id = learning_entitlements.source_code_id), 0)`,
+    batchNo: sql<string | null>`(select b.batch_no from learning_codes lc join learning_code_batches b on b.id = lc.batch_id where lc.id = learning_entitlements.source_code_id)`,
+    channel: sql<string | null>`(select b.channel from learning_codes lc join learning_code_batches b on b.id = lc.batch_id where lc.id = learning_entitlements.source_code_id)`,
+  }).from(schema.learningEntitlements)
+    .leftJoin(schema.users, eq(schema.users.id, schema.learningEntitlements.userId))
+    .orderBy(desc(schema.learningEntitlements.grantedAt))
+
+  const items = rows
+    .filter(r => !q
+      || String(r.username || '').toLowerCase().includes(q)
+      || String(r.displayName || '').toLowerCase().includes(q)
+      || String(r.email || '').toLowerCase().includes(q)
+      || String(r.batchNo || '').toLowerCase().includes(q))
+    .map(r => ({
+      id: r.id,
+      user_id: r.userId,
+      username: r.username,
+      display_name: r.displayName,
+      email: r.email,
+      course_id: r.courseId,
+      status: r.status,
+      granted_at: r.grantedAt,
+      revoked_at: r.revokedAt,
+      source: r.batchNo ? { batch_no: r.batchNo, channel: r.channel } : { batch_no: null, channel: 'manual' },
+      credits_granted: r.creditsGranted,
+      completed_lessons: r.completedLessons,
+      last_learned_at: r.lastLearnedAt,
+    }))
+  return success(c, { items })
+})
+
+// POST /admin/learning/users/:id/grant — 客服手动开通（默认不送积分；显式传正数才发）
+app.post('/learning/users/:id/grant', async (c) => {
+  const operator = c.get('user')
+  const userId = Number(c.req.param('id'))
+  const body = await c.req.json().catch(() => ({}))
+  const courseId = String(body.course_id || 'aigc-short-drama-v1')
+  const [target] = await db.select().from(schema.users).where(eq(schema.users.id, userId)).limit(1)
+  if (!target) return badRequest(c, '用户不存在')
+
+  const { grantCourseAccess } = await import('../services/learning-redemption.js')
+  grantCourseAccess({ userId, courseId, grantedBy: operator.id })
+
+  const credits = Number(body.credits) || 0
+  if (credits > 0) {
+    const { applyCreditOp } = await import('../services/credits.js')
+    await applyCreditOp({
+      userId, amount: credits, type: 'admin_grant',
+      description: `学习卡手动开通补发积分 ${credits}`,
+      operatorId: operator.id,
+    })
+  }
+  logTaskSuccess('Learning', 'manual-grant', { operatorId: operator.id, userId, courseId, credits })
+  return success(c, { user_id: userId, course_id: courseId, credits_added: credits })
+})
+
+// POST /admin/learning/users/:id/revoke — 撤销权限（退款/违规）。原码保持已使用。
+app.post('/learning/users/:id/revoke', async (c) => {
+  const operator = c.get('user')
+  const userId = Number(c.req.param('id'))
+  const body = await c.req.json().catch(() => ({}))
+  const courseId = String(body.course_id || 'aigc-short-drama-v1')
+  const { revokeCourseAccess } = await import('../services/learning-redemption.js')
+  revokeCourseAccess(userId, courseId, operator.id)
+  logTaskSuccess('Learning', 'manual-revoke', { operatorId: operator.id, userId, courseId })
+  return success(c, { user_id: userId, course_id: courseId, status: 'revoked' })
+})
+
+// POST /admin/learning/users/:id/restore — 恢复被撤销的权限（保留原兑换来源）
+app.post('/learning/users/:id/restore', async (c) => {
+  const operator = c.get('user')
+  const userId = Number(c.req.param('id'))
+  const body = await c.req.json().catch(() => ({}))
+  const courseId = String(body.course_id || 'aigc-short-drama-v1')
+  const { grantCourseAccess } = await import('../services/learning-redemption.js')
+  grantCourseAccess({ userId, courseId, grantedBy: operator.id })
+  logTaskSuccess('Learning', 'manual-restore', { operatorId: operator.id, userId, courseId })
+  return success(c, { user_id: userId, course_id: courseId, status: 'active' })
+})
+
 export default app

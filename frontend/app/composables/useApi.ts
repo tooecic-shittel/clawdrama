@@ -332,6 +332,13 @@ export const adminAPI = {
   learningSetBatchStatus: (id: number, status: 'active' | 'disabled') =>
     api.post(`/admin/learning/batches/${id}/status`, { status }),
   learningDisableCode: (id: number) => api.post(`/admin/learning/codes/${id}/disable`, {}),
+  learningEnrollments: (q?: string) => api.get<{ items: any[] }>(`/admin/learning/enrollments${q ? `?q=${encodeURIComponent(q)}` : ''}`),
+  learningGrant: (userId: number, d?: { course_id?: string; credits?: number }) =>
+    api.post(`/admin/learning/users/${userId}/grant`, d || {}),
+  learningRevoke: (userId: number, courseId?: string) =>
+    api.post(`/admin/learning/users/${userId}/revoke`, { course_id: courseId }),
+  learningRestore: (userId: number, courseId?: string) =>
+    api.post(`/admin/learning/users/${userId}/restore`, { course_id: courseId }),
   userDramas: (id: number) => api.get<{ items: any[] }>(`/admin/users/${id}/dramas`),
   restoreDrama: (id: number) => api.post(`/admin/dramas/${id}/restore`, {}),
   setRole: (id: number, role: 'admin' | 'user') => api.post(`/admin/users/${id}/role`, { role }),

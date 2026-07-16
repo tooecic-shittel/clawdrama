@@ -1,7 +1,7 @@
 import { getAuthToken } from '~/composables/useAuth'
 
 const PUBLIC_PATHS = ['/', '/login', '/register']
-const ADMIN_PATHS = ['/settings']
+const ADMIN_PATHS = ['/settings', '/admin']
 
 export default defineNuxtRouteMiddleware((to) => {
   if (import.meta.server) return
