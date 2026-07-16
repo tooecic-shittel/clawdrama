@@ -19,6 +19,63 @@ export const users = sqliteTable('users', {
   updatedAt: text('updated_at').notNull(),
 })
 
+// === 学习中心：电商学习卡兑换 ===
+// 学习卡在抖音/淘宝等平台销售，网站只负责兑换与课程交付。
+// 兑换码明文绝不入库：只存 HMAC-SHA256 摘要 + 末四位。
+
+export const learningCodeBatches = sqliteTable('learning_code_batches', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  batchNo: text('batch_no').notNull().unique(),      // LC-YYYYMMDD-XXXX
+  courseId: text('course_id').notNull(),             // aigc-short-drama-v1
+  channel: text('channel').notNull(),                // douyin/taobao/influencer/reseller/physical/internal
+  sku: text('sku').notNull(),                        // 平台 SKU 或活动名
+  campaign: text('campaign'),
+  partnerName: text('partner_name'),
+  quantity: integer('quantity').notNull(),
+  includedCredits: integer('included_credits').notNull(), // 兑换时按批次快照发放
+  expiresAt: text('expires_at').notNull(),
+  status: text('status').notNull().default('active'),     // active | disabled
+  createdBy: integer('created_by'),
+  createdAt: text('created_at').notNull(),
+  updatedAt: text('updated_at').notNull(),
+})
+
+export const learningCodes = sqliteTable('learning_codes', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  batchId: integer('batch_id').notNull(),
+  codeHash: text('code_hash').notNull().unique(),    // HMAC-SHA256(pepper, normalized)
+  codeSuffix: text('code_suffix').notNull(),         // 末四位，客服核对用
+  status: text('status').notNull().default('unused'), // unused | redeemed | disabled
+  redeemedBy: integer('redeemed_by'),
+  redeemedAt: text('redeemed_at'),
+  disabledAt: text('disabled_at'),
+  createdAt: text('created_at').notNull(),
+  updatedAt: text('updated_at').notNull(),
+})
+
+export const learningEntitlements = sqliteTable('learning_entitlements', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  userId: integer('user_id').notNull(),
+  courseId: text('course_id').notNull(),
+  sourceCodeId: integer('source_code_id'),           // null = 管理员手动开通
+  status: text('status').notNull().default('active'), // active | revoked
+  grantedBy: integer('granted_by'),                  // 管理员手动操作人
+  grantedAt: text('granted_at').notNull(),
+  revokedAt: text('revoked_at'),
+  updatedAt: text('updated_at').notNull(),
+})
+
+export const learningProgress = sqliteTable('learning_progress', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  userId: integer('user_id').notNull(),
+  courseId: text('course_id').notNull(),
+  lessonId: text('lesson_id').notNull(),
+  status: text('status').notNull().default('in_progress'), // in_progress | completed
+  lastPositionSec: integer('last_position_sec').notNull().default(0),
+  completedAt: text('completed_at'),
+  updatedAt: text('updated_at').notNull(),
+})
+
 // 邀请码：注册必须持有效邀请码（首个用户即管理员除外）。
 export const inviteCodes = sqliteTable('invite_codes', {
   id: integer('id').primaryKey({ autoIncrement: true }),

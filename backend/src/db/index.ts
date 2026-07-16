@@ -42,6 +42,64 @@ sqlite.exec(`
   );
   CREATE INDEX IF NOT EXISTS idx_credit_tx_user_created ON credit_transactions (user_id, created_at DESC);
 
+  CREATE TABLE IF NOT EXISTS learning_code_batches (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    batch_no TEXT NOT NULL UNIQUE,
+    course_id TEXT NOT NULL,
+    channel TEXT NOT NULL,
+    sku TEXT NOT NULL,
+    campaign TEXT,
+    partner_name TEXT,
+    quantity INTEGER NOT NULL,
+    included_credits INTEGER NOT NULL,
+    expires_at TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'active',
+    created_by INTEGER,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_learning_batches_batch_no ON learning_code_batches (batch_no);
+
+  CREATE TABLE IF NOT EXISTS learning_codes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    batch_id INTEGER NOT NULL,
+    code_hash TEXT NOT NULL UNIQUE,
+    code_suffix TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'unused',
+    redeemed_by INTEGER,
+    redeemed_at TEXT,
+    disabled_at TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_learning_codes_hash ON learning_codes (code_hash);
+  CREATE INDEX IF NOT EXISTS idx_learning_codes_batch ON learning_codes (batch_id, status);
+
+  CREATE TABLE IF NOT EXISTS learning_entitlements (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    course_id TEXT NOT NULL,
+    source_code_id INTEGER,
+    status TEXT NOT NULL DEFAULT 'active',
+    granted_by INTEGER,
+    granted_at TEXT NOT NULL,
+    revoked_at TEXT,
+    updated_at TEXT NOT NULL
+  );
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_learning_entitlements_user_course ON learning_entitlements (user_id, course_id);
+
+  CREATE TABLE IF NOT EXISTS learning_progress (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    course_id TEXT NOT NULL,
+    lesson_id TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'in_progress',
+    last_position_sec INTEGER NOT NULL DEFAULT 0,
+    completed_at TEXT,
+    updated_at TEXT NOT NULL
+  );
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_learning_progress_user_lesson ON learning_progress (user_id, course_id, lesson_id);
+
   CREATE TABLE IF NOT EXISTS invite_codes (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     code TEXT NOT NULL UNIQUE,

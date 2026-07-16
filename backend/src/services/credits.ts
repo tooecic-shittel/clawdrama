@@ -6,6 +6,7 @@ export type CreditTxType =
   | 'admin_grant'     // admin manually granted
   | 'register_bonus'  // welcome credits on signup
   | 'referral_bonus'  // invite reward (both inviter and invitee)
+  | 'learning_redemption' // learning card included credits
   | 'deduct'          // consumed by an action
   | 'refund'          // refund for failed action
 
