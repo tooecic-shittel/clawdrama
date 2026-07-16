@@ -5,6 +5,10 @@ import { db, schema } from '../db/index.js'
 import { requireAdmin } from '../middleware/auth.js'
 import { success, badRequest, now } from '../utils/response.js'
 import { logTaskSuccess } from '../utils/task-logger.js'
+import {
+  createLearningCodeBatch, listLearningBatches, listBatchCodes, setBatchStatus, disableCode,
+} from '../services/learning-code-batches.js'
+import { LearningError } from '../services/learning-redemption.js'
 
 // 管理员用户管理。挂载在受 requireAuth 保护的 /api/v1 下，整组再加 requireAdmin。
 const app = new Hono()
@@ -135,6 +139,60 @@ app.post('/users/:id/reset-password', async (c) => {
   await db.update(schema.users).set({ passwordHash, updatedAt: now() }).where(eq(schema.users.id, id))
   logTaskSuccess('Admin', 'reset-password', { operatorId: operator.id, userId: id })
   return success(c, { id, temp_password: password })
+})
+
+// === 学习卡批次管理 ===
+
+// POST /admin/learning/batches — 创建批次并一次性返回完整码 CSV（之后永远只有掩码）
+app.post('/learning/batches', async (c) => {
+  const operator = c.get('user')
+  const body = await c.req.json().catch(() => ({}))
+  try {
+    const { batch, csv } = createLearningCodeBatch(body, operator.id)
+    logTaskSuccess('Learning', 'create-batch', {
+      operatorId: operator.id, batchNo: batch.batchNo, channel: batch.channel, quantity: batch.quantity,
+    })
+    c.header('Content-Type', 'text/csv; charset=utf-8')
+    c.header('Content-Disposition', `attachment; filename="${batch.batchNo}.csv"`)
+    c.header('X-Batch-No', batch.batchNo)
+    // BOM 让 Excel 正确识别 UTF-8
+    return c.body(`﻿${csv}`)
+  } catch (err: any) {
+    if (err instanceof LearningError) return c.json({ code: err.status, message: err.message }, err.status as any)
+    throw err
+  }
+})
+
+// GET /admin/learning/batches — 批次统计（不含完整码）
+app.get('/learning/batches', async (c) => {
+  return success(c, { items: listLearningBatches() })
+})
+
+// GET /admin/learning/batches/:id/codes — 掩码明细
+app.get('/learning/batches/:id/codes', async (c) => {
+  return success(c, { items: listBatchCodes(Number(c.req.param('id'))) })
+})
+
+// POST /admin/learning/batches/:id/status — 启用/停用整批
+app.post('/learning/batches/:id/status', async (c) => {
+  const body = await c.req.json().catch(() => ({}))
+  const status = body.status === 'disabled' ? 'disabled' : 'active'
+  try {
+    return success(c, setBatchStatus(Number(c.req.param('id')), status))
+  } catch (err: any) {
+    if (err instanceof LearningError) return c.json({ code: err.status, message: err.message }, err.status as any)
+    throw err
+  }
+})
+
+// POST /admin/learning/codes/:id/disable — 停用单张未使用码
+app.post('/learning/codes/:id/disable', async (c) => {
+  try {
+    return success(c, disableCode(Number(c.req.param('id'))))
+  } catch (err: any) {
+    if (err instanceof LearningError) return c.json({ code: err.status, message: err.message }, err.status as any)
+    throw err
+  }
 })
 
 export default app

@@ -304,8 +304,34 @@ export const authAPI = {
   me: () => api.get<any>('/auth/me'),
 }
 
+/** 带鉴权的文件下载（POST → blob）。用于批次创建时一次性下载 CSV。 */
+async function downloadReq(path: string, body: any): Promise<{ blob: Blob; filename: string }> {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+  const token = getAuthToken()
+  if (token) headers['Authorization'] = `Bearer ${token}`
+  const resp = await fetch(`${BASE}${path}`, { method: 'POST', headers, body: JSON.stringify(body) })
+  if (!resp.ok) {
+    let message = `${resp.status}`
+    try { message = (await resp.json()).message || message } catch {}
+    throw new Error(humanizeError(message))
+  }
+  const disposition = resp.headers.get('Content-Disposition') || ''
+  const match = disposition.match(/filename="?([^";]+)"?/)
+  return { blob: await resp.blob(), filename: match?.[1] || 'codes.csv' }
+}
+
 export const adminAPI = {
   users: () => api.get<{ items: any[] }>('/admin/users'),
+  // 学习卡批次
+  learningCreateBatch: (d: {
+    course_id: string; channel: string; sku: string; campaign?: string;
+    partner_name?: string; quantity: number; included_credits: number; expires_at: string;
+  }) => downloadReq('/admin/learning/batches', d),
+  learningBatches: () => api.get<{ items: any[] }>('/admin/learning/batches'),
+  learningBatchCodes: (id: number) => api.get<{ items: any[] }>(`/admin/learning/batches/${id}/codes`),
+  learningSetBatchStatus: (id: number, status: 'active' | 'disabled') =>
+    api.post(`/admin/learning/batches/${id}/status`, { status }),
+  learningDisableCode: (id: number) => api.post(`/admin/learning/codes/${id}/disable`, {}),
   userDramas: (id: number) => api.get<{ items: any[] }>(`/admin/users/${id}/dramas`),
   restoreDrama: (id: number) => api.post(`/admin/dramas/${id}/restore`, {}),
   setRole: (id: number, role: 'admin' | 'user') => api.post(`/admin/users/${id}/role`, { role }),
