@@ -346,6 +346,15 @@ export const adminAPI = {
   resetPassword: (id: number) => api.post<{ temp_password: string }>(`/admin/users/${id}/reset-password`, {}),
 }
 
+export const learningAPI = {
+  redeem: (code: string) => api.post<{ status: string; course_id: string; credits_added: number; balance: number }>('/learning/redeem', { code }),
+  courses: () => api.get<any>('/learning/courses'),
+  course: (_id: string) => api.get<any>('/learning/courses'),
+  lesson: (courseId: string, lessonId: string) => api.get<any>(`/learning/courses/${courseId}/lessons/${lessonId}`),
+  saveProgress: (courseId: string, lessonId: string, d: { status: string; last_position_sec?: number }) =>
+    api.put(`/learning/courses/${courseId}/lessons/${lessonId}/progress`, d),
+}
+
 export const inviteAPI = {
   my: () => api.get<{ code: string; invited_count: number; invited: Array<{ username: string; created_at: string }>; reward_total: number; reward_per_invite: number; invitee_bonus: number }>('/invites/my'),
   list: () => api.get<Array<{ id: number; code: string; note: string | null; max_uses: number; used_count: number; is_active: boolean; used_by: string[]; created_at: string }>>('/invites'),
