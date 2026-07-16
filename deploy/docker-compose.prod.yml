@@ -21,6 +21,8 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=5679
+      # 学习中心媒体目录（容器内路径；宿主机为 /data/clawdrama/learning）
+      - LEARNING_DATA_DIR=/app/data/learning
     restart: unless-stopped
     logging:
       driver: json-file
