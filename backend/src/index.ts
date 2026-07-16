@@ -26,6 +26,8 @@ import auth from './routes/auth.js'
 import credits from './routes/credits.js'
 import payments from './routes/payments.js'
 import invites from './routes/invites.js'
+import learning from './routes/learning.js'
+import learningAssets from './routes/learning-assets.js'
 import admin from './routes/admin.js'
 import backup from './routes/backup.js'
 import { requestLogger, errorHandler } from './middleware/logger.js'
@@ -62,6 +64,10 @@ app.route('/api/v1/auth', auth)
 // Payment routes: order creation is protected per-route; provider callbacks must stay public.
 app.route('/api/v1/payments', payments)
 
+// 课程媒体：签名 URL 鉴权（原生 video/download 请求带不了 Bearer 头），
+// 必须挂在受保护分组之前。
+app.route('/api/v1/learning-assets', learningAssets)
+
 // Protected API routes — require Bearer token
 const api = new Hono()
 api.use('*', requireAuth)
@@ -85,6 +91,7 @@ api.route('/ai-voices', aiVoices)
 api.route('/credits', credits)
 api.route('/invites', invites)
 api.route('/admin', admin)
+api.route('/learning', learning)
 api.route('/backup', backup) // 临时：迁移 Railway→阿里云 用，迁完删除
 
 app.route('/api/v1', api)
