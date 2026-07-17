@@ -1,5 +1,6 @@
 # /data/clawdrama/learning/aigc-short-drama-v1/ 生产文件清单
-# 视频：H.264 + AAC MP4，faststart。文件名必须与本清单完全一致。
+# 视频:H.264 + AAC MP4,faststart。文件名必须与本清单完全一致。
+# 注:课程资料(模板/清单/对照表)已内嵌在课程图文页,无需上传 downloads 文件。
 
 videos/lesson-01.mp4
 videos/lesson-02.mp4
@@ -9,14 +10,3 @@ videos/lesson-05.mp4
 videos/lesson-06.mp4
 videos/lesson-07.mp4
 videos/lesson-08.mp4
-
-downloads/lesson-01-工作流全景图.pdf
-downloads/lesson-01-开课准备清单.pdf
-downloads/lesson-02-剧本模板.docx
-downloads/lesson-02-示例剧本.docx
-downloads/lesson-03-改写前后对照示例.pdf
-downloads/lesson-04-分镜检查清单.pdf
-downloads/lesson-05-角色一致性要点.pdf
-downloads/lesson-06-首尾帧质检清单.pdf
-downloads/lesson-07-引擎选型对照表.pdf
-downloads/lesson-08-成片导出与发布指南.pdf

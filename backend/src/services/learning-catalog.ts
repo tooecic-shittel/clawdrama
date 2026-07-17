@@ -44,7 +44,7 @@ const AIGC_SHORT_DRAMA: CourseOutline = {
     '随课平台积分',
     '微信群答疑',
     '每周一次直播演示',
-    '资料包下载',
+    '全套模板与检查清单（课内直接查看）',
   ],
   lessons: [
     {
@@ -56,7 +56,7 @@ const AIGC_SHORT_DRAMA: CourseOutline = {
       outcome: '看懂整条生产线，账号与素材准备就绪',
       markdownFile: 'lessons/01-workflow.md',
       videoFile: 'lesson-01.mp4',
-      downloads: ['lesson-01-工作流全景图.pdf', 'lesson-01-开课准备清单.pdf'],
+      downloads: [],
     },
     {
       id: 'lesson-02',
@@ -67,7 +67,7 @@ const AIGC_SHORT_DRAMA: CourseOutline = {
       outcome: '写出一份符合制作规格的短剧剧本',
       markdownFile: 'lessons/02-script.md',
       videoFile: 'lesson-02.mp4',
-      downloads: ['lesson-02-剧本模板.docx', 'lesson-02-示例剧本.docx'],
+      downloads: [],
     },
     {
       id: 'lesson-03',
@@ -78,7 +78,7 @@ const AIGC_SHORT_DRAMA: CourseOutline = {
       outcome: '得到一份 AI 规范化、可直接拆分镜的剧本',
       markdownFile: 'lessons/03-rewrite.md',
       videoFile: 'lesson-03.mp4',
-      downloads: ['lesson-03-改写前后对照示例.pdf'],
+      downloads: [],
     },
     {
       id: 'lesson-04',
@@ -89,7 +89,7 @@ const AIGC_SHORT_DRAMA: CourseOutline = {
       outcome: '得到节拍完整、可生产的分镜表和角色/场景清单',
       markdownFile: 'lessons/04-breakdown.md',
       videoFile: 'lesson-04.mp4',
-      downloads: ['lesson-04-分镜检查清单.pdf'],
+      downloads: [],
     },
     {
       id: 'lesson-05',
@@ -100,7 +100,7 @@ const AIGC_SHORT_DRAMA: CourseOutline = {
       outcome: '生成全剧统一的角色形象（含三视图）和场景图',
       markdownFile: 'lessons/05-character-scene.md',
       videoFile: 'lesson-05.mp4',
-      downloads: ['lesson-05-角色一致性要点.pdf'],
+      downloads: [],
     },
     {
       id: 'lesson-06',
@@ -111,7 +111,7 @@ const AIGC_SHORT_DRAMA: CourseOutline = {
       outcome: '为每个镜头生成合格的首帧/尾帧',
       markdownFile: 'lessons/06-shot-images.md',
       videoFile: 'lesson-06.mp4',
-      downloads: ['lesson-06-首尾帧质检清单.pdf'],
+      downloads: [],
     },
     {
       id: 'lesson-07',
@@ -122,7 +122,7 @@ const AIGC_SHORT_DRAMA: CourseOutline = {
       outcome: '按镜头特点选对引擎并批量产出可用视频片段',
       markdownFile: 'lessons/07-video.md',
       videoFile: 'lesson-07.mp4',
-      downloads: ['lesson-07-引擎选型对照表.pdf'],
+      downloads: [],
     },
     {
       id: 'lesson-08',
@@ -133,7 +133,7 @@ const AIGC_SHORT_DRAMA: CourseOutline = {
       outcome: '导出一部带配音字幕的完整短剧样片',
       markdownFile: 'lessons/08-audio-compose.md',
       videoFile: 'lesson-08.mp4',
-      downloads: ['lesson-08-成片导出与发布指南.pdf'],
+      downloads: [],
     },
   ],
 }

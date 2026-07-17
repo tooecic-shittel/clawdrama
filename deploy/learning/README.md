@@ -13,13 +13,9 @@
 ├── videos/
 │   ├── lesson-01.mp4
 │   ├── lesson-02.mp4
-│   ├── ... 
+│   ├── ...
 │   └── lesson-08.mp4
-└── downloads/
-    ├── lesson-01-工作流全景图.pdf
-    ├── lesson-01-开课准备清单.pdf
-    ├── lesson-02-剧本模板.docx
-    └── ...（文件名必须与课程目录 learning-catalog.ts 中 downloads 完全一致）
+└── downloads/        # 预留目录。课程资料（模板/清单/对照表）已内嵌课程图文页，当前无需上传任何下载文件
 ```
 
 完整文件清单见 `aigc-short-drama-v1-file-list.txt`。
