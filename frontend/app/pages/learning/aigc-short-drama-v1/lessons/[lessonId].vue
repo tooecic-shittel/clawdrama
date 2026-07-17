@@ -11,8 +11,13 @@
           <p class="lv-outcome">🎯 {{ data.lesson.outcome }}</p>
         </div>
 
-        <!-- 视频 -->
-        <div class="lv-video-wrap">
+        <!-- 视频（未上线时显示占位，不挡图文学习） -->
+        <div v-if="videoMissing" class="lv-video-placeholder">
+          <span class="lv-vp-icon">🎬</span>
+          <span class="lv-vp-title">本节视频课程即将上线</span>
+          <span class="lv-vp-sub">先跟着下方图文教程操作，内容完全一致</span>
+        </div>
+        <div v-else class="lv-video-wrap">
           <video
             ref="videoEl"
             class="lv-video"
@@ -61,14 +66,18 @@ const data = ref(null)
 const loading = ref(true)
 const videoEl = ref(null)
 const isCompleted = ref(false)
+const videoMissing = ref(false)
 
 let lastSavedAt = 0
 let pendingSeek = 0
+let videoRefreshTried = false
 
 const lessonId = computed(() => String(route.params.lessonId || ''))
 
 async function load() {
   loading.value = true
+  videoMissing.value = false
+  videoRefreshTried = false
   try {
     data.value = await learningAPI.lesson(COURSE_ID, lessonId.value)
     isCompleted.value = data.value.progress?.status === 'completed'
@@ -116,17 +125,24 @@ function onVideoEnded() {
 }
 
 async function onVideoError() {
-  // 签名链接两小时过期：刷新课节载荷换新链接后续播
   const video = videoEl.value
   if (!video || !data.value) return
+  // 只尝试刷新一次（应对签名链接两小时过期）；仍失败视为视频未上线，
+  // 换占位提示，避免"刷新→再错→再刷新"的死循环。
+  if (videoRefreshTried) {
+    videoMissing.value = true
+    return
+  }
+  videoRefreshTried = true
   const position = video.currentTime || 0
   try {
     const fresh = await learningAPI.lesson(COURSE_ID, lessonId.value)
     data.value.video_url = fresh.video_url
     data.value.downloads = fresh.downloads
     pendingSeek = position
-    toast.info('播放链接已刷新')
-  } catch {}
+  } catch {
+    videoMissing.value = true
+  }
 }
 
 function markCompleted() {
@@ -173,6 +189,14 @@ onBeforeUnmount(() => {
 
 .lv-video-wrap { border-radius: 14px; overflow: hidden; background: #0d1117; }
 .lv-video { display: block; width: 100%; aspect-ratio: 16/9; }
+.lv-video-placeholder {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+  border-radius: 14px; padding: 34px 20px;
+  border: 1.5px dashed var(--border-strong, #bcc9d9); background: var(--bg-1, #f8fbff);
+}
+.lv-vp-icon { font-size: 30px; }
+.lv-vp-title { font-size: 15px; font-weight: 700; color: var(--text-1, #2c3850); }
+.lv-vp-sub { font-size: 12.5px; color: var(--text-3, #8fa0b8); }
 
 .lv-nav { display: grid; grid-template-columns: 1fr auto 1fr; gap: 10px; align-items: center; margin-top: 6px; }
 .lv-nav-btn {

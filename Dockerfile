@@ -53,6 +53,8 @@ COPY --from=frontend-build /app/frontend/.output/public ./frontend/dist
 # Skills —— 必须落到 /app/skills，与后端 path.resolve(__dirname,'../../../skills')
 # 对齐（skills.ts 在 /app/backend/src/agents 下解析为 /app/skills）。拷到 backend/skills 会导致 SKILL.md 全部加载不到。
 COPY skills/ ./skills/
+# 课程图文正文（学习中心从这里读 Markdown）
+COPY course-content/ ./course-content/
 
 # Config
 COPY configs/config.example.yaml ./configs/config.yaml
