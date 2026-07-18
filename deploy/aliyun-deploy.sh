@@ -7,7 +7,7 @@
 set -euo pipefail
 cd /opt/clawdrama
 git fetch origin aliyun-stable
-git reset --hard origin/aliyun-stable
+git reset --hard FETCH_HEAD
 docker compose -f deploy/docker-compose.prod.yml build
 docker compose -f deploy/docker-compose.prod.yml up -d
 sleep 5
